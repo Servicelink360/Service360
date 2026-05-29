@@ -134,11 +134,19 @@ if ($KeyName) { $instanceParams += @("--key-name", $KeyName) }
 $instanceId = aws ec2 @instanceParams
 Write-Host "EC2 instance: $instanceId (boot + docker build ~5 min)"
 aws ec2 wait instance-running --instance-ids $instanceId --region $Region
-$publicIp = aws ec2 describe-instances --instance-ids $instanceId --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region $Region
+
+# Stable testing IP (Elastic IP) — does not change when instance reboots
+Write-Host "Allocating Elastic IP for testing..."
+$alloc = aws ec2 allocate-address --domain vpc --region $Region | ConvertFrom-Json
+aws ec2 associate-address --instance-id $instanceId --allocation-id $alloc.AllocationId --region $Region | Out-Null
+aws ec2 create-tags --resources $alloc.AllocationId --tags "Key=Name,Value=$Project-test-ip" --region $Region | Out-Null
+$publicIp = $alloc.PublicIp
+aws ec2 authorize-security-group-ingress --group-id $sgId --protocol tcp --port 5301 --cidr 0.0.0.0/0 --region $Region 2>$null | Out-Null
 
 Write-Host ""
 Write-Host "=== Service360 test environment ==="
 Write-Host "RDS:      $rdsHost"
+Write-Host "Test IP:  $publicIp  (Elastic IP)"
 Write-Host "API:      http://${publicIp}:5301/"
 Write-Host "Admin S3: http://$bucket.s3-website-$Region.amazonaws.com"
 Write-Host ""
@@ -151,8 +159,10 @@ Write-Host "  aws s3 sync build/ s3://$bucket/ --delete"
 # Save outputs
 @{
   rds_host = $rdsHost
+  test_ip = $publicIp
   api_url = "http://${publicIp}:5301/"
   admin_bucket = $bucket
   ec2_instance_id = $instanceId
+  region = $Region
 } | ConvertTo-Json | Set-Content (Join-Path $repoRoot "deploy\aws-outputs.json")
 Write-Host "Saved deploy/aws-outputs.json"
