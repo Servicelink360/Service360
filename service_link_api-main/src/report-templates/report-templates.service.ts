@@ -218,19 +218,20 @@ export class ReportTemplatesService {
         if (withItems?.items) {
           withItems.items = sortTemplateItems(withItems.items);
         }
-        const sourceDeptIds = await this.ReportTemplateServiceRepository.find({
+        const templateServicesRepo = manager.getRepository(ReportTemplateService);
+        const sourceDeptIds = await templateServicesRepo.find({
           where: { reportTemplateId: +id },
           select: ['serviceId'],
         });
         if (sourceDeptIds.length) {
           await syncTemplateServices(
-            this.ReportTemplateServiceRepository,
+            templateServicesRepo,
             savedTemplate.id,
             sourceDeptIds.map((r) => +r.serviceId),
           );
         }
         const [withServices] = await attachServiceIdsToTemplates(
-          this.ReportTemplateServiceRepository,
+          templateServicesRepo,
           [withItems ?? savedTemplate],
         );
         return {
