@@ -14,7 +14,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
-      - ../service_link_api-main/.env
+      - ../service_link_api-main/.env.prod
     environment:
       REDIS_IP: redis
       REDIS_PORT: "6379"
