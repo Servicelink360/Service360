@@ -711,7 +711,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     const execPath =
         process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
         process.env.CHROME_PATH?.trim() ||
-        (!isWindows ? '/usr/bin/chromium-browser' : undefined);
+        (!isWindows ? '/usr/bin/chromium' : undefined);
 
     let browser: any;
     try {

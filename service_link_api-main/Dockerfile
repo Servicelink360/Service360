@@ -18,6 +18,7 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps --omit=dev
 COPY --from=build /usr/src/app/dist ./dist
 COPY --from=build /usr/src/app/public ./public
+COPY --from=build /usr/src/app/template.html ./template.html
 COPY deploy/global-bundle.pem ./deploy/global-bundle.pem
 EXPOSE 5301
 CMD ["npm", "run", "start:prod"]
