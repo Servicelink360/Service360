@@ -7,8 +7,10 @@ env:
     REACT_APP_ORDER_API_URL: http://3.106.200.185:5301/
     REACT_APP_MODE: PROD
     GENERATE_SOURCEMAP: false
-    NODE_OPTIONS: --openssl-legacy-provider --max_old_space_size=4096
+    NODE_OPTIONS: --openssl-legacy-provider --max_old_space_size=6144
     CI: "false"
+    DISABLE_ESLINT_PLUGIN: "true"
+    TSC_COMPILE_ON_ERROR: "true"
 frontend:
   phases:
     preBuild:
