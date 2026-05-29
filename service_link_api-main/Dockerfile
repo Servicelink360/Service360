@@ -1,20 +1,16 @@
-FROM node:16
-
-# Create app directory
+FROM node:18-bookworm-slim AS build
 WORKDIR /usr/src/app
-
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
 COPY package*.json ./
-
 RUN npm install --legacy-peer-deps
-# If you are building your code for production
-# RUN npm ci --only=production
-
-# Bundle app source
 COPY . .
+RUN npm run build
 
-#RUN npm run build
-
-CMD ["npm","run", "start:prod"]
+FROM node:18-bookworm-slim
+WORKDIR /usr/src/app
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm install --legacy-peer-deps --omit=dev
+COPY --from=build /usr/src/app/dist ./dist
+COPY --from=build /usr/src/app/public ./public
+EXPOSE 5301
+CMD ["npm", "run", "start:prod"]

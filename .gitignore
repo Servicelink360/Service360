@@ -9,8 +9,10 @@
 
 # Database dumps (large, may contain real data)
 *.sql
+!deploy/database/*.sql
 *.dump
 data/
+deploy/aws-outputs.json
 
 # Duplicate / host copy (keep canonical api + admin folders only)
 app_from_host/
