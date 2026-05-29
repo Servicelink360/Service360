@@ -4,7 +4,7 @@
 version: 1
 env:
   variables:
-    REACT_APP_ORDER_API_URL: http://3.106.200.185:5301/
+    REACT_APP_ORDER_API_URL: http://3.106.232.253:5301/
     REACT_APP_MODE: PROD
     GENERATE_SOURCEMAP: false
     NODE_OPTIONS: --openssl-legacy-provider --max_old_space_size=6144
