@@ -1,13 +1,19 @@
-FROM node:18-bookworm-slim AS build
+FROM node:20-bookworm-slim AS build
 WORKDIR /usr/src/app
+ENV PUPPETEER_SKIP_DOWNLOAD=true
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
-FROM node:18-bookworm-slim
+FROM node:20-bookworm-slim
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
+    && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm install --legacy-peer-deps --omit=dev
 COPY --from=build /usr/src/app/dist ./dist
