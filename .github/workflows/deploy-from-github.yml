@@ -68,6 +68,8 @@ jobs:
               sed -i "s|^DATABASE_HOST=.*|DATABASE_HOST=${{ secrets.RDS_HOST }}|" "$ENV_FILE" || true
               sed -i "s|^DATABASE_PASSWORD=.*|DATABASE_PASSWORD=${{ secrets.RDS_PASSWORD }}|" "$ENV_FILE" || true
               sed -i "s|^DATABASE_DB_NAME=.*|DATABASE_DB_NAME=service360|" "$ENV_FILE" || true
+              sed -i "s|^DATABASE_SSL=.*|DATABASE_SSL=true|" "$ENV_FILE" || true
+              grep -q '^DATABASE_SSL=' "$ENV_FILE" || echo 'DATABASE_SSL=true' >> "$ENV_FILE"
               sed -i "s|^REDIS_IP=.*|REDIS_IP=redis|" "$ENV_FILE" || true
               sed -i "s|^BASE_UPLOAD_URL=.*|BASE_UPLOAD_URL=${{ secrets.API_URL }}|" "$ENV_FILE" || true
             fi
