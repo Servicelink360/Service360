@@ -1,5 +1,5 @@
 # AWS Amplify — admin UI (service_link_admin-main)
-# Override REACT_APP_ORDER_API_URL in Amplify console when API URL changes.
+# API URL: override in Amplify console if EC2 IP changes.
 
 version: 1
 env:
@@ -7,20 +7,24 @@ env:
     REACT_APP_ORDER_API_URL: http://3.106.200.185:5301/
     REACT_APP_MODE: PROD
     GENERATE_SOURCEMAP: false
-    NODE_OPTIONS: --openssl-legacy-provider
+    NODE_OPTIONS: --openssl-legacy-provider --max_old_space_size=4096
+    CI: "false"
 frontend:
   phases:
     preBuild:
       commands:
+        - nvm install 18
         - nvm use 18
         - node -v && npm -v
+        - cd service_link_admin-main/ckeditor5
+        - npm install
+        - npm run build
+        - cd ../..
         - cd service_link_admin-main
         - npm install --legacy-peer-deps
     build:
       commands:
         - cd service_link_admin-main
-        - export NODE_OPTIONS=--openssl-legacy-provider
-        - export GENERATE_SOURCEMAP=false
         - npm run build
   artifacts:
     baseDirectory: service_link_admin-main/build
@@ -29,3 +33,4 @@ frontend:
   cache:
     paths:
       - service_link_admin-main/node_modules/**/*
+      - service_link_admin-main/ckeditor5/node_modules/**/*
