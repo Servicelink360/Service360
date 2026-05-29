@@ -1,0 +1,21 @@
+# AWS Amplify: connect GitHub repo → auto-build admin UI
+# Console: Amplify → New app → Host web app → GitHub → Service360 → use this file
+
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd service_link_admin-main
+        - npm ci --legacy-peer-deps
+    build:
+      commands:
+        - export NODE_OPTIONS=--openssl-legacy-provider
+        - npm run build
+  artifacts:
+    baseDirectory: service_link_admin-main/build
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - service_link_admin-main/node_modules/**/*
