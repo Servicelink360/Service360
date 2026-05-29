@@ -1,0 +1,4 @@
+node_modules
+build
+.git
+ckeditor5/node_modules
