@@ -1,7 +1,12 @@
 # AWS Amplify — admin UI (service_link_admin-main)
-# App settings → Environment variables: REACT_APP_ORDER_API_URL = your API URL
+# Override REACT_APP_ORDER_API_URL in Amplify console when API URL changes.
 
 version: 1
+env:
+  variables:
+    REACT_APP_ORDER_API_URL: http://3.104.215.45:8001/
+    REACT_APP_MODE: PROD
+    GENERATE_SOURCEMAP: false
 frontend:
   phases:
     preBuild:
