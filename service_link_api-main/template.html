@@ -1,0 +1,197 @@
+<html>
+
+<head>
+    <style>
+        html {
+            -webkit-print-color-adjust: exact;
+        }
+
+        body {
+            width: 892px;
+            margin: auto;
+            font-family: serif;
+        }
+
+        .container {
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        .row {
+            border-bottom: 1px dotted #909090;
+        }
+
+        .row:after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+
+        .item50 {
+            width: 50%;
+            float: left;
+        }
+
+        .item80 {
+            width: 80%;
+            float: left;
+        }
+
+        .item20 {
+            width: 20%;
+            float: left;
+        }
+
+        .item40 {
+            width: 40%;
+            float: left;
+        }
+
+        .item60 {
+            width: 60%;
+            float: left;
+        }
+
+        .item100 {
+            width: 100%;
+            float: left;
+        }
+
+        .logo {
+            margin-top: 30px;
+            margin-left: 10px;
+            height: 110px;
+        }
+
+        .a-right {
+            text-align: right;
+        }
+
+        .header-text-left {
+            padding-right: 10px;
+            line-height: 0.5;
+        }
+
+        .title {
+            background-color: #408040;
+            padding: 10px;
+        }
+
+        .title span {
+            color: #ffff;
+        }
+
+        .tcontent {
+            margin-top: 20px;
+        }
+
+        .boder-top-dot {
+            border-top: 1px dotted #909090;
+            /* margin-top: 1px; */
+        }
+
+        .tcontent .item40 {
+            background-color: #f5f9f5;
+            margin-top: 1px;
+            margin-bottom: 1px;
+
+        }
+
+        .tcontent span {
+            font-size: 14px;
+        }
+
+        .tcontent .item40 .name {
+            margin: 10px;
+        }
+
+        .tcontent .item60 .value {
+            margin: 10px;
+        }
+
+        .tcontent .item60 .label {
+            width: 18px;
+            height: 28px;
+
+            float: left;
+            margin-right: 10px;
+            margin-top: -5px;
+        }
+
+        .tcontent .item60 .yes {
+            background-color: #38aa00;
+        }
+
+        .tcontent .item60 .no {
+            background-color: #ed0f0d;
+        }
+
+        .tcontent .images {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: flex-start;
+            /* <--- thêm dòng này */
+            gap: 10px;
+            /* tuỳ chọn, để ảnh cách nhau đều */
+
+            margin-top: 6px;
+               margin-bottom: 6px;
+        }
+
+        .tcontent .images .images-item {
+            flex: 0 0 auto;
+            /* <--- giữ nguyên kích thước ảnh */
+        }
+
+        .tcontent .images .images-item img {
+            max-height: 260px;
+            max-width: 260px;
+            align-self: flex-start;
+        }
+    </style>
+
+</head>
+
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="row">
+                <div class="item50">
+                    <img class="logo" src="{{LOGO_URL}}" />
+                </div>
+                <div class="item50">
+                    <div class="a-right header-text-left">
+                        <p>Servicelink Pty Ltd</p>
+                        <p>77 624 079 698</p>
+                        <p>Suite 309/49-51 Queens Rd, Five Dock, NSW, 2046</p>
+                        <p>Helpdesk@servicelink.net.au</p>
+                        <p>www.servicelink.net.au</p>
+                        <p>0420 220 220</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="content">
+            <div class="row title">
+                <div class="item80">
+                    <span><b>{{TITLE}}</b></span>
+                </div>
+                <div class="item20 a-right">
+                    <span>{{CUR_DATE}}</span>
+                </div>
+            </div>
+
+            <div class="tcontent">
+                {{CONTENT}}
+            </div>
+
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>

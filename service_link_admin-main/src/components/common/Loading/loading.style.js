@@ -1,0 +1,14 @@
+import styled from "styled-components";
+const LoadingDiv = styled.div`
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25));
+  left: 0;
+  display: flex;
+  justify-content: center;
+  align-content: center;
+  z-index: 5000;
+`;
+export { LoadingDiv };

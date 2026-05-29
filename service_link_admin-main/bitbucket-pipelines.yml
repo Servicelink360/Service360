@@ -1,0 +1,49 @@
+#  Template NodeJS build
+
+#  This template allows you to validate your NodeJS code.
+#  The workflow allows running tests and code linting on the default branch.
+
+pipelines:
+  tags: 
+    v*:
+      - step:
+          size: 2x 
+          name: Build
+          image: node:16
+          caches:
+            - node
+          script:
+            - npm install  --legacy-peer-deps
+            - npm run build
+          artifacts:
+            - build/** 
+      # - step:
+      #     name: Deploy
+      #     script:
+      #       - pipe: atlassian/sftp-deploy:0.5.8
+      #         variables:
+      #           USER: "root"
+      #           SERVER: "172.104.32.239"
+      #           REMOTE_PATH: "/home/msa/web/emerse/html/"
+      #           LOCAL_PATH: "build/*"
+      #           PASSWORD: $PASSWORD
+      #           EXTRA_ARGS: "-oStrictHostKeyChecking=no"
+      - step:
+          name: Deploy
+          script:
+            - pipe: atlassian/rsync-deploy:0.7.1
+              variables:
+                USER: "root"
+                SERVER: "172.104.32.239"
+                REMOTE_PATH: "/home/msa/web/emerse/html/"
+                LOCAL_PATH: "build/*"
+                DEBUG: 'true'
+      - step:
+          name: Rebuild on Remote Server
+          script:
+            - pipe: atlassian/ssh-run:0.2.6
+              variables:
+                SSH_USER: "root"
+                SERVER: "172.104.32.239"
+                MODE: "command"
+                COMMAND: "cd /home/msa/web && docker-compose up -d --build"

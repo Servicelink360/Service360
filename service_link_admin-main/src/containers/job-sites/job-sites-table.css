@@ -1,0 +1,60 @@
+/**
+ * Job Sites nested tables — match app_from_host (Service360):
+ * main list green, site-items teal, tasks gray.
+ */
+
+.job-sites-page .job-sites-main-table .ant-table-thead > tr > th {
+  background: #397d36 !important;
+  color: #fff !important;
+}
+
+.job-sites-page .job-sites-main-table .ant-table-row-expand-icon {
+  border-color: #397d36;
+  color: #397d36;
+}
+
+.job-sites-page .job-sites-items-table .ant-table-thead > tr > th {
+  background: #5caeb0 !important;
+  color: #fff !important;
+}
+
+.job-sites-page .job-sites-items-table .ant-table-row-expand-icon {
+  border-color: #5caeb0;
+  color: #5caeb0;
+}
+
+.job-sites-page .job-sites-tasks-table .ant-table-thead > tr > th {
+  background: #788195 !important;
+  color: #fff !important;
+}
+
+.job-sites-page .job-sites-items-table .ant-table-footer,
+.job-sites-page .job-sites-tasks-table .ant-table-footer {
+  background: #f1f3f6 !important;
+  color: #788195 !important;
+  text-align: center;
+  font-size: 12px;
+}
+
+.job-sites-page .ant-table-expanded-row > td {
+  background: #f9f9f9 !important;
+}
+
+.job-sites-page .ant-table-tbody > tr > td > .ant-table-wrapper:only-child .ant-table,
+.job-sites-page
+  .ant-table-tbody
+  > tr
+  > td
+  > .ant-table-expanded-row-fixed
+  > .ant-table-wrapper:only-child
+  .ant-table {
+  margin: 0 !important;
+}
+
+.job-sites-page .job-sites-items-table {
+  padding-left: 33px;
+}
+
+.job-sites-page .job-sites-tasks-table {
+  padding-left: 33px;
+}

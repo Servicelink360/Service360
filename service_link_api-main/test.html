@@ -1,0 +1,295 @@
+<html>
+
+<head>
+    <style>
+        html {
+            -webkit-print-color-adjust: exact;
+        }
+
+        body {
+            width: 892px;
+            margin: auto;
+            font-family: serif;
+        }
+
+        .container {
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        .row {
+            border-bottom: 1px dotted #909090;
+        }
+
+        .row:after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+
+        .item50 {
+            width: 50%;
+            float: left;
+        }
+
+        .item80 {
+            width: 80%;
+            float: left;
+        }
+
+        .item20 {
+            width: 20%;
+            float: left;
+        }
+
+        .item40 {
+            width: 40%;
+            float: left;
+        }
+
+        .item60 {
+            width: 60%;
+            float: left;
+        }
+
+        .item100 {
+            width: 100%;
+            float: left;
+        }
+
+        .logo {
+            margin-top: 30px;
+            margin-left: 10px;
+            height: 110px;
+        }
+
+        .a-right {
+            text-align: right;
+        }
+
+        .header-text-left {
+            padding-right: 10px;
+            line-height: 0.5;
+        }
+
+        .title {
+            background-color: #408040;
+            padding: 10px;
+        }
+
+        .title span {
+            color: #ffff;
+        }
+
+        .tcontent {
+            margin-top: 20px;
+        }
+
+        .boder-top-dot {
+            border-top: 1px dotted #909090;
+            /* margin-top: 1px; */
+        }
+
+        .tcontent .item40 {
+            background-color: #f5f9f5;
+            margin-top: 1px;
+            margin-bottom: 1px;
+
+        }
+
+        .tcontent span {
+            font-size: 14px;
+        }
+
+        .tcontent .item40 .name {
+            margin: 10px;
+        }
+
+        .tcontent .item60 .value {
+            margin: 10px;
+        }
+
+        .tcontent .item60 .label {
+            width: 18px;
+            height: 28px;
+
+            float: left;
+            margin-right: 10px;
+            margin-top: -5px;
+        }
+
+        .tcontent .item60 .yes {
+            background-color: #38aa00;
+        }
+
+        .tcontent .item60 .no {
+            background-color: #ed0f0d;
+        }
+
+        .tcontent .images {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: flex-start;
+            /* <--- thêm dòng này */
+            gap: 10px;
+            /* tuỳ chọn, để ảnh cách nhau đều */
+
+            margin-top: 6px;
+               margin-bottom: 6px;
+        }
+
+        .tcontent .images .images-item {
+            flex: 0 0 auto;
+            /* <--- giữ nguyên kích thước ảnh */
+        }
+
+        .tcontent .images .images-item img {
+            max-height: 260px;
+            max-width: 260px;
+            align-self: flex-start;
+        }
+    </style>
+
+</head>
+
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="row">
+                <div class="item50">
+                    <img class="logo" src="http://3.104.215.45:8001/public/upload/files/logo-a8a4.png" />
+                </div>
+                <div class="item50">
+                    <div class="a-right header-text-left">
+                        <p>Servicelink Pty Ltd</p>
+                        <p>77 624 079 698</p>
+                        <p>Suite 309/49-51 Queens Rd, Five Dock, NSW, 2046</p>
+                        <p>Shelpdesk@servicelink.net.au</p>
+                        <p>www.servicelink.net.au</p>
+                        <p>0420 220 220</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="content">
+            <div class="row title">
+                <div class="item80">
+                    <span> Roof & Gutter Cleaning Report </span>
+                </div>
+                <div class="item20 a-right">
+                    <span>08 May 2024</span>
+                </div>
+            </div>
+
+            <div class="tcontent">
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span> Roof & Gutter Cleaning Report </span>
+                        </div>
+                    </div>
+                    <div class="item60">
+                        <div class="value"><span>08 May 2024</span></div>
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span> Site Name: </span>
+                        </div>
+                    </div>
+                    <div class="item60">
+                        <div class="value"><span>Leichhardt Family Day Care</span></div>
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span> Site Address:</span>
+                        </div>
+                    </div>
+                    <div class="item60">
+                        <div class="value"><span>22 Foster Street, Leichhardt</span></div>
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span> Is the site safe to work on::</span>
+                        </div>
+                    </div>
+                    <div class="item60">
+                        <div class="value"><span><span class="label yes"></span>Yes</span></div>
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span>After photos when job has been finished:</span>
+                        </div>
+                    </div>
+                    <div class="item60">
+
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="images">
+                    <div class="images-item"><img class=""
+                            src="https://api.serviceslink.com.au/public/upload/files/20221209_173153-50ef.jpg" /></div>
+                    <div class="images-item"><img class=""
+                            src="https://api.serviceslink.com.au/public/upload/files/Screenshot_at_Mar_02_01-38-03-8c77.png" />
+                    </div>
+                </div>
+
+
+
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span> Has the site been cleaned up afterwards including
+                                pathways:</span>
+                        </div>
+                    </div>
+                    <div class="item60">
+                        <div class="value"><span><span class="label no"></span>NO</span></div>
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="row">
+                    <div class="item40">
+                        <div class="name">
+                            <span>Photos:</span>
+                        </div>
+                    </div>
+                    <div class="item60">
+
+                    </div>
+                </div>
+                <div class="boder-top-dot"></div>
+                <div class="images">
+                    <div class="images-item"><img class=""
+                            src="https://api.serviceslink.com.au/public/upload/files/20221209_173153-50ef.jpg" /></div>
+                    <div class="images-item"><img class=""
+                            src="https://api.serviceslink.com.au/public/upload/files/Screenshot_at_Mar_02_01-38-03-8c77.png" />
+                    </div>
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>

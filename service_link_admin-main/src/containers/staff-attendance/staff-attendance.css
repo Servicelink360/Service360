@@ -1,0 +1,60 @@
+.staff-attendance-main .ant-table-thead > tr > th {
+  background: #397d36 !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.staff-attendance-main .ant-table-row-expand-icon-cell {
+  background: #fff;
+}
+
+.staff-attendance-main .ant-table-row-expand-icon {
+  border-color: #397d36;
+  color: #397d36;
+}
+
+.staff-attendance-main .ant-table-thead > tr > th::before {
+  background: transparent !important;
+}
+
+.staff-attendance-detail .ant-table-thead > tr > th {
+  background: #4a4a4a !important;
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.staff-attendance-detail .ant-table {
+  margin: 0 !important;
+}
+
+.staff-attendance-detail-wrap {
+  background: #f5f5f5;
+  padding: 8px 12px 12px;
+}
+
+.staff-attendance-total-hours {
+  margin: 8px 0 16px;
+  font-weight: 600;
+  color: #397d36;
+}
+
+.staff-attendance-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.staff-attendance-actions .btnEdit {
+  color: #1890ff;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.staff-attendance-actions .btnDelete {
+  color: #f44336;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}

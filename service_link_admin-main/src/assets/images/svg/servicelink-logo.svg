@@ -1,0 +1,4 @@
+<!-- Pixel-accurate logo: transparent PNG is embedded at runtime via logo.tsx -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 83" role="img" aria-label="ServiceLink">
+  <title>ServiceLink</title>
+</svg>

@@ -1,0 +1,38 @@
+.ag-theme-balham .ag-icon {
+    font-family: "agGridBalham" !important;
+}
+
+.ag-theme-balham .ag-radio-button-input-wrapper {
+    font-family: "agGridBalham" !important;
+}
+.ag-theme-balham .ag-checkbox-input-wrapper {
+    font-family: "agGridBalham" !important;
+}
+.ag-cell-value {
+    width: 100%;
+}
+
+.ag-theme-balham .ag-header-cell-moving {
+    background-color: rgb(17, 112, 180) !important;
+}
+
+.ag-theme-balham .ag-root-wrapper {
+    border-radius: 5px 5px 3px 3px !important;
+}
+
+.ag-theme-balham .ag-header-cell {
+    background: #397d36 !important;
+    color: #fff !important;
+    font-size: 12px !important;
+    font-family: 'Montserrat','Roboto',sans-serif !important;
+    font-weight: normal !important;
+}
+
+.ag-theme-balham .ag-pinned-right-header {
+    background: #397d36 !important;
+    color: #fff !important;
+}
+
+.ag-header-viewport {
+    background: #397d36 !important;
+}

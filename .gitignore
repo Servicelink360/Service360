@@ -1,0 +1,26 @@
+# Dependencies and builds
+**/node_modules/
+**/dist/
+**/build/
+
+# Secrets — never commit
+**/.env
+**/.env.*
+!**/.env.example
+
+# Logs and local artifacts
+**/log/
+*.log
+
+# Database dumps (large, may contain real data)
+*.sql
+*.dump
+data/
+
+# Duplicate / host copy (keep canonical api + admin folders only)
+app_from_host/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
