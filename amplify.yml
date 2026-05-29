@@ -1,16 +1,17 @@
-# AWS Amplify: connect GitHub repo → auto-build admin UI
-# Console: Amplify → New app → Host web app → GitHub → Service360 → use this file
+# AWS Amplify — admin UI (service_link_admin-main)
+# App settings → Environment variables: REACT_APP_ORDER_API_URL = your API URL
 
 version: 1
 frontend:
   phases:
     preBuild:
       commands:
+        - nvm use 18
         - cd service_link_admin-main
-        - npm ci --legacy-peer-deps
+        - npm install --legacy-peer-deps
     build:
       commands:
-        - export NODE_OPTIONS=--openssl-legacy-provider
+        - cd service_link_admin-main
         - npm run build
   artifacts:
     baseDirectory: service_link_admin-main/build
