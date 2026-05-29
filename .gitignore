@@ -3,11 +3,6 @@
 **/dist/
 **/build/
 
-# Secrets — never commit
-**/.env
-**/.env.*
-!**/.env.example
-
 # Logs and local artifacts
 **/log/
 *.log
