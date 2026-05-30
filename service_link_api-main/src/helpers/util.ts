@@ -318,13 +318,17 @@ async function imageBufferToJpegDataUri(buf: Buffer): Promise<string> {
 }
 
 function normalizeUnicodeForPdf(text: unknown): string {
-    return String(text ?? '')
-        .replace(/\u2013/g, '-') // en-dash –
-        .replace(/\u2014/g, '-') // em-dash —
-        .replace(/\u2212/g, '-') // minus sign
-        .replace(/[\u2018\u2019]/g, "'")
-        .replace(/[\u201C\u201D]/g, '"')
-        .replace(/\u2026/g, '...');
+    let s = String(text ?? '');
+    // UTF-8 en/em dash mis-read as Latin-1 (shows as "â€" in PDF)
+    s = s.replace(/\u00e2\u20ac[\u0093\u0094\u201c\u201d]/g, '-');
+    s = s.replace(/â€[\u0093\u0094\u201c\u201d""]/g, '-');
+    s = s.replace(/\u2013/g, '-'); // en-dash –
+    s = s.replace(/\u2014/g, '-'); // em-dash —
+    s = s.replace(/\u2212/g, '-'); // minus sign
+    s = s.replace(/[\u2018\u2019]/g, "'");
+    s = s.replace(/[\u201C\u201D]/g, '"');
+    s = s.replace(/\u2026/g, '...');
+    return s;
 }
 
 function escapeHtml(unsafe: unknown): string {
@@ -750,6 +754,9 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     await sleep(500);
     const page = await browser.newPage();
     console.log('2 convert to pdf');
+    if (!/charset/i.test(html)) {
+        html = html.replace(/<head>/i, '<head><meta charset="UTF-8">');
+    }
     await page.setContent(html, { waitUntil: 'load', timeout: 120_000 });
 
     // Same basename pattern as S3 (`report_<timestamp>.pdf`) so stored URLs stay consistent.
