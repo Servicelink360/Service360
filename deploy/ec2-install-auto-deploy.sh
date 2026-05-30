@@ -43,5 +43,8 @@ CRON
 chmod 644 /etc/cron.d/service360-auto-deploy
 touch "$LOG"
 
+echo "Running first deploy now..."
+/usr/local/bin/service360-auto-deploy || bash "${APP_DIR}/deploy/ec2-deploy.sh"
+
 echo "Installed. Pushes to main deploy within ~2 minutes."
 echo "Log: tail -f ${LOG}"
