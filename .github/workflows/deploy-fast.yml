@@ -1,0 +1,159 @@
+# Build on GitHub (fast CPUs, no EC2 overload). Copy only compiled output to EC2 (~30 sec on server).
+#
+# Secrets (GitHub → Settings → Secrets → Actions):
+#   EC2_HOST      = 13.55.122.55
+#   EC2_SSH_KEY   = contents of service360-api_Key_pem.pem
+#   API_URL       = http://13.55.122.55:5301/  (or https://api.service360.com.au/ after SSL)
+
+name: Fast deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: What to deploy
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - api
+          - admin
+          - both
+
+concurrency:
+  group: ec2-fast-deploy
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'service_link_api-main/**'
+            admin:
+              - 'service_link_admin-main/**'
+
+  deploy-api:
+    name: Build & deploy API
+    needs: changes
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.target == 'api' ||
+      github.event.inputs.target == 'both' ||
+      (github.event.inputs.target != 'admin' && needs.changes.outputs.api == 'true')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: service_link_api-main/package-lock.json
+
+      - name: Build API
+        working-directory: service_link_api-main
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: |
+          npm ci --legacy-peer-deps
+          npm run build
+
+      - name: Pack API artifact
+        run: |
+          mkdir -p artifact/api/dist
+          cp -a service_link_api-main/dist/. artifact/api/dist/
+          cp service_link_api-main/template.html artifact/api/
+          tar czf api-artifact.tar.gz -C artifact api
+
+      - uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: api-artifact.tar.gz
+          target: /tmp/deploy-artifacts
+
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -e
+            cd /opt/app && git fetch origin main && git reset --hard origin/main
+            sudo rm -rf /tmp/deploy-artifacts/api
+            sudo mkdir -p /tmp/deploy-artifacts
+            sudo tar xzf /tmp/deploy-artifacts/api-artifact.tar.gz -C /tmp/deploy-artifacts
+            sudo bash /opt/app/deploy/ec2-apply-artifacts.sh api
+
+  deploy-admin:
+    name: Build & deploy Admin
+    needs: changes
+    runs-on: ubuntu-latest
+    if: |
+      github.event.inputs.target == 'admin' ||
+      github.event.inputs.target == 'both' ||
+      (github.event.inputs.target != 'api' && needs.changes.outputs.admin == 'true')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: |
+            service_link_admin-main/package-lock.json
+            service_link_admin-main/ckeditor5/package-lock.json
+
+      - name: Build admin
+        working-directory: service_link_admin-main
+        env:
+          REACT_APP_ORDER_API_URL: ${{ secrets.API_URL || 'http://13.55.122.55:5301/' }}
+          REACT_APP_MODE: PROD
+          NODE_OPTIONS: --openssl-legacy-provider --max_old_space_size=4096
+          CI: 'false'
+          DISABLE_ESLINT_PLUGIN: 'true'
+          GENERATE_SOURCEMAP: 'false'
+        run: |
+          cd ckeditor5 && npm install && npm run build && cd ..
+          npm ci --legacy-peer-deps
+          printf 'REACT_APP_ORDER_API_URL=%s\nREACT_APP_MODE=PROD\nGENERATE_SOURCEMAP=false\n' \
+            "$REACT_APP_ORDER_API_URL" > .env.production
+          npm run build
+
+      - name: Pack admin artifact
+        run: tar czf admin-artifact.tar.gz -C service_link_admin-main build
+
+      - uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: admin-artifact.tar.gz
+          target: /tmp/deploy-artifacts
+
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 5m
+          script: |
+            set -e
+            cd /opt/app && git fetch origin main && git reset --hard origin/main
+            sudo rm -rf /tmp/deploy-artifacts/admin
+            sudo mkdir -p /tmp/deploy-artifacts
+            sudo tar xzf /tmp/deploy-artifacts/admin-artifact.tar.gz -C /tmp/deploy-artifacts/admin
+            sudo bash /opt/app/deploy/ec2-apply-artifacts.sh admin

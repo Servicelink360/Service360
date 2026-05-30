@@ -1,14 +1,9 @@
-# Auto-deploy on every push to main (needs GitHub secrets — set once in browser).
-# GitHub → Servicelink360/Service360 → Settings → Secrets → Actions:
-#   EC2_HOST = 13.55.122.55
-#   EC2_SSH_KEY = paste your .pem file contents
-#   API_URL = http://13.55.122.55:5301/
+# Fallback: full build ON EC2 (slow — use deploy-fast.yml instead).
+# Disabled on push; run manually only if GitHub Actions fast deploy is unavailable.
 
-name: Deploy to EC2
+name: Deploy to EC2 (slow fallback)
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -17,12 +12,10 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy API + Admin
+    name: Full EC2 docker build
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' }}
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.0
+      - uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER || 'ubuntu' }}
@@ -32,12 +25,6 @@ jobs:
           script: |
             set -e
             APP_DIR="/opt/app"
-            API_URL="${{ secrets.API_URL || 'http://13.55.122.55:5301/' }}"
-            if [ ! -d "$APP_DIR/.git" ]; then
-              sudo mkdir -p "$APP_DIR"
-              sudo git clone https://github.com/Servicelink360/Service360.git "$APP_DIR"
-              sudo chown -R ubuntu:ubuntu "$APP_DIR"
-            fi
             cd "$APP_DIR"
             git fetch origin main && git reset --hard origin/main
             bash deploy/ec2-deploy.sh
