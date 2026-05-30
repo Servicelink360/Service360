@@ -46,6 +46,18 @@ set_env() {
   fi
 }
 
+needs_full_api_build() {
+  local base="${1:-HEAD~1}"
+  git diff --name-only "$base" HEAD 2>/dev/null | grep -qE '^service_link_api-main/(Dockerfile|package\.json|package-lock\.json)' \
+    || git diff --name-only "$base" HEAD 2>/dev/null | grep -qE '^deploy/docker-compose'
+}
+
+needs_full_admin_build() {
+  local base="${1:-HEAD~1}"
+  git diff --name-only "$base" HEAD 2>/dev/null | grep -qE '^service_link_admin-main/(Dockerfile|package\.json|package-lock\.json|ckeditor5/)' \
+    || git diff --name-only "$base" HEAD 2>/dev/null | grep -qE '^deploy/docker-compose|^deploy/nginx'
+}
+
 STARTED_AT="$(date -Is)"
 
 echo "=== git pull ==="
@@ -108,9 +120,39 @@ fi
 
 export REACT_APP_ORDER_API_URL="${API_URL}"
 
+BASE="${PREV_COMMIT:-HEAD~1}"
+USE_FAST="${DEPLOY_FAST:-1}"
+
 if [ "${#SERVICES[@]}" -gt 0 ]; then
-  "${DC[@]}" -f "$COMPOSE_FILE" build "${SERVICES[@]}"
-  "${DC[@]}" -f "$COMPOSE_FILE" up -d --force-recreate "${SERVICES[@]}"
+  if [ "$USE_FAST" = "1" ]; then
+    if $BUILD_API && ! $BUILD_ADMIN && ! needs_full_api_build "$BASE"; then
+      bash "$APP_DIR/deploy/ec2-deploy-fast.sh" api
+    elif $BUILD_ADMIN && ! $BUILD_API && ! needs_full_admin_build "$BASE"; then
+      bash "$APP_DIR/deploy/ec2-deploy-fast.sh" admin
+    elif $BUILD_API && $BUILD_ADMIN \
+        && ! needs_full_api_build "$BASE" && ! needs_full_admin_build "$BASE"; then
+      bash "$APP_DIR/deploy/ec2-deploy-fast.sh" both
+    elif $BUILD_API && ! needs_full_api_build "$BASE"; then
+      bash "$APP_DIR/deploy/ec2-deploy-fast.sh" api
+      if $BUILD_ADMIN; then
+        if needs_full_admin_build "$BASE"; then
+          "${DC[@]}" -f "$COMPOSE_FILE" build admin
+          "${DC[@]}" -f "$COMPOSE_FILE" up -d --force-recreate admin
+        else
+          bash "$APP_DIR/deploy/ec2-deploy-fast.sh" admin
+        fi
+      fi
+    elif $BUILD_ADMIN && ! needs_full_admin_build "$BASE"; then
+      bash "$APP_DIR/deploy/ec2-deploy-fast.sh" admin
+    else
+      echo "=== full docker build (Dockerfile or package.json changed) ==="
+      "${DC[@]}" -f "$COMPOSE_FILE" build "${SERVICES[@]}"
+      "${DC[@]}" -f "$COMPOSE_FILE" up -d --force-recreate "${SERVICES[@]}"
+    fi
+  else
+    "${DC[@]}" -f "$COMPOSE_FILE" build "${SERVICES[@]}"
+    "${DC[@]}" -f "$COMPOSE_FILE" up -d --force-recreate "${SERVICES[@]}"
+  fi
 fi
 
 "${DC[@]}" -f "$COMPOSE_FILE" ps
