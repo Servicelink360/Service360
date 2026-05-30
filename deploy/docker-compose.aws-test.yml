@@ -27,7 +27,6 @@ services:
       - redis
     volumes:
       - api_uploads:/usr/src/app/public/uploads
-      - ../deploy-status.json:/usr/src/app/deploy-status.json
 
   admin:
     build:

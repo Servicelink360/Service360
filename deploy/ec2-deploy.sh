@@ -16,8 +16,22 @@ write_status() {
 EOF
 }
 
+set_env() {
+  local key="$1" val="$2"
+  if grep -q "^${key}=" "$ENV_PROD" 2>/dev/null; then
+    sed -i "s|^${key}=.*|${key}=${val}|" "$ENV_PROD"
+  else
+    echo "${key}=${val}" >> "$ENV_PROD"
+  fi
+}
+
 STARTED_AT="$(date -Is)"
 write_status "deploying" "" "Building API and admin..."
+if [ -f "$ENV_PROD" ]; then
+  set_env DEPLOY_STATUS deploying
+  set_env DEPLOY_STARTED_AT "$STARTED_AT"
+  set_env DEPLOY_MESSAGE "Building API and admin..."
+fi
 
 echo "=== git pull ==="
 git fetch origin main
@@ -40,6 +54,13 @@ echo "=== status ==="
 docker compose -f "$COMPOSE_FILE" ps
 
 write_status "ready" "$(date -Is)" "Deploy complete"
+if [ -f "$ENV_PROD" ]; then
+  COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  set_env DEPLOY_STATUS ready
+  set_env DEPLOY_COMMIT "$COMMIT"
+  set_env DEPLOY_FINISHED_AT "$(date -Is)"
+  set_env DEPLOY_MESSAGE "Deploy complete"
+fi
 
 echo "=== done ==="
 echo "Admin: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo EC2-IP)/"
