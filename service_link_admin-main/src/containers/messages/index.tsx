@@ -892,7 +892,7 @@ const MessagesPage: React.FC = () => {
       );
       if (cancelled || res?.code !== 1 || !res?.data?.peerId) return;
 
-      const peerType = res.data.peerType as PeerType;
+      const peerType = res.data.peerType as 'customer' | 'staff';
       const peerId = +res.data.peerId;
       const customerId = res.data.customerId ? +res.data.customerId : null;
       const rowList = threads.length ? threads : (await loadThreads()) || [];
