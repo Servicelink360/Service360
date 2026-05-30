@@ -12,7 +12,7 @@ ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends chromium \
+    && apt-get install -y --no-install-recommends chromium fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm install --legacy-peer-deps --omit=dev

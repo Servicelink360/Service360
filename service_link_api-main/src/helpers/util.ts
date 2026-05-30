@@ -317,9 +317,19 @@ async function imageBufferToJpegDataUri(buf: Buffer): Promise<string> {
     return `data:image/jpeg;base64,${out.toString('base64')}`;
 }
 
+function normalizeUnicodeForPdf(text: unknown): string {
+    return String(text ?? '')
+        .replace(/\u2013/g, '-') // en-dash –
+        .replace(/\u2014/g, '-') // em-dash —
+        .replace(/\u2212/g, '-') // minus sign
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/\u2026/g, '...');
+}
+
 function escapeHtml(unsafe: unknown): string {
     if (unsafe == null) return '';
-    return String(unsafe)
+    return normalizeUnicodeForPdf(unsafe)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -777,12 +787,15 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
             const pageSize = pg.getSize();
             const bottomX = pageSize.width - 70;
             pg.drawText(`Page ${i + 1}`, { x: bottomX, y: 18, size: 9 });
-            pg.drawText(title, { x: 30, y: 36, size: 9 });
-            pg.drawText(`Submitted by: ${submittedByLabel} @ ${submittedStamp}`, {
-                x: 30,
-                y: 18,
-                size: 9,
-            });
+            pg.drawText(normalizeUnicodeForPdf(title), { x: 30, y: 36, size: 9 });
+            pg.drawText(
+                `Submitted by: ${normalizeUnicodeForPdf(submittedByLabel)} @ ${submittedStamp}`,
+                {
+                    x: 30,
+                    y: 18,
+                    size: 9,
+                },
+            );
             pg.drawText(`Submitted Id: ${rowNumber} Your Partner in Facilities www.servicelink.net.au`, {
                 x: 30,
                 y: 8,
