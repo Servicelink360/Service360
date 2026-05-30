@@ -27,9 +27,15 @@ ENV NODE_OPTIONS=--openssl-legacy-provider --max_old_space_size=3072
 ENV CI=false
 ENV DISABLE_ESLINT_PLUGIN=true
 
-RUN npm run build \
-    && grep -q "$REACT_APP_ORDER_API_URL" /app/build/static/js/main.*.chunk.js \
-    || (echo "BUILD FAILED: API URL not embedded in bundle" && exit 1)
+RUN npm run build
+
+# Belt-and-suspenders: force the API URL into built assets (CRA/cache can leave a stale IP).
+RUN find /app/build -type f \( -name '*.js' -o -name '*.html' \) \
+    -exec sed -i "s|http://3.106.232.253:5301/|${REACT_APP_ORDER_API_URL}|g" {} + \
+    && find /app/build -type f \( -name '*.js' -o -name '*.html' \) \
+    -exec sed -i "s|http://3.104.215.45:8001/|${REACT_APP_ORDER_API_URL}|g" {} + \
+    && grep -rq "$(printf '%s' "$REACT_APP_ORDER_API_URL" | sed 's|http://||')" /app/build/static/js/ \
+    || (echo "BUILD FAILED: API URL not in bundle" && exit 1)
 
 FROM nginx:alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
