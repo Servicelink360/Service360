@@ -134,14 +134,7 @@ if [ "${#SERVICES[@]}" -gt 0 ]; then
       bash "$APP_DIR/deploy/ec2-deploy-fast.sh" both
     elif $BUILD_API && ! needs_full_api_build "$BASE"; then
       bash "$APP_DIR/deploy/ec2-deploy-fast.sh" api
-      if $BUILD_ADMIN; then
-        if needs_full_admin_build "$BASE"; then
-          "${DC[@]}" -f "$COMPOSE_FILE" build admin
-          "${DC[@]}" -f "$COMPOSE_FILE" up -d --force-recreate admin
-        else
-          bash "$APP_DIR/deploy/ec2-deploy-fast.sh" admin
-        fi
-      fi
+      $BUILD_ADMIN && bash "$APP_DIR/deploy/ec2-deploy-fast.sh" admin
     elif $BUILD_ADMIN && ! needs_full_admin_build "$BASE"; then
       bash "$APP_DIR/deploy/ec2-deploy-fast.sh" admin
     else
