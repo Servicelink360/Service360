@@ -16,10 +16,12 @@ COPY package*.json ./
 RUN npm install --legacy-peer-deps
 COPY . .
 
-# CRA reads .env.production at build time. Write it here so the API URL cannot
-# come from stale copied .env files or from a cached layer with the wrong ARG.
+# Remove any copied/local env files, then write the only production env CRA should read.
+RUN rm -f .env .env.local .env.production .env.production.local .env.development .env.development.local
 RUN printf 'REACT_APP_ORDER_API_URL=%s\nREACT_APP_MODE=%s\nGENERATE_SOURCEMAP=false\n' \
-    "$REACT_APP_ORDER_API_URL" "$REACT_APP_MODE" > .env.production
+    "$REACT_APP_ORDER_API_URL" "$REACT_APP_MODE" > .env.production \
+    && echo "=== admin build API URL ===" \
+    && cat .env.production
 
 ENV NODE_OPTIONS=--openssl-legacy-provider --max_old_space_size=3072
 ENV CI=false
