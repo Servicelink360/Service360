@@ -50,7 +50,12 @@ export class MessagesService {
   private async resolveReportConversationPeer(
     userTaskId?: number,
     reportFaultId?: number,
-  ): Promise<{ peerType: 'customer' | 'staff'; peerId: number; displayName: string } | null> {
+  ): Promise<{
+    peerType: 'customer' | 'staff';
+    peerId: number;
+    displayName: string;
+    customerId: number;
+  } | null> {
     if (userTaskId) {
       const task = await this.userTaskRepo.findOne({ where: { id: userTaskId } });
       if (!task || task.type !== 'CUSTOM' || +task.staffId <= 0) return null;
@@ -58,6 +63,7 @@ export class MessagesService {
         peerType: 'staff',
         peerId: +task.staffId,
         displayName: await this.displayNameForUser(+task.staffId),
+        customerId: +task.customerId,
       };
     }
     if (reportFaultId) {
@@ -71,6 +77,7 @@ export class MessagesService {
           peerType: 'staff',
           peerId: +creator.id,
           displayName: await this.displayNameForUser(+creator.id),
+          customerId: +fault.customerId,
         };
       }
       return {
@@ -79,6 +86,7 @@ export class MessagesService {
         displayName:
           fault.customerName?.trim() ||
           (await this.displayNameForUser(+fault.customerId)),
+        customerId: +fault.customerId,
       };
     }
     return null;
@@ -1165,6 +1173,7 @@ export class MessagesService {
       let reportReference: string | undefined;
       let reportFaultId: number | undefined;
       let userTaskId: number | undefined;
+      let reportCustomerIdForCc = 0;
 
       if (body.reportFaultId) {
         const fault = await this.reportFaultRepo.findOne({
@@ -1190,6 +1199,7 @@ export class MessagesService {
         const ref = this.buildReportFaultReferenceBlock(fault);
         reportReference = ref.reference;
         reportFaultId = fault.id;
+        reportCustomerIdForCc = +fault.customerId;
         if (!messageBody.includes(this.reportFaultLink(fault.id))) {
           messageBody = ref.fullBodyPrefix + messageBody;
         }
@@ -1222,6 +1232,7 @@ export class MessagesService {
         const ref = this.buildNewReportReferenceBlock(task);
         reportReference = ref.reference;
         userTaskId = task.id;
+        reportCustomerIdForCc = +task.customerId;
         if (!messageBody.includes(this.newReportLink(task.id))) {
           messageBody = ref.fullBodyPrefix + messageBody;
         }
@@ -1249,7 +1260,10 @@ export class MessagesService {
         await this.saveMessageToThread(senderThread, userInfo, messageFields);
       }
 
-      const ccAnchorId = reportFaultOwnerId ?? (thread.customerId ? +thread.customerId : 0);
+      const ccAnchorId =
+        reportFaultOwnerId ||
+        reportCustomerIdForCc ||
+        (thread.customerId ? +thread.customerId : 0);
       if (ccAnchorId) {
         const ccExclude =
           reportFaultOwnerId && senderCustomerId

@@ -399,6 +399,7 @@ const MessagesPage: React.FC = () => {
   const [userTaskId, setUserTaskId] = useState<number | null>(
     userTaskIdParam ? +userTaskIdParam : null,
   );
+  const [reportCustomerId, setReportCustomerId] = useState<number | null>(null);
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [newMessageCustomerId, setNewMessageCustomerId] = useState<number | null>(null);
   const [newMessageStaffId, setNewMessageStaffId] = useState<number | null>(null);
@@ -799,6 +800,10 @@ const MessagesPage: React.FC = () => {
       loadCompanyCc(selectedConversation.peerId);
       return;
     }
+    if (isAdmin && selectedConversation?.peerType === 'staff' && reportCustomerId) {
+      loadCompanyCc(reportCustomerId);
+      return;
+    }
     if (isCustomer && activeConversation?.conversationKind === 'admin') {
       // Use recipients list for CC options (no API calls).
       const opts = colleagueRecipientOptions.map((c) => ({
@@ -818,6 +823,7 @@ const MessagesPage: React.FC = () => {
     activeConversation?.conversationKind,
     colleagueRecipientOptions,
     selectedConversation,
+    reportCustomerId,
     loadCompanyCc,
   ]);
 
@@ -861,6 +867,12 @@ const MessagesPage: React.FC = () => {
   }, [reportFaultIdParam, userTaskIdParam]);
 
   useEffect(() => {
+    if (!hasReportContext) {
+      setReportCustomerId(null);
+    }
+  }, [hasReportContext]);
+
+  useEffect(() => {
     if (!isAdmin || !hasReportContext) {
       reportContextKeyRef.current = '';
       return;
@@ -882,9 +894,11 @@ const MessagesPage: React.FC = () => {
 
       const peerType = res.data.peerType as PeerType;
       const peerId = +res.data.peerId;
+      const customerId = res.data.customerId ? +res.data.customerId : null;
       const rowList = threads.length ? threads : (await loadThreads()) || [];
       const existing = findAdminThreadRow(rowList, peerType, peerId);
       reportContextKeyRef.current = contextKey;
+      setReportCustomerId(customerId);
       setSelectedConversation({
         threadId: existing?.threadId ?? res.data.threadId ?? 0,
         peerType,
@@ -949,7 +963,11 @@ const MessagesPage: React.FC = () => {
   const showCcComposer =
     ccOptions.length > 0 &&
     ((isCustomer && activeConversation?.conversationKind === 'admin') ||
-      (isAdmin && selectedConversation?.peerType === 'customer'));
+      (isAdmin && selectedConversation?.peerType === 'customer') ||
+      (isAdmin &&
+        selectedConversation?.peerType === 'staff' &&
+        reportCustomerId != null &&
+        reportCustomerId > 0));
 
   const sendMessage = async () => {
     const text = draft.trim();
@@ -1369,7 +1387,7 @@ const MessagesPage: React.FC = () => {
                 {selectedConversation?.peerType === 'staff'
                   ? selectedConversation.displayName || 'staff'
                   : 'customer'}
-                ; reference will be attached when you send.
+                ; reference will be attached when you send. You can Cc company colleagues below.
               </Text>
             )}
             {isCustomer &&
