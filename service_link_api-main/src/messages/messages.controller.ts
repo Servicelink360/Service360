@@ -63,6 +63,26 @@ export class MessagesController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Get('report-conversation')
+  async resolveReportConversation(
+    @Res() res,
+    @Query('userTaskId') userTaskId: string,
+    @Query('reportFaultId') reportFaultId: string,
+    @Request() req,
+  ) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(
+      res,
+      await this.messagesService.resolveReportConversation(
+        user,
+        userTaskId ? +userTaskId : undefined,
+        reportFaultId ? +reportFaultId : undefined,
+      ),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Get()
   async listMessages(@Res() res, @Query() query: ListMessagesDto, @Request() req) {
     const user: IUserInfo = req.user;

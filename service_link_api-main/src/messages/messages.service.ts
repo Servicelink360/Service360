@@ -13,6 +13,7 @@ import { Customer } from '../users/entities/customer.entity';
 import { errorCode } from '../constants/errorCode';
 import { ReportFault } from '../report-faults/entities/report-fault.entity';
 import { UserTask } from '../user-tasks/entities/user-task.entity';
+import { User } from '../users/entities/user.entity';
 import { reportFaultStatus } from '../constants/status';
 
 @Injectable()
@@ -30,7 +31,88 @@ export class MessagesService {
     private readonly reportFaultRepo: Repository<ReportFault>,
     @InjectRepository(UserTask)
     private readonly userTaskRepo: Repository<UserTask>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
+
+  private async displayNameForUser(userId: number): Promise<string> {
+    const u = await this.userRepo.findOne({ where: { id: userId } });
+    if (!u) return `User #${userId}`;
+    return (
+      u.fullName?.trim() ||
+      [u.firstName, u.lastName].filter(Boolean).join(' ').trim() ||
+      u.username ||
+      `User #${userId}`
+    );
+  }
+
+  /** Admin: open the staff (or customer) conversation for a linked report. */
+  private async resolveReportConversationPeer(
+    userTaskId?: number,
+    reportFaultId?: number,
+  ): Promise<{ peerType: 'customer' | 'staff'; peerId: number; displayName: string } | null> {
+    if (userTaskId) {
+      const task = await this.userTaskRepo.findOne({ where: { id: userTaskId } });
+      if (!task || task.type !== 'CUSTOM' || +task.staffId <= 0) return null;
+      return {
+        peerType: 'staff',
+        peerId: +task.staffId,
+        displayName: await this.displayNameForUser(+task.staffId),
+      };
+    }
+    if (reportFaultId) {
+      const fault = await this.reportFaultRepo.findOne({ where: { id: reportFaultId } });
+      if (!fault || +fault.status === reportFaultStatus.DELETED) return null;
+      const creator = fault.createdBy
+        ? await this.userRepo.findOne({ where: { id: +fault.createdBy } })
+        : null;
+      if (creator && +creator.type === userType.STAFF) {
+        return {
+          peerType: 'staff',
+          peerId: +creator.id,
+          displayName: await this.displayNameForUser(+creator.id),
+        };
+      }
+      return {
+        peerType: 'customer',
+        peerId: +fault.customerId,
+        displayName:
+          fault.customerName?.trim() ||
+          (await this.displayNameForUser(+fault.customerId)),
+      };
+    }
+    return null;
+  }
+
+  async resolveReportConversation(
+    userInfo: IUserInfo,
+    userTaskId?: number,
+    reportFaultId?: number,
+  ) {
+    try {
+      if (+userInfo.type !== userType.ADMIN) {
+        return { ...errorCode.CAN_NOT_DELETE, message: 'Admin only' };
+      }
+      if (!userTaskId && !reportFaultId) {
+        return { ...errorCode.VALIDATION_ERROR, message: 'userTaskId or reportFaultId required' };
+      }
+      const peer = await this.resolveReportConversationPeer(userTaskId, reportFaultId);
+      if (!peer) {
+        return { ...errorCode.NOT_FOUND, message: 'Report not found' };
+      }
+      const thread =
+        peer.peerType === 'staff'
+          ? await this.getOrCreateStaffThread(peer.peerId)
+          : await this.getOrCreateCustomerThread(peer.peerId);
+      return {
+        ...errorCode.SUCCESS,
+        data: { ...peer, threadId: thread.id },
+      };
+    } catch (error) {
+      this.logger.error(error);
+      return { ...errorCode.EXCEPTION, message: (error as Error).message };
+    }
+  }
 
   private preview(text: string, max = 120): string {
     const t = text.replace(/\s+/g, ' ').trim();
@@ -1019,20 +1101,21 @@ export class MessagesService {
         thread = await this.getOrCreateStaffThread(+body.staffId);
       } else if (body.customerId) {
         thread = await this.getOrCreateCustomerThread(+body.customerId);
-      } else if (body.userTaskId) {
-        const taskForCustomer = await this.userTaskRepo.findOne({
-          where: { id: body.userTaskId },
-        });
-        if (!taskForCustomer || taskForCustomer.type !== 'CUSTOM') {
-          return { ...errorCode.NOT_FOUND, message: 'New report not found' };
+      } else if (body.userTaskId || body.reportFaultId) {
+        const peer = await this.resolveReportConversationPeer(
+          body.userTaskId ? +body.userTaskId : undefined,
+          body.reportFaultId ? +body.reportFaultId : undefined,
+        );
+        if (!peer) {
+          return {
+            ...errorCode.NOT_FOUND,
+            message: body.userTaskId ? 'New report not found' : 'Report fault not found',
+          };
         }
-        thread = await this.getOrCreateCustomerThread(+taskForCustomer.customerId);
-      } else if (body.reportFaultId) {
-        const faultForCustomer = await this.reportFaultRepo.findOne({
-          where: { id: body.reportFaultId },
-        });
-        if (!faultForCustomer) return errorCode.NOT_FOUND;
-        thread = await this.getOrCreateCustomerThread(+faultForCustomer.customerId);
+        thread =
+          peer.peerType === 'staff'
+            ? await this.getOrCreateStaffThread(peer.peerId)
+            : await this.getOrCreateCustomerThread(peer.peerId);
       } else {
         return {
           ...errorCode.VALIDATION_ERROR,

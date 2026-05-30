@@ -7,6 +7,7 @@ import { CustomerAdminMessage } from './entities/customer-admin-message.entity';
 import { CustomerAdminMessageDeletion } from './entities/customer-admin-message-deletion.entity';
 import { ReportFault } from '../report-faults/entities/report-fault.entity';
 import { UserTask } from '../user-tasks/entities/user-task.entity';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UserTask } from '../user-tasks/entities/user-task.entity';
       CustomerAdminMessageDeletion,
       ReportFault,
       UserTask,
+      User,
     ]),
   ],
   controllers: [MessagesController],

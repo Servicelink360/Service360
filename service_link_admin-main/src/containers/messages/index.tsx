@@ -346,6 +346,7 @@ const MessagesPage: React.FC = () => {
   const dispatch = useDispatch();
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const reportContextKeyRef = useRef('');
 
   const scrollToLatestMessage = useCallback(() => {
     const run = () => {
@@ -860,6 +861,51 @@ const MessagesPage: React.FC = () => {
   }, [reportFaultIdParam, userTaskIdParam]);
 
   useEffect(() => {
+    if (!isAdmin || !hasReportContext) {
+      reportContextKeyRef.current = '';
+      return;
+    }
+    const contextKey = `${reportFaultIdParam || ''}|${userTaskIdParam || ''}`;
+    if (reportContextKeyRef.current === contextKey) return;
+
+    let cancelled = false;
+    (async () => {
+      const q = reportFaultIdParam
+        ? `reportFaultId=${encodeURIComponent(reportFaultIdParam)}`
+        : `userTaskId=${encodeURIComponent(userTaskIdParam!)}`;
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.MESSAGES}/report-conversation?${q}`,
+        'GET',
+      );
+      if (cancelled || res?.code !== 1 || !res?.data?.peerId) return;
+
+      const peerType = res.data.peerType as PeerType;
+      const peerId = +res.data.peerId;
+      const rowList = threads.length ? threads : (await loadThreads()) || [];
+      const existing = findAdminThreadRow(rowList, peerType, peerId);
+      reportContextKeyRef.current = contextKey;
+      setSelectedConversation({
+        threadId: existing?.threadId ?? res.data.threadId ?? 0,
+        peerType,
+        peerId,
+        displayName: existing?.customerName || res.data.displayName,
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAdmin,
+    hasReportContext,
+    reportFaultIdParam,
+    userTaskIdParam,
+    threads.length,
+    loadThreads,
+  ]);
+
+  useEffect(() => {
     if (loadingMessages) return;
     scrollToLatestMessage();
   }, [lastMessageKey, messageTab, loadingMessages, scrollToLatestMessage]);
@@ -1314,7 +1360,19 @@ const MessagesPage: React.FC = () => {
                 }}
               />
             ) : null}
-            {(isAdmin || isCustomer) &&
+            {isAdmin && (reportFaultId || userTaskId) && (
+              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                {reportFaultId
+                  ? `Linked to fault report #${reportFaultId}`
+                  : `Linked to new report #${userTaskId}`}
+                {' — messaging '}
+                {selectedConversation?.peerType === 'staff'
+                  ? selectedConversation.displayName || 'staff'
+                  : 'customer'}
+                ; reference will be attached when you send.
+              </Text>
+            )}
+            {isCustomer &&
               activeConversation?.conversationKind === 'admin' &&
               (reportFaultId || userTaskId) && (
               <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
