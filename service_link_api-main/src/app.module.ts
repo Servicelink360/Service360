@@ -30,6 +30,7 @@ import { UserDailyJobsModule } from './user-daily-job/user-daily-jobs.module';
 import { AdminModule } from './admin/admin.module';
 import { MessagesModule } from './messages/messages.module';
 import { CompaniesModule } from './companies/companies.module';
+import { DeployStatusController } from './deploy-status.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -92,7 +93,7 @@ import { CompaniesModule } from './companies/companies.module';
     MessagesModule,
     CompaniesModule,
   ],
-  controllers: [],
+  controllers: [DeployStatusController],
   providers: [AppService],
 
 })

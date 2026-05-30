@@ -9,6 +9,16 @@ ENV_PROD="${APP_DIR}/service_link_api-main/.env.prod"
 
 cd "$APP_DIR"
 
+STATUS_FILE="${APP_DIR}/deploy-status.json"
+write_status() {
+  cat > "$STATUS_FILE" << EOF
+{"status":"$1","commit":"$(git rev-parse --short HEAD 2>/dev/null || echo unknown)","startedAt":"${STARTED_AT:-}","finishedAt":"${2:-}","message":"$3"}
+EOF
+}
+
+STARTED_AT="$(date -Is)"
+write_status "deploying" "" "Building API and admin..."
+
 echo "=== git pull ==="
 git fetch origin main
 git reset --hard origin/main
@@ -28,6 +38,8 @@ docker compose -f "$COMPOSE_FILE" up -d --force-recreate
 
 echo "=== status ==="
 docker compose -f "$COMPOSE_FILE" ps
+
+write_status "ready" "$(date -Is)" "Deploy complete"
 
 echo "=== done ==="
 echo "Admin: http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo EC2-IP)/"
