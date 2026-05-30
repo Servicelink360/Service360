@@ -4,6 +4,12 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/app}"
 API_URL="${API_URL:-http://13.55.122.55:5301/}"
+HTTPS_ENV="${APP_DIR}/deploy/https.env"
+if [ -f "$HTTPS_ENV" ]; then
+  # shellcheck disable=SC1090
+  source "$HTTPS_ENV"
+  API_URL="${API_URL:-https://${API_DOMAIN}/}"
+fi
 COMPOSE_FILE="${APP_DIR}/deploy/docker-compose.aws-test.yml"
 ENV_PROD="${APP_DIR}/service_link_api-main/.env.prod"
 PREV_COMMIT="${PREV_COMMIT:-}"
