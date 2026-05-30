@@ -27,7 +27,9 @@ ENV NODE_OPTIONS=--openssl-legacy-provider --max_old_space_size=3072
 ENV CI=false
 ENV DISABLE_ESLINT_PLUGIN=true
 
-RUN npm run build
+RUN npm run build \
+    && grep -q "$REACT_APP_ORDER_API_URL" /app/build/static/js/main.*.chunk.js \
+    || (echo "BUILD FAILED: API URL not embedded in bundle" && exit 1)
 
 FROM nginx:alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
