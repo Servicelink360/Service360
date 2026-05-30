@@ -1,135 +1,59 @@
-# Deploy Service360 from GitHub → AWS (EC2 API + S3 admin)
-# Docs: deploy/GITHUB-DEPLOY.md
+# Auto-deploy Service360 to EC2 on every push to main.
+# One-time setup: add GitHub repo secrets (Settings → Secrets → Actions):
+#   EC2_HOST          = 13.55.122.55
+#   EC2_SSH_KEY       = contents of your .pem private key
+#   EC2_USER          = ubuntu  (optional)
+#   API_URL           = http://13.55.122.55:5301/
 
-name: Deploy from GitHub
+name: Deploy to EC2
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      step:
-        description: What to deploy
-        type: choice
-        options:
-          - all
-          - api-only
-          - admin-only
-          - restore-database
-        default: all
-      restore_database:
-        description: Also restore 29__05_2026.sql (destructive)
-        type: boolean
-        default: false
 
 concurrency:
-  group: aws-test-deploy
+  group: ec2-deploy
   cancel-in-progress: false
 
 jobs:
-  deploy-api:
-    name: API → EC2 (Docker)
+  deploy:
+    name: Deploy API + Admin → EC2
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || inputs.step == 'all' || inputs.step == 'api-only'
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'ap-southeast-2' }}
-
-      - name: Deploy on EC2 via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER || 'ubuntu' }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 45m
           script_stop: true
           script: |
             set -e
-            APP_DIR="/opt/service360"
+            APP_DIR="/opt/app"
             REPO="https://github.com/Servicelink360/Service360.git"
+            API_URL="${{ secrets.API_URL || 'http://13.55.122.55:5301/' }}"
 
             if [ ! -d "$APP_DIR/.git" ]; then
               sudo mkdir -p "$APP_DIR"
               sudo git clone "$REPO" "$APP_DIR"
-              sudo chown -R "$(whoami):$(whoami)" "$APP_DIR"
+              sudo chown -R ubuntu:ubuntu "$APP_DIR"
             fi
 
             cd "$APP_DIR"
             git fetch origin main
             git reset --hard origin/main
 
-            ENV_FILE="service_link_api-main/.env"
-            if [ -f "$ENV_FILE" ]; then
-              sed -i "s|^DATABASE_HOST=.*|DATABASE_HOST=${{ secrets.RDS_HOST }}|" "$ENV_FILE" || true
-              sed -i "s|^DATABASE_PASSWORD=.*|DATABASE_PASSWORD=${{ secrets.RDS_PASSWORD }}|" "$ENV_FILE" || true
-              sed -i "s|^DATABASE_DB_NAME=.*|DATABASE_DB_NAME=service360|" "$ENV_FILE" || true
-              sed -i "s|^DATABASE_SSL=.*|DATABASE_SSL=true|" "$ENV_FILE" || true
-              grep -q '^DATABASE_SSL=' "$ENV_FILE" || echo 'DATABASE_SSL=true' >> "$ENV_FILE"
-              sed -i "s|^REDIS_IP=.*|REDIS_IP=redis|" "$ENV_FILE" || true
-              sed -i "s|^BASE_UPLOAD_URL=.*|BASE_UPLOAD_URL=${{ secrets.API_URL }}|" "$ENV_FILE" || true
+            ENV_PROD="service_link_api-main/.env.prod"
+            if [ -f "$ENV_PROD" ]; then
+              sed -i "s|^BASE_UPLOAD_URL=.*|BASE_UPLOAD_URL=${API_URL}|" "$ENV_PROD"
+              sed -i 's|^REDIS_IP=.*|REDIS_IP=redis|' "$ENV_PROD" || true
+              grep -q '^REDIS_IP=' "$ENV_PROD" || echo 'REDIS_IP=redis' >> "$ENV_PROD"
             fi
 
-            sudo docker compose -f deploy/docker-compose.aws-test.yml up -d --build
-            echo "API deployed: ${{ secrets.API_URL }}"
-
-  deploy-admin:
-    name: Admin → S3
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || inputs.step == 'all' || inputs.step == 'admin-only'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-          cache: npm
-          cache-dependency-path: service_link_admin-main/package-lock.json
-
-      - name: Configure AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'ap-southeast-2' }}
-
-      - name: Build admin
-        working-directory: service_link_admin-main
-        env:
-          NODE_OPTIONS: --openssl-legacy-provider
-          REACT_APP_MODE: PROD
-          REACT_APP_VERSION: 1.0.7
-          REACT_APP_SITE_NAME: SERVICE LINK
-          REACT_APP_FOOTER_BRAND: SERVICELINK
-          REACT_APP_ORDER_API_URL: ${{ secrets.API_URL }}
-          GENERATE_SOURCEMAP: false
-        run: |
-          npm ci --legacy-peer-deps
-          npm run build
-
-      - name: Sync to S3
-        run: |
-          aws s3 sync service_link_admin-main/build/ "s3://${{ secrets.ADMIN_S3_BUCKET }}/" --delete
-          echo "Admin: http://${{ secrets.ADMIN_S3_BUCKET }}.s3-website-${{ secrets.AWS_REGION || 'ap-southeast-2' }}.amazonaws.com"
-
-  restore-database:
-    name: Database restore
-    runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' && inputs.restore_database == true) || inputs.step == 'restore-database'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Restore 29__05_2026.sql to RDS
-        env:
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
-          RDS_DB: service360
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
-          chmod +x deploy/scripts/restore-database.sh
-          deploy/scripts/restore-database.sh
+            export REACT_APP_ORDER_API_URL="${API_URL}"
+            sudo -E docker compose -f deploy/docker-compose.aws-test.yml build api admin
+            sudo docker compose -f deploy/docker-compose.aws-test.yml up -d --force-recreate
+            sudo docker compose -f deploy/docker-compose.aws-test.yml ps
+            echo "Deployed: ${API_URL}"
