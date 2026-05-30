@@ -3,6 +3,17 @@ const shouldParseOptions = (type?: string) => {
   return ['SELECT', 'CHECKLIST'].includes(type);
 };
 
+/** Fix UTF-8 mojibake in template labels (e.g. "â€"" -> "-"). */
+export const fixTextEncoding = (text: unknown): string => {
+  if (text == null) return '';
+  let s = String(text);
+  s = s.replace(/\u00e2\u20ac[\u0093-\u0099]?/g, '-');
+  s = s.replace(/â€./g, '-');
+  s = s.replace(/[\u2013\u2014\u2212]/g, '-');
+  s = s.replace(/\bTiime and Date\b/gi, 'Time and Date');
+  return s;
+};
+
 export const parseOptionsFromItem = (item: any) => {
   if (!item) return [];
   if (Array.isArray(item.options) && item.options.length) {
@@ -22,7 +33,8 @@ export const transformItemFromServer = (item: any) => {
   const config = item.config || {};
   return {
     ...item,
-    label: config.label ?? item.label ?? item.name,
+    name: fixTextEncoding(item.name),
+    label: fixTextEncoding(config.label ?? item.label ?? item.name),
     required:
       typeof item.required === 'boolean'
         ? item.required

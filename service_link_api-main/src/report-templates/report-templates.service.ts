@@ -39,6 +39,8 @@ import { DEFAULT_REPORT_TEMPLATE_CATEGORIES } from './report-template-category.e
 import {
   createItemEntities,
   normalizeCategory,
+  prepareTemplateItemsForResponse,
+  sanitizeTemplateItemsText,
   sortTemplateItems,
 } from './report-template-items.helper';
 
@@ -216,7 +218,7 @@ export class ReportTemplatesService {
           relations: ['items'],
         });
         if (withItems?.items) {
-          withItems.items = sortTemplateItems(withItems.items);
+          withItems.items = prepareTemplateItemsForResponse(withItems.items);
         }
         const templateServicesRepo = manager.getRepository(ReportTemplateService);
         const sourceDeptIds = await templateServicesRepo.find({
@@ -273,7 +275,7 @@ export class ReportTemplatesService {
       this.applyStaffAssignmentFilter(query, userInfo);
       const data = await query.getMany();
       data.forEach((template) => {
-        template.items = sortTemplateItems(template.items);
+        template.items = prepareTemplateItemsForResponse(template.items);
       });
       const withServices = await attachServiceIdsToTemplates(
         this.ReportTemplateServiceRepository,
@@ -298,7 +300,7 @@ export class ReportTemplatesService {
       if (data.order === null || data.order === undefined) {
         data.order = 0;
       }
-      data.items = sortTemplateItems(data.items);
+      data.items = prepareTemplateItemsForResponse(data.items);
       const [withServices] = await attachServiceIdsToTemplates(
         this.ReportTemplateServiceRepository,
         [data],
@@ -395,7 +397,7 @@ export class ReportTemplatesService {
 
       const result = await query.getManyAndCount();
       result[0].forEach((template) => {
-        template.items = sortTemplateItems(template.items);
+        template.items = prepareTemplateItemsForResponse(template.items);
       });
       if (!result) return errorCode.EXCEPTION;
       return { ...errorCode.SUCCESS, data: { count: result[1], rows: result[0] } };
@@ -479,7 +481,7 @@ export class ReportTemplatesService {
           relations: ['items', 'createdUser', 'updatedUser'],
         });
         if (withItems) {
-          withItems.items = sortTemplateItems(withItems.items);
+          withItems.items = prepareTemplateItemsForResponse(withItems.items);
         }
         return { ...errorCode.SUCCESS, data: withItems };
       });

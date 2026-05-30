@@ -1,5 +1,24 @@
 import { ReportTemplateItemDto } from './dto/create-report-template.dto';
 import { ReportTemplateItem } from './entities/report-template-item.entity';
+import { fixTextEncoding } from '../helpers/text-encoding';
+
+export function sanitizeTemplateItemText(item: ReportTemplateItem): ReportTemplateItem {
+  if (!item) return item;
+  const config = item.config ? { ...item.config } : undefined;
+  if (config?.label != null) {
+    config.label = fixTextEncoding(config.label);
+  }
+  return {
+    ...item,
+    name: fixTextEncoding(item.name),
+    config,
+  };
+}
+
+export function sanitizeTemplateItemsText(items?: ReportTemplateItem[]): ReportTemplateItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.map(sanitizeTemplateItemText);
+}
 
 export function buildItemConfigFromDto(item: ReportTemplateItemDto): Record<string, unknown> {
   return {
@@ -28,10 +47,14 @@ export function createItemEntities(
     factory.create({
       type: item.type,
       order: item.order,
-      name: item.name,
+      name: fixTextEncoding(item.name),
       value: item.value ?? '',
       required: typeof item.required === 'boolean' ? item.required : false,
-      config: buildItemConfigFromDto(item),
+      config: buildItemConfigFromDto({
+        ...item,
+        name: fixTextEncoding(item.name),
+        label: item.label != null ? fixTextEncoding(item.label) : item.label,
+      }),
       reportTemplateId,
       createdAt: new Date(),
     }),
@@ -43,6 +66,10 @@ export function sortTemplateItems<T extends { order?: number }>(items?: T[]): T[
     return [];
   }
   return [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+export function prepareTemplateItemsForResponse(items?: ReportTemplateItem[]): ReportTemplateItem[] {
+  return sanitizeTemplateItemsText(sortTemplateItems(items));
 }
 
 export function normalizeCategory(value?: string): string {

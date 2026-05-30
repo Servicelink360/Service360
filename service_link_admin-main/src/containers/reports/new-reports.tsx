@@ -21,6 +21,7 @@ import { useDispatch } from "react-redux";
 import { useIntl } from "react-intl";
 import dashboardActions from "@app/redux/dashboard/actions";
 import { dJobStatus, userType } from "../../constants/statusUser";
+import { fixTextEncoding } from "@app/library/report-templates/templateItemUtils";
 
 const { RangePicker } = DatePicker;
 
@@ -297,7 +298,8 @@ const TemplateFileUpload: React.FC<{ value?: string; onChange?: (v: string | und
 };
 
 const getTemplateLabel = (it: TemplateItem) => {
-  return String(it?.config?.label || (it as any)?.label || it?.name || "").trim();
+  const raw = String(it?.config?.label || (it as any)?.label || it?.name || "").trim();
+  return fixTextEncoding(raw);
 };
 
 /** Admin preset on YES_NO template fields (stored in item.value / config.defaultValue). */
