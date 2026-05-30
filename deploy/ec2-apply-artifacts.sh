@@ -22,7 +22,7 @@ apply_admin() {
   [ -d "$dir" ] || { echo "missing ${dir}" >&2; exit 1; }
   echo "=== apply admin static files ==="
   docker cp "${dir}/." "${ADMIN_CONTAINER}:/usr/share/nginx/html/"
-  docker exec "${ADMIN_CONTAINER}" nginx -s reload 2>/dev/null || true
+  docker restart "${ADMIN_CONTAINER}" >/dev/null
   echo "=== admin live ==="
 }
 
