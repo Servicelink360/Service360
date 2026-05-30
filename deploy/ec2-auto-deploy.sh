@@ -14,5 +14,6 @@ if [ "$LOCAL" = "$REMOTE" ]; then
   exit 0
 fi
 echo "$(date -Is) deploying $REMOTE (was ${LOCAL:0:8})"
+git reset --hard origin/main
 PREV_COMMIT="$LOCAL" bash "$APP_DIR/deploy/ec2-deploy.sh"
 echo "$(date -Is) auto-deploy end"

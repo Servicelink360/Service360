@@ -11,6 +11,13 @@ FORCE_SERVICES="${DEPLOY_SERVICES:-}"
 
 cd "$APP_DIR"
 
+LOCK="/var/lock/service360-deploy.lock"
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  echo "=== another deploy is running — skip ==="
+  exit 0
+fi
+
 if [ "$(id -u)" = "0" ]; then
   DC=(docker compose)
 else
