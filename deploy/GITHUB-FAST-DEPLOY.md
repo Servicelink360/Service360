@@ -1,38 +1,40 @@
-# Fast deploy (git push → live in ~5–12 min, EC2 update ~30 sec)
+# Fast deploy — only changed code
 
-Builds run on **GitHub Actions** (not on your small EC2). Only compiled files are copied to the server.
+Builds run on **GitHub** or **your PC**. The server only receives compiled files (~30 sec). No full docker rebuild on EC2.
 
-## One-time setup (5 min)
+## From your PC (fastest if GitHub secrets not set)
 
-GitHub → **Servicelink360/Service360** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
-
-| Secret | Value |
-|--------|--------|
-| `EC2_HOST` | `13.55.122.55` |
-| `EC2_SSH_KEY` | Paste entire `.pem` file contents |
-| `API_URL` | `http://13.55.122.55:5301/` (or `https://api.service360.com.au/` after SSL) |
-
-## How it works
-
-| You change | GitHub builds | EC2 time |
-|------------|---------------|----------|
-| API only | ~3 min | ~30 sec copy + restart |
-| Admin only | ~8 min | ~30 sec copy |
-| Both | parallel jobs | ~30 sec each |
-
-Push to `main` → **Actions** tab shows progress. No SSH needed.
-
-## Manual deploy
-
-Actions → **Fast deploy to EC2** → **Run workflow** → choose `api`, `admin`, or `both`.
-
-## On the server (first time only)
-
-Ensure `ec2-apply-artifacts.sh` exists:
-
-```bash
-sudo git -C /opt/app pull
-sudo chmod +x /opt/app/deploy/ec2-apply-artifacts.sh
+```cmd
+deploy\PUSH-CHANGED.cmd
 ```
 
-Containers must be named `deploy-api-1` and `deploy-admin-1` (default docker compose).
+Detects whether API or admin changed, builds only that, copies `dist/` or `build/` to EC2.
+
+Force one service:
+
+```cmd
+deploy\PUSH-CHANGED.cmd -Target api
+deploy\PUSH-CHANGED.cmd -Target admin
+```
+
+## From git push (GitHub Actions)
+
+One-time secrets: `EC2_HOST`, `EC2_SSH_KEY`, `API_URL`
+
+| You change | What runs |
+|------------|-----------|
+| `service_link_api-main/**` only | API job only |
+| `service_link_admin-main/**` only | Admin job only |
+| Both folders | Both jobs (parallel) |
+| Docs / deploy scripts only | **Nothing** (skipped) |
+
+Push to `main` → Actions tab. Manual: **Fast deploy to EC2** → pick `api` / `admin` / `both`.
+
+## What the server does
+
+```bash
+# Copies compiled output into running containers + restart (~30 sec)
+ec2-apply-artifacts.sh api|admin
+```
+
+No `git pull`. No `docker build`. No React compile on EC2.

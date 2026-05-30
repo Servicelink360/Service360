@@ -1,0 +1,39 @@
+---
+description: EC2 deploy — changed code only, never full rebuild on server
+alwaysApply: true
+---
+
+# Service360 EC2 deploy (mandatory)
+
+**Server:** `13.55.122.55` (`/opt/app`, branch `main`). Containers: `deploy-api-1` (:5301), `deploy-admin-1` (:80).
+
+## NEVER on EC2
+
+- `docker compose build` / full docker rebuild (OOM, 30+ min)
+- `git reset --hard` or full repo sync as part of deploy
+- React/npm compile on the server
+- Cron jobs that build containers (`ec2-auto-deploy.sh` is disabled — exit 0)
+
+## ALWAYS deploy changed code only
+
+1. **Build off-server:** GitHub Actions `deploy-fast.yml` OR local `deploy/PUSH-CHANGED.cmd` / `deploy/scripts/deploy-changed.ps1`
+2. **Ship compiled output only:** `dist/` (API) or `build/` (admin) tarball → SCP → `ec2-apply-artifacts.sh api|admin`
+3. **Server step (~30 sec):** `docker cp` into running container + `docker restart` — nothing else
+
+## What triggers what
+
+| Changed path | Build | Skip |
+|--------------|-------|------|
+| `service_link_api-main/**` | API only | admin |
+| `service_link_admin-main/**` | Admin only | api |
+| docs / unrelated | nothing | both |
+
+## If user asks to deploy
+
+Run or instruct: `deploy\PUSH-CHANGED.cmd` (auto-detect) or `-Target api|admin`.
+
+Do not suggest `ec2-deploy.sh`, `docker compose up --build`, or SSH git pull as deploy.
+
+## Stability (already on server)
+
+Swap 2GB, docker memory limits in `deploy/docker-compose.aws-test.yml`, `ec2-watchdog.sh` cron.

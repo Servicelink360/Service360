@@ -1,15 +1,20 @@
 # Run on AWS EC2 (same host as API) for test/staging.
-# Usage: docker compose -f deploy/docker-compose.aws-test.yml up -d --build
+# Usage: docker compose -f deploy/docker-compose.aws-test.yml up -d
 #
 # Admin UI: http://EC2_PUBLIC_IP/  (port 80)
 # API:      http://EC2_PUBLIC_IP:5301/
+#
+# Memory limits prevent host OOM. Run deploy/ec2-setup-stability.sh once on the server.
 
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: redis-server --maxmemory 96mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    mem_limit: 128m
+    mem_reservation: 32m
 
   api:
     build:
@@ -21,26 +26,46 @@ services:
     environment:
       REDIS_IP: redis
       REDIS_PORT: "6379"
+      NODE_OPTIONS: "--max-old-space-size=1024"
     ports:
       - "5301:5301"
     depends_on:
       - redis
     volumes:
       - api_uploads:/usr/src/app/public/uploads
+    mem_limit: 1536m
+    mem_reservation: 384m
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:5301/v1/deploy-status',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
   admin:
     build:
       context: ../service_link_admin-main
       dockerfile: Dockerfile
       args:
-        # Hardcoded — do not use ${REACT_APP_ORDER_API_URL}; /opt/app/.env can override with a stale IP.
         REACT_APP_ORDER_API_URL: http://13.55.122.55:5301/
         REACT_APP_MODE: PROD
     restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
-      - api
+      api:
+        condition: service_started
+    mem_limit: 256m
+    mem_reservation: 64m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   api_uploads:
