@@ -123,6 +123,9 @@ jobs:
         env:
           REACT_APP_ORDER_API_URL: ${{ secrets.API_URL || 'http://13.55.122.55:5301/' }}
           REACT_APP_MODE: PROD
+          REACT_APP_VERSION: '1.0.7'
+          REACT_APP_SITE_NAME: 'SERVICE LINK'
+          REACT_APP_FOOTER_BRAND: SERVICELINK
           NODE_OPTIONS: --openssl-legacy-provider --max_old_space_size=4096
           CI: 'false'
           DISABLE_ESLINT_PLUGIN: 'true'
@@ -130,7 +133,7 @@ jobs:
         run: |
           cd ckeditor5 && npm install && npm run build && cd ..
           npm ci --legacy-peer-deps
-          printf 'REACT_APP_ORDER_API_URL=%s\nREACT_APP_MODE=PROD\nGENERATE_SOURCEMAP=false\n' \
+          printf 'REACT_APP_ORDER_API_URL=%s\nREACT_APP_MODE=PROD\nREACT_APP_VERSION=1.0.7\nREACT_APP_SITE_NAME=SERVICE LINK\nREACT_APP_FOOTER_BRAND=SERVICELINK\nGENERATE_SOURCEMAP=false\n' \
             "$REACT_APP_ORDER_API_URL" > .env.production
           npm run build
 

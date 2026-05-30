@@ -11,6 +11,7 @@ import actions from './actions';
 import serviceType from './../../constants/serviceType';
 import intl from '@app/lib/helpers/intlProvider'
 import { userType } from '@app/constants/statusUser';
+import env from '@app/config/site.config';
 
 const history = createBrowserHistory();
 export function* loginRequest() {
@@ -21,7 +22,7 @@ export function* loginRequest() {
         call(callAPI, serviceType.COMMON, 'v1/auth/signIn', 'POST', {
           username: payload.user.username,
           password: payload.user.password,
-          version: process.env.REACT_APP_VERSION,
+          version: env.version || '1.0.7',
           type: userType.ADMIN,
         }),
         call(callAPI, serviceType.COMMON, 'v1/settings/getSettings', 'GET'),

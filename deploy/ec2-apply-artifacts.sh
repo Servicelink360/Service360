@@ -21,6 +21,7 @@ apply_admin() {
   local dir="${ARTIFACT_ROOT}/admin/build"
   [ -d "$dir" ] || { echo "missing ${dir}" >&2; exit 1; }
   echo "=== apply admin static files ==="
+  docker exec "${ADMIN_CONTAINER}" sh -c 'rm -rf /usr/share/nginx/html/*'
   docker cp "${dir}/." "${ADMIN_CONTAINER}:/usr/share/nginx/html/"
   docker restart "${ADMIN_CONTAINER}" >/dev/null
   echo "=== admin live ==="

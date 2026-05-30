@@ -33,7 +33,7 @@ function Get-ChangedServices {
 }
 
 function Build-Api {
-  Write-Host '=== Build API (changed files only → dist) ===' -ForegroundColor Cyan
+  Write-Host '=== Build API (changed files only -> dist) ===' -ForegroundColor Cyan
   Push-Location (Join-Path $repoRoot 'service_link_api-main')
   $env:PUPPETEER_SKIP_DOWNLOAD = 'true'
   if (-not (Test-Path 'node_modules')) { npm ci --legacy-peer-deps }
@@ -55,7 +55,7 @@ function Build-Api {
 }
 
 function Build-Admin {
-  Write-Host '=== Build Admin (changed files only → static bundle) ===' -ForegroundColor Cyan
+  Write-Host '=== Build Admin (changed files only -> static bundle) ===' -ForegroundColor Cyan
   $adminDir = Join-Path $repoRoot 'service_link_admin-main'
   Push-Location $adminDir
   $env:REACT_APP_ORDER_API_URL = $ApiUrl
@@ -67,6 +67,9 @@ function Build-Admin {
   @(
     "REACT_APP_ORDER_API_URL=$ApiUrl"
     'REACT_APP_MODE=PROD'
+    'REACT_APP_VERSION=1.0.7'
+    'REACT_APP_SITE_NAME=SERVICE LINK'
+    'REACT_APP_FOOTER_BRAND=SERVICELINK'
     'GENERATE_SOURCEMAP=false'
   ) | Set-Content '.env.production' -Encoding utf8
   if (-not (Test-Path 'node_modules')) { npm ci --legacy-peer-deps }
@@ -87,17 +90,18 @@ function Build-Admin {
 
 function Deploy-Artifact {
   param([string]$Service, [string]$TarPath)
+  $tarName = Split-Path -Leaf $TarPath
   Write-Host "=== Upload & apply $Service (~30 sec on server) ===" -ForegroundColor Green
-  scp @sshOpts $TarPath "ubuntu@${Ec2Host}:/tmp/$([IO.Path]::GetFileName($TarPath))"
+  scp @sshOpts $TarPath "ubuntu@${Ec2Host}:/tmp/$tarName"
   $remote = @"
 set -e
 sudo mkdir -p /tmp/deploy-artifacts
 sudo rm -rf /tmp/deploy-artifacts/$Service
 if [ '$Service' = 'admin' ]; then
   sudo mkdir -p /tmp/deploy-artifacts/admin
-  sudo tar xzf /tmp/$([IO.Path]::GetFileName($TarPath)) -C /tmp/deploy-artifacts/admin
+  sudo tar xzf /tmp/$tarName -C /tmp/deploy-artifacts/admin
 else
-  sudo tar xzf /tmp/$([IO.Path]::GetFileName($TarPath)) -C /tmp/deploy-artifacts
+  sudo tar xzf /tmp/$tarName -C /tmp/deploy-artifacts
 fi
 sudo bash /opt/app/deploy/ec2-apply-artifacts.sh $Service
 "@
@@ -120,4 +124,4 @@ foreach ($svc in $services) {
   }
 }
 
-Write-Host 'Done. Only changed service(s) were built and copied — no full server rebuild.' -ForegroundColor Green
+Write-Host 'Done. Only changed service(s) were built and copied - no full server rebuild.' -ForegroundColor Green
