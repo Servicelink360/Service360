@@ -319,15 +319,17 @@ async function imageBufferToJpegDataUri(buf: Buffer): Promise<string> {
 
 function normalizeUnicodeForPdf(text: unknown): string {
     let s = String(text ?? '');
-    // UTF-8 en/em dash mis-read as Latin-1 (shows as "â€" in PDF)
-    s = s.replace(/\u00e2\u20ac[\u0093\u0094\u201c\u201d]/g, '-');
-    s = s.replace(/â€[\u0093\u0094\u201c\u201d""]/g, '-');
-    s = s.replace(/\u2013/g, '-'); // en-dash –
-    s = s.replace(/\u2014/g, '-'); // em-dash —
-    s = s.replace(/\u2212/g, '-'); // minus sign
+    // Mojibake: en-dash UTF-8 shown as "â€" + char in PDF
+    s = s.replace(/\u00e2\u20ac./g, '-');
+    s = s.replace(/â€./g, '-');
+    s = s.replace(/\u2013/g, '-');
+    s = s.replace(/\u2014/g, '-');
+    s = s.replace(/\u2212/g, '-');
     s = s.replace(/[\u2018\u2019]/g, "'");
     s = s.replace(/[\u201C\u201D]/g, '"');
     s = s.replace(/\u2026/g, '...');
+    // Drop any remaining non-ASCII so Chromium/pdf-lib never mangle labels
+    s = s.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
     return s;
 }
 
