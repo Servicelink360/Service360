@@ -25,7 +25,6 @@ const Task = (props: IProps) => {
     const [page, setPage] = useState(pageData);
     const [form] = Form.useForm();
     const { staffId } = props;
-    console.log('staffId', staffId)
     const { loading, rows, row, success, modalType, count, loadingAction, reportTemplates } = useSelector((state: any) => state?.tasks);
     const dispatch = useDispatch();
     const urlParams = new URLSearchParams(window.location.search);
@@ -39,8 +38,8 @@ const Task = (props: IProps) => {
 
     // Restore main handler functions (single instance, not duplicated)
 
-    const handleResetSearch = React.useCallback(async (page: any = 1, limit: any = 100, orderBy: string = 'id', orderValue: string = 'DESC') => {
-        const formData = await form.validateFields();
+    const handleResetSearch = React.useCallback((page: any = 1, limit: any = 100, orderBy: string = 'id', orderValue: string = 'DESC') => {
+        const formData = form.getFieldsValue();
         dispatch(
             actions.getData({ keyword: formData?.Name ? formData?.Name?.trim() : '', page, limit, status, orderBy, orderValue, isAdmin: 1, staffId: staffId ? staffId : 0 })
         );
@@ -212,18 +211,6 @@ const Task = (props: IProps) => {
     }, [success, handleResetSearch, page, limit]);
 
     useEffect(() => {
-        if (status) {
-            handleResetSearch(page, limit);
-        }
-    }, [status, handleResetSearch, page, limit]);
-
-
-    const onTableChange = (pagination: any, filters, sorter, extra): void => {
-        setPage(pagination.current);
-        setLimit(pagination.pageSize);
-        handleResetSearch(pagination.current, pagination.pageSize, sorter?.field ?? 'id', sorter?.order ? (sorter?.order === 'ascend' ? "ASC" : "DESC") : 'DESC');
-    };
-    useEffect(() => {
         window.scrollTo({
             top: 0,
             left: 0,
@@ -233,7 +220,14 @@ const Task = (props: IProps) => {
         return () => {
             dispatch(actions.clearData());
         };
-    }, [dispatch, handleResetSearch, page, limit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]);
+
+    const onTableChange = (pagination: any, filters, sorter, extra): void => {
+        setPage(pagination.current);
+        setLimit(pagination.pageSize);
+        handleResetSearch(pagination.current, pagination.pageSize, sorter?.field ?? 'id', sorter?.order ? (sorter?.order === 'ascend' ? "ASC" : "DESC") : 'DESC');
+    };
 
     const ActionBTN = () => {
         return (

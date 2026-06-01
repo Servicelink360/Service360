@@ -180,8 +180,8 @@ const TaskToday: React.FC = () => {
     }, [success]);
 
 
-    const handleResetSearch = async (page: any = 1, limit: any = 100, orderBy: string = 'id', orderValue: string = 'DESC') => {
-        const formData = await form.validateFields();
+    const handleResetSearch = (page: any = 1, limit: any = 100, orderBy: string = 'id', orderValue: string = 'DESC') => {
+        const formData = form.getFieldsValue();
         dispatch(
             actions.getData({ keyword: formData?.Name ? formData?.Name?.trim() : '', page, limit, status, orderBy, orderValue })
         );
