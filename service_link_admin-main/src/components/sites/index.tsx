@@ -31,7 +31,7 @@ type IProps = {
 }
 
 const Index = (props: IProps) => {
-    const { modalType, getDataInit, isSuccess, loadingAction, data, title, services, customers, staffs, } = props
+    const { modalType, isSuccess, loadingAction, data, title, services, customers, staffs, } = props
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
@@ -41,8 +41,8 @@ const Index = (props: IProps) => {
     const [infoModal, setInfoModal] = useState(null)
 
     useEffect(() => {
-        getDataInit("SITES")
-    }, [getDataInit])
+        dispatch(actions.getDataInit("SITES"))
+    }, [dispatch])
 
     useEffect(() => {
         if (isSuccess) {
@@ -54,7 +54,7 @@ const Index = (props: IProps) => {
         if (data) {
             form.setFieldsValue({ ...data })
         }
-    }, [data, form])
+    }, [data?.id, form])
 
     const validateMessages = {
         required: intl.formatMessage({ id: 'form.error.Required' }),

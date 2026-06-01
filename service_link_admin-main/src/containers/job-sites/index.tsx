@@ -233,9 +233,12 @@ const JobSite = (props: IProps) => {
         },
     ], [intl, sortOrderFor]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const getDataInit = async (payload) => {
-        dispatch(actions.getDataInit(payload));
-    };
+    const getDataInit = useCallback(
+        (payload: string) => {
+            dispatch(actions.getDataInit(payload));
+        },
+        [dispatch],
+    );
 
     const handleOnClick = (modalType: string, row?: any): void => {
         if (modalType === actionType.ADD || modalType === actionType.VIEW || modalType === actionType.UPDATE_ITEM || modalType === actionType.UPDATE
@@ -261,10 +264,12 @@ const JobSite = (props: IProps) => {
     };
 
     useEffect(() => {
-        if (success) {
-            loadSites(page, limit);
+        if (!success) {
+            return;
         }
-    }, [success, loadSites, page, limit]);
+        loadSites(page, limit);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [success]);
 
     const handleResetSearch = async (
         pageNum: any = 1,
@@ -286,15 +291,21 @@ const JobSite = (props: IProps) => {
         sorter: any,
         extra?: { action?: string },
     ): void => {
-        setPage(pagination.current);
-        setLimit(pagination.pageSize);
-
         if (extra?.action === "paginate") {
+            setPage(pagination.current);
+            if (pagination.pageSize !== limit) {
+                setLimit(pagination.pageSize);
+            }
             loadSites(pagination.current, pagination.pageSize);
             return;
         }
         if (extra?.action !== "sort") {
             return;
+        }
+
+        setPage(pagination.current);
+        if (pagination.pageSize !== limit) {
+            setLimit(pagination.pageSize);
         }
 
         const colSorter = Array.isArray(sorter)
@@ -327,6 +338,9 @@ const JobSite = (props: IProps) => {
         }
 
         appliedSortRef.current = { field, orderValue, at: Date.now() };
+        if (listSort.orderBy === field && listSort.orderValue === orderValue) {
+            return;
+        }
         setListSort({ orderBy: field, orderValue });
         loadSites(pagination.current, pagination.pageSize, field, orderValue);
     };

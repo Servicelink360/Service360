@@ -29,7 +29,7 @@ type IProps = {
 }
 
 const Index = (props: IProps) => {
-    const { modalType, getDataInit, isSuccess, loadingAction, data, title,  reportTemplates } = props;
+    const { modalType, isSuccess, loadingAction, data, title,  reportTemplates } = props;
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
@@ -38,8 +38,8 @@ const Index = (props: IProps) => {
     const [isCustom, setIsCustom] = useState(data ? data.type === 'C' ? true : false : false)
 
     useEffect(() => {
-        getDataInit("TASKS")
-    }, [getDataInit])
+        dispatch(actions.getDataInit("TASKS"))
+    }, [dispatch])
 
     useEffect(() => {
         if (isSuccess) {

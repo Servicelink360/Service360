@@ -1,6 +1,6 @@
 /**
- * Regenerate report PDFs for tasks still pointing at legacy server URLs.
- * Usage: node scripts/regenerate-report-pdfs.js [--dry-run] [--id=155]
+ * Regenerate report PDFs (all tasks with pdf_file, or one task via --id=).
+ * Usage: node scripts/regenerate-report-pdfs.js [--dry-run] [--id=155] [--custom-only]
  */
 require('dotenv').config({ path: require('path').join(__dirname, '../.env.prod') });
 const { Client } = require('pg');
@@ -18,9 +18,10 @@ async function loadConvertHtmlToPdf() {
 
 function parseArgs() {
   const dryRun = process.argv.includes('--dry-run');
+  const customOnly = process.argv.includes('--custom-only');
   const idArg = process.argv.find((a) => a.startsWith('--id='));
   const id = idArg ? Number(idArg.split('=')[1]) : null;
-  return { dryRun, id };
+  return { dryRun, id, customOnly };
 }
 
 async function fetchTaskBundle(client, taskId) {
@@ -54,6 +55,8 @@ async function fetchTaskBundle(client, taskId) {
   );
 
   const row = taskRes.rows[0];
+  row.checkIn = row.check_in;
+  row.createdAt = row.created_at;
   row.reportTemplate = row.report_template;
   row.staff = row.staff ? { fullName: row.staff.full_name, username: row.staff.username } : null;
   row.createdUser = row.created_user
@@ -68,7 +71,7 @@ async function fetchTaskBundle(client, taskId) {
 }
 
 async function main() {
-  const { dryRun, id } = parseArgs();
+  const { dryRun, id, customOnly } = parseArgs();
   const convertHtmlToPdf = await loadConvertHtmlToPdf();
 
   const client = new Client({
@@ -77,7 +80,7 @@ async function main() {
     user: process.env.DATABASE_USERNAME,
     password: process.env.DATABASE_PASSWORD,
     database: process.env.DATABASE_DB_NAME,
-    ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    ssl: { rejectUnauthorized: false },
   });
   await client.connect();
 
@@ -85,9 +88,11 @@ async function main() {
   if (id) {
     taskIds = [id];
   } else {
+    const typeFilter = customOnly ? `AND type = 'CUSTOM'` : '';
     const q = await client.query(`
       SELECT id FROM user_tasks
       WHERE pdf_file IS NOT NULL AND pdf_file <> ''
+      ${typeFilter}
       ORDER BY id ASC
     `);
     taskIds = q.rows.map((r) => r.id);

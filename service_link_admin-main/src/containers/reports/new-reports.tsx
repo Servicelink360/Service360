@@ -8,7 +8,8 @@ import urlConfig from "@app/config/site.config";
 import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined, UploadOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync, callAPIUploadAsync } from "../../library/helpers/api";
-import { dateTimeFormat } from "@app/config/data.config";
+import { dateFormat, dateTimeFormat } from "@app/config/data.config";
+import { AU_UTC_OFFSET, momentAu } from "@app/library/helpers/australianDatetime";
 import type { UploadFile } from "antd/es/upload/interface";
 import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography, Upload } from "antd";
 import moment from "moment";
@@ -302,6 +303,83 @@ const getTemplateLabel = (it: TemplateItem) => {
   return fixTextEncoding(raw);
 };
 
+const isTimeLikeTemplateItem = (it: TemplateItem): boolean => {
+  // Some templates have "Time", "Time " or "Time (optional)" as label/name.
+  const raw = String(getTemplateLabel(it) || it?.name || "");
+  const normalized = raw
+    // Strip icons / punctuation / zero-width chars etc.
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return false;
+  if (normalized.includes("time and date")) return false;
+  return /\btime\b/.test(normalized);
+};
+
+const isTimeLikeLabel = (label: unknown): boolean => {
+  const raw = String(label ?? "");
+  const normalized = raw
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return false;
+  if (normalized.includes("time and date")) return false;
+  return /\btime\b/.test(normalized);
+};
+
+const legacyFieldKey = (r: any, idx: number) =>
+  `_legacy_${r?.id != null && Number.isFinite(+r.id) ? +r.id : r?.order != null && Number.isFinite(+r.order) ? +r.order : idx}`;
+
+function matchReportItemForTemplate(
+  reports: any[],
+  it: TemplateItem,
+  idx: number,
+): any | undefined {
+  if (!Array.isArray(reports) || !reports.length) return undefined;
+  const sorted = [...reports].sort((a, b) => (+a.order || 0) - (+b.order || 0));
+  const label = getTemplateLabel(it);
+  const typeMatch = (rep: any) =>
+    String(rep.type || "").toUpperCase() === String(it.type || "").toUpperCase();
+  // Prefer name+type match. Index-based mapping breaks when older rows have chunked media parts.
+  return (
+    sorted.find((rep) => rep.name === it.name && typeMatch(rep)) ??
+    (label ? sorted.find((rep) => rep.name === label && typeMatch(rep)) : undefined) ??
+    (sorted[idx] && typeMatch(sorted[idx]) ? sorted[idx] : undefined)
+  );
+}
+
+function parseReportItemValueForForm(r: any): any {
+  if (!r) return undefined;
+  const rt = String(r.type || "").toUpperCase();
+  const isTimeLabel = isTimeLikeLabel(r?.name);
+  if (rt === "TIME") {
+    const v = String(r.value ?? "").trim();
+    // Corrupt legacy values: TIME field sometimes stored photo JSON/URLs.
+    if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
+    return moment(moment().format(`YYYY-MM-DD ${v}`));
+  }
+  if (rt === "DATE" || rt === "DATE_PICKER") {
+    return r.value ? moment(r.value) : undefined;
+  }
+  if (rt === "[REPORT_DATE]") {
+    return r.value ? moment(r.value, "YYYY-MM-DD") : undefined;
+  }
+  if (rt === "[REPORT_TIME]") {
+    const v = String(r.value ?? "").trim();
+    if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
+    return moment(moment().format(`YYYY-MM-DD ${v}`));
+  }
+  if ((rt === "TEXT" || rt === "DATETIME") && isTimeLabel) {
+    const s = String(r.value ?? "").trim();
+    if (!s || s.startsWith("[") || /^https?:\/\//i.test(s)) return undefined;
+    const strict = moment(s, ["HH:mm:ss", "HH:mm", "h:mm:ss a", "h:mm a"], true);
+    if (strict.isValid()) return strict;
+    const loose = moment(new Date(s));
+    return loose.isValid() ? loose : undefined;
+  }
+  return r.value;
+}
+
 /** Admin preset on YES_NO template fields (stored in item.value / config.defaultValue). */
 const getYesNoPreset = (item: TemplateItem): "YES" | "NO" | undefined => {
   const raw = String(item.value ?? item.config?.defaultValue ?? "")
@@ -388,14 +466,75 @@ function reportPdfLinkLabel(row: any, href: string): string {
   return "PDF";
 }
 
-/** When the report was submitted — not last edit / PDF regen time. */
+/** Admin uploads embed epoch ms in filenames; use when check_in predates actual submit. */
+function inferSubmissionFromReportMedia(row: any): moment.Moment | null {
+  const reports = row?.reports;
+  if (!Array.isArray(reports)) return null;
+  let maxTs = 0;
+  for (const r of reports) {
+    const val = String(r?.value ?? "");
+    const re = /\/(\d{13})(?:-|\.)/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(val)) !== null) {
+      const ts = Number(match[1]);
+      if (Number.isFinite(ts) && ts > maxTs) maxTs = ts;
+    }
+  }
+  if (maxTs <= 0) return null;
+  const m = moment(maxTs);
+  return m.isValid() ? m : null;
+}
+
+/** When the report was submitted — align with PDF reference time, not PDF regen / bad check_in. */
 function getReportSubmittedAt(row: any): string | Date | null | undefined {
-  return row?.checkIn ?? row?.check_in ?? row?.createdAt ?? row?.created_at ?? null;
+  const checkIn = row?.checkIn ?? row?.check_in ?? null;
+  const createdAt = row?.createdAt ?? row?.created_at ?? null;
+  const media = inferSubmissionFromReportMedia(row);
+
+  let ref: string | Date | null = createdAt ?? checkIn;
+
+  if (checkIn && createdAt) {
+    const ci = moment(checkIn);
+    const ca = moment(createdAt);
+    if (ci.isValid() && ca.isValid()) {
+      const forwardSkewMin = ci.diff(ca, "minutes");
+      // check_in stored as AU wall clock tagged Z (~+10h ahead of real created_at).
+      if (forwardSkewMin >= 540 && forwardSkewMin <= 660) ref = createdAt;
+    }
+  }
+
+  if (media && ref) {
+    const refM = moment(ref);
+    if (refM.isValid()) {
+      const aheadMin = media.diff(refM, "minutes");
+      const behindMin = refM.diff(media, "minutes");
+      if (aheadMin > 30 || behindMin > 30) ref = media.toDate();
+    }
+  } else if (media && !ref) {
+    ref = media.toDate();
+  }
+
+  return ref;
+}
+
+function resolveReportSubmittedDisplayMoment(row: any): moment.Moment | null {
+  const t = getReportSubmittedAt(row);
+  if (!t) return null;
+  const checkIn = row?.checkIn ?? row?.check_in ?? null;
+  const createdAt = row?.createdAt ?? row?.created_at ?? null;
+  const wallClockStorage =
+    checkIn &&
+    createdAt &&
+    Math.abs(moment(checkIn).diff(moment(createdAt), "minutes")) <= 2;
+  const m = wallClockStorage
+    ? moment(t).utcOffset(AU_UTC_OFFSET, true)
+    : momentAu(t);
+  return m && m.isValid() ? m : null;
 }
 
 function formatReportSubmittedAt(row: any): string {
-  const t = getReportSubmittedAt(row);
-  return t ? moment(t).format(dateTimeFormat) : "—";
+  const m = resolveReportSubmittedDisplayMoment(row);
+  return m ? m.format(dateTimeFormat) : "—";
 }
 
 /** List/view: staff name for field submissions; "Admin" when submitted via admin portal. */
@@ -1206,10 +1345,7 @@ const NewReports: React.FC = () => {
             page: nextPage,
             limit: nextLimit,
           };
-          if (
-            (+profileType === userType.CUSTOMER || +profileType === userType.ADMIN) &&
-            sort.orderBy
-          ) {
+          if (sort.orderBy) {
             params.orderBy = sort.orderBy;
             params.orderValue = sort.orderValue;
           }
@@ -1294,14 +1430,20 @@ const NewReports: React.FC = () => {
     loadRows(page, limit, listFilters);
   }, [page, limit, listFilters, listSort, reportListTab, loadRows, location.search]);
 
-  const onTableChange = (pagination: any, _filters: any, sorter: any) => {
-    setPage(pagination.current);
-    if (pagination.pageSize !== limit) setLimit(pagination.pageSize);
+  const onTableChange = (pagination: any, _filters: any, sorter: any, extra?: { action?: string }) => {
+    if (extra?.action === "paginate") {
+      setPage(pagination.current);
+      if (pagination.pageSize !== limit) setLimit(pagination.pageSize);
+      return;
+    }
+
     const colSorter = Array.isArray(sorter)
       ? [...sorter].reverse().find((s: { order?: string }) => s?.order) ?? sorter[sorter.length - 1]
       : sorter;
     const rawField = colSorter?.columnKey ?? colSorter?.field;
     if (rawField == null) return;
+
+    setPage(1);
     const field = String(Array.isArray(rawField) ? rawField[rawField.length - 1] : rawField);
     const allowed = new Set([
       "staffFullName",
@@ -1536,19 +1678,23 @@ const NewReports: React.FC = () => {
           const preset = getYesNoPreset(it);
           if (preset) patch[fieldKey] = preset;
         } else if (fieldType === "DATE" || fieldType === "DATE_PICKER" || fieldType === "TIME") {
-          // Only auto-fill for staff when the field is hidden from staff UI.
-          const staffHidden = isStaffUser && isHiddenFromStaffCreate(it);
-          if (!isStaffUser || staffHidden) {
+          // Staff wants Date/Time prefilled with "now" on new reports (but never overwrite).
+          const current = baseValues[fieldKey];
+          if (current === undefined || current === null || current === "") {
             patch[fieldKey] = moment();
           }
         } else if (isAutoMergeTemplateField(it)) {
-          // Allow staff to manually pick report date/time when configured visible.
           const t = String(it.type || "").toUpperCase();
           const staffManual =
             isStaffUser &&
             (t === "[REPORT_DATE]" || t === "[REPORT_TIME]") &&
             !isHiddenFromStaffCreate(it);
-          if (!staffManual) {
+          if (staffManual) {
+            const current = baseValues[fieldKey];
+            if (current === undefined || current === null || current === "") {
+              patch[fieldKey] = moment();
+            }
+          } else {
             patch[fieldKey] = resolveAutoMergeFieldValue(it, baseValues, profile);
           }
         }
@@ -1650,66 +1796,79 @@ const NewReports: React.FC = () => {
   const openEdit = useCallback(async (row: any) => {
     resetSubmitUi();
     await markReportOpenedForViewer(row);
-    setEditing(row);
+
+    let editRow = row;
+    try {
+      const one = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.USER_TASKS}/${row.id}`,
+        "GET",
+      );
+      if (one?.code === 1 && one?.data) editRow = one.data;
+    } catch {
+      /* list row fallback */
+    }
+
+    setEditing(editRow);
     form.resetFields();
     const reportValues: Record<string, any> = {};
-    const editTpl = reportTemplates.find((t: any) => +t.id === +row.reportTemplateId);
-    if (editTpl?.items?.length && Array.isArray(row.reports)) {
+    const editTpl = reportTemplates.find((t: any) => +t.id === +editRow.reportTemplateId);
+    if (editTpl?.items?.length && Array.isArray(editRow.reports)) {
       const sortedTpl = editTpl.items
         .slice()
         .filter((it: TemplateItem) => !isJunkTemplateField(it))
         .sort((a: TemplateItem, b: TemplateItem) => (+a.order || 0) - (+b.order || 0));
-      const sortedRep = row.reports
-        .slice()
-        .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
       sortedTpl.forEach((it: TemplateItem, idx: number) => {
         const fieldKey = getTemplateFieldKey(it, idx);
-        const label = getTemplateLabel(it);
-        const typeMatch = (rep: any) =>
-          String(rep.type || "").toUpperCase() === String(it.type || "").toUpperCase();
-        const r =
-          sortedRep[idx] ??
-          sortedRep.find((rep: any) => rep.name === it.name && typeMatch(rep)) ??
-          (label ? sortedRep.find((rep: any) => rep.name === label && typeMatch(rep)) : undefined);
-        if (!r) return;
-        const rt = String(r.type || "").toUpperCase();
-        if (rt === "TIME") {
-          reportValues[fieldKey] = r.value
-            ? moment(moment().format(`YYYY-MM-DD ${r.value}`))
-            : undefined;
-        } else if (rt === "DATE" || rt === "DATE_PICKER") {
-          reportValues[fieldKey] = r.value ? moment(r.value) : undefined;
-        } else {
-          reportValues[fieldKey] = r.value;
+        const rep = matchReportItemForTemplate(editRow.reports, it, idx);
+        let parsed = parseReportItemValueForForm(rep);
+        if (isTimeLikeTemplateItem(it)) {
+          if (moment.isMoment(parsed) && parsed.isValid()) {
+            parsed = moment(moment().format(`YYYY-MM-DD ${parsed.format("HH:mm:ss")}`));
+          } else if (parsed != null && String(parsed).trim() !== "") {
+            const s = String(parsed).trim();
+            const strict = moment(s, ["HH:mm:ss", "HH:mm", "h:mm:ss a", "h:mm a"], true);
+            const m = strict.isValid() ? strict : moment(new Date(s));
+            if (m.isValid()) {
+              parsed = moment(moment().format(`YYYY-MM-DD ${m.format("HH:mm:ss")}`));
+            } else {
+              parsed = undefined;
+            }
+          }
         }
+        if (parsed !== undefined) reportValues[fieldKey] = parsed;
       });
-    } else if (Array.isArray(row.reports)) {
-      row.reports.forEach((r: any) => {
-        if (r.type === "TIME") {
-          reportValues[r.name] = r.value
-            ? moment(moment().format(`YYYY-MM-DD ${r.value}`))
-            : undefined;
-        } else if (String(r.type || "").toUpperCase() === "DATE") {
-          reportValues[r.name] = r.value ? moment(r.value) : undefined;
-        } else {
-          reportValues[r.name] = r.value;
-        }
-      });
+    } else if (Array.isArray(editRow.reports)) {
+      editRow.reports
+        .slice()
+        .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
+        .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0))
+        .forEach((r: any, idx: number) => {
+          reportValues[legacyFieldKey(r, idx)] = parseReportItemValueForForm(r);
+        });
     }
 
-    const siteId = row.siteId;
-    const serviceId = row.serviceId;
+    const siteId = editRow.siteId;
+    const serviceId = editRow.serviceId;
 
-    if (siteId) {
-      const depRes = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getServicesBySite`, "GET", { siteId });
-      const deptRows = depRes?.data || [];
-      setServices(deptRows);
-      setServicesSiteId(+siteId);
-    } else {
-      setServices([]);
-      setServicesSiteId(null);
+    setServices([]);
+    setServicesSiteId(null);
+    setLoadingSiteServices(Boolean(siteId));
+    try {
+      if (siteId) {
+        const depRes = await callAPIAsync(
+          serviceType.COMMON,
+          `${endPoint.JOB_SITES}/getServicesBySite`,
+          "GET",
+          { siteId },
+        );
+        const deptRows = depRes?.data || [];
+        setServices(deptRows);
+        setServicesSiteId(+siteId);
+      }
+    } finally {
+      setLoadingSiteServices(false);
     }
-    setLoadingSiteServices(false);
 
     let customerRows: any[] = [];
     if (siteId && serviceId != null && serviceId !== "") {
@@ -1720,16 +1879,16 @@ const NewReports: React.FC = () => {
       customerRows = custRes?.data || [];
     }
 
-    const cid = row.customerId;
+    const cid = editRow.customerId;
     if (cid != null && !customerRows.some((c: any) => +c.id === +cid)) {
       customerRows = [
         ...customerRows,
         {
           id: cid,
-          fullName: row.customerName || row.customer?.fullName,
-          customerName: row.customerName || row.customer?.fullName,
-          companyName: row.companyName,
-          customerInfo: row.companyName ? { companyName: row.companyName } : row.customer?.customerInfo,
+          fullName: editRow.customerName || editRow.customer?.fullName,
+          customerName: editRow.customerName || editRow.customer?.fullName,
+          companyName: editRow.companyName,
+          customerInfo: editRow.companyName ? { companyName: editRow.companyName } : editRow.customer?.customerInfo,
         },
       ];
     }
@@ -1737,24 +1896,24 @@ const NewReports: React.FC = () => {
 
     form.setFieldsValue({
       ...reportValues,
-      taskName: row.taskName,
-      description: row.description,
-      siteId: row.siteId,
-      siteName: row.siteName,
-      siteLocation: row.siteLocation,
-      siteAddress: row.siteAddress,
-      staffId: row.staffId ?? (profile?.id ? +profile.id : 0),
-      serviceId: row.serviceId != null ? String(row.serviceId) : undefined,
-      serviceName: row.serviceName,
-      customerId: row.customerId != null ? +row.customerId : undefined,
-      customerName: row.customerName,
-      companyName: row.companyName,
-      reportTemplateId: row.reportTemplateId,
-      notifiesStaff: row.notifiesStaff ?? 1,
+      taskName: editRow.taskName,
+      description: editRow.description,
+      siteId: editRow.siteId,
+      siteName: editRow.siteName,
+      siteLocation: editRow.siteLocation,
+      siteAddress: editRow.siteAddress,
+      staffId: editRow.staffId ?? (profile?.id ? +profile.id : 0),
+      serviceId: editRow.serviceId != null ? String(editRow.serviceId) : undefined,
+      serviceName: editRow.serviceName,
+      customerId: editRow.customerId != null ? +editRow.customerId : undefined,
+      customerName: editRow.customerName,
+      companyName: editRow.companyName,
+      reportTemplateId: editRow.reportTemplateId,
+      notifiesStaff: editRow.notifiesStaff ?? 1,
     });
 
-    if (isStaffUser && row.siteId && (row.customerId == null || row.customerId === "")) {
-      await applyStaffSiteAssignment(+row.siteId);
+    if (isStaffUser && editRow.siteId && (editRow.customerId == null || editRow.customerId === "")) {
+      await applyStaffSiteAssignment(+editRow.siteId);
     }
 
     setVisible(true);
@@ -1974,6 +2133,38 @@ const NewReports: React.FC = () => {
   }, [clearSaveProgressTimer, setSubmitStep]);
 
   const buildReportItems = (values: Record<string, any>) => {
+    if (!templateItemsForSubmit.length && Array.isArray(editing?.reports) && editing.reports.length) {
+      const legacy = editing.reports
+        .slice()
+        .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
+        .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
+      return legacy
+        .map((r: any, idx: number) => {
+          const fieldKey = legacyFieldKey(r, idx);
+          const fieldType = String(r.type || "").toUpperCase();
+          const raw = values[fieldKey];
+          if (raw === undefined || raw === null || raw === "") return null;
+
+          let value: any = raw;
+          if (fieldType === "TIME" && moment.isMoment(raw)) value = raw.format("HH:mm:ss");
+          if ((fieldType === "DATE" || fieldType === "DATE_PICKER") && moment.isMoment(raw)) {
+            value = raw.format("YYYY-MM-DD");
+          }
+          if (isJsonMediaFieldType(fieldType)) {
+            const arr = parseMediaListValue(raw);
+            if (!arr.length) return null;
+            value = JSON.stringify(arr);
+          }
+          return {
+            name: String(r.name ?? "").trim() || `field_${idx + 1}`,
+            type: r.type,
+            order: r.order ?? idx + 1,
+            value,
+          };
+        })
+        .filter(Boolean);
+    }
+
     const usedNames = new Set<string>();
     const allocateStorageName = (it: TemplateItem, idx: number) => {
       const base = String(it.name ?? "").trim() || `field_${idx + 1}`;
@@ -2003,6 +2194,12 @@ const NewReports: React.FC = () => {
         const fieldType = String(it.type || "").toUpperCase();
         let raw = values[fieldKey];
 
+        if ((raw === undefined || raw === null || raw === "") && editing?.reports) {
+          raw = parseReportItemValueForForm(
+            matchReportItemForTemplate(editing.reports, it, idx),
+          );
+        }
+
         if (isAutoMergeTemplateField(it)) {
           // If staff is allowed to manually pick report date/time, don't auto-fill here.
           const staffManual =
@@ -2017,7 +2214,10 @@ const NewReports: React.FC = () => {
         if (raw === undefined || raw === null || raw === "") return null;
 
         let value: any = raw;
-        if (fieldType === "TIME" && moment.isMoment(raw)) value = raw.format("HH:mm");
+        if (fieldType === "TIME" && moment.isMoment(raw)) value = raw.format("HH:mm:ss");
+        if (isTimeLikeTemplateItem(it) && moment.isMoment(raw)) {
+          value = raw.format("HH:mm:ss");
+        }
         if ((fieldType === "DATE" || fieldType === "DATE_PICKER") && moment.isMoment(raw)) {
           value = raw.format("YYYY-MM-DD");
         }
@@ -2125,7 +2325,7 @@ const NewReports: React.FC = () => {
 
     values = form.getFieldsValue();
 
-    // Auto-fill hidden DATE/TIME items for staff at submit time.
+    // Auto-fill hidden DATE/TIME items for staff at submit time (create) or restore on edit.
     if (isStaffUser && templateItemsForSubmit.length) {
       const patch: Record<string, moment.Moment> = {};
       templateItemsForSubmit.forEach((it, idx) => {
@@ -2135,7 +2335,16 @@ const NewReports: React.FC = () => {
         const fieldKey = getTemplateFieldKey(it, idx);
         const current = values[fieldKey];
         if (current === undefined || current === null || current === "") {
-          patch[fieldKey] = moment();
+          const existing = editing?.reports
+            ? parseReportItemValueForForm(matchReportItemForTemplate(editing.reports, it, idx))
+            : undefined;
+          if (existing != null && existing !== "" && moment.isMoment(existing)) {
+            patch[fieldKey] = existing;
+          } else if (existing != null && existing !== "") {
+            /* non-moment hidden values handled via buildReportItems fallback */
+          } else {
+            patch[fieldKey] = moment();
+          }
         }
       });
       if (Object.keys(patch).length) {
@@ -2412,8 +2621,46 @@ const NewReports: React.FC = () => {
     : undefined;
 
   const supportsTableSort =
-    +profileType === userType.CUSTOMER || +profileType === userType.ADMIN;
+    +profileType === userType.CUSTOMER ||
+    +profileType === userType.ADMIN ||
+    +profileType === userType.STAFF;
   const tableSorter = supportsTableSort ? { sorter: true as const } : {};
+  const submittedColumnSorter = supportsTableSort
+    ? {
+        sorter: true as const,
+        sortDirections: ["descend", "ascend"] as ("descend" | "ascend")[],
+        showSorterTooltip: true,
+      }
+    : {};
+  const reportSortOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [
+      { value: "submittedAt:DESC", label: "Submitted (newest first)" },
+      { value: "submittedAt:ASC", label: "Submitted (oldest first)" },
+      { value: "siteName:ASC", label: "Job site (A–Z)" },
+      { value: "siteName:DESC", label: "Job site (Z–A)" },
+      { value: "serviceName:ASC", label: "Service (A–Z)" },
+      { value: "serviceName:DESC", label: "Service (Z–A)" },
+    ];
+    if (+profileType === userType.ADMIN) {
+      opts.splice(2, 0,
+        { value: "staffFullName:ASC", label: "Submitted by (A–Z)" },
+        { value: "staffFullName:DESC", label: "Submitted by (Z–A)" },
+      );
+    }
+    if (+profileType === userType.ADMIN || +profileType === userType.CUSTOMER) {
+      opts.push(
+        { value: "readStatus:ASC", label: "Status (unread first)" },
+        { value: "readStatus:DESC", label: "Status (read first)" },
+      );
+    }
+    return opts;
+  }, [profileType]);
+  const onMobileSortChange = useCallback((value: string) => {
+    const [orderBy, orderValue] = value.split(":");
+    if (!orderBy || !orderValue) return;
+    setPage(1);
+    setListSort({ orderBy, orderValue });
+  }, []);
   const sortOrderFor = (field: string) =>
     supportsTableSort && listSort.orderBy === field
       ? (listSort.orderValue === "ASC" ? ("ascend" as const) : ("descend" as const))
@@ -2728,9 +2975,10 @@ const NewReports: React.FC = () => {
     {
       title: "Submitted",
       key: "submittedAt",
+      columnKey: "submittedAt",
       dataIndex: "submittedAt",
       width: 155,
-      ...tableSorter,
+      ...submittedColumnSorter,
       sortOrder: sortOrderFor("submittedAt"),
       render: (_: unknown, r: any) => formatReportSubmittedAt(r),
     },
@@ -2813,7 +3061,24 @@ const NewReports: React.FC = () => {
 
   const isEditMode = Boolean(editing?.id);
   const useStaffStyleCreate = isStaffUser || (isAdminUser && !isEditMode);
+  // Staff edit: lock site/template only when the report already has them saved.
+  // Older legacy rows can have missing reportTemplateId and must allow selection.
+  const lockStaffEditContext =
+    isStaffUser &&
+    isEditMode &&
+    editing?.siteId != null &&
+    String(editing.siteId).trim() !== "" &&
+    editing?.reportTemplateId != null &&
+    String(editing.reportTemplateId).trim() !== "";
   const templateChosen = Boolean(selectedTemplateId);
+  const legacyReportsForRender = useMemo(() => {
+    if (!isEditMode || templateChosen) return [];
+    if (!Array.isArray(editing?.reports)) return [];
+    return editing.reports
+      .slice()
+      .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
+      .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
+  }, [editing, isEditMode, templateChosen]);
   const hadSubmittedCustomer =
     isEditMode && editing?.customerId != null && String(editing.customerId).trim() !== "";
   const hadSubmittedSite = isEditMode && editing?.siteId != null && String(editing.siteId).trim() !== "";
@@ -2865,6 +3130,7 @@ const NewReports: React.FC = () => {
             placeholder={useStaffStyleCreate ? "Select job site" : "Select site"}
             options={sites.map((s: any) => ({ value: s.id, label: s.name || s.siteName || `#${s.id}` }))}
             onChange={onPickSite}
+            disabled={lockStaffEditContext}
           />
         </Form.Item>
       </Fieldset>
@@ -2874,7 +3140,11 @@ const NewReports: React.FC = () => {
   const templateFieldCol = showTemplateField ? (
     <Col span={modalFieldColSpan}>
       <Fieldset>
-        <Form.Item name="reportTemplateId" label="Report template" rules={[{ required: true }]}>
+        <Form.Item
+          name="reportTemplateId"
+          label="Report template"
+          rules={[{ required: !isEditMode }]}
+        >
           <Select
             key={
               useStaffStyleCreate
@@ -2888,9 +3158,12 @@ const NewReports: React.FC = () => {
                 ? "Select a job site first"
                 : loadingSiteServices
                   ? "Loading templates..."
-                  : "Select a template"
+                  : isEditMode
+                    ? "Select a template (optional for legacy reports)"
+                    : "Select a template"
             }
             disabled={
+              lockStaffEditContext ||
               (useStaffStyleCreate && !watchedSiteId) ||
               (useStaffStyleCreate && loadingSiteServices)
             }
@@ -3077,6 +3350,25 @@ const NewReports: React.FC = () => {
                 />
               </div>
             </Form.Item>
+            {supportsTableSort && (showMobileCards || isMobilePortrait) ? (
+              <Form.Item label="Sort by" style={isMobilePortrait ? { width: "100%" } : undefined}>
+                <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
+                  <Select
+                    className={mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined}
+                    popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
+                    dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
+                    value={`${listSort.orderBy}:${listSort.orderValue}`}
+                    options={reportSortOptions}
+                    onChange={onMobileSortChange}
+                    style={{
+                      minWidth: isMobilePortrait ? undefined : 220,
+                      width: isMobilePortrait ? "100%" : undefined,
+                      ...(mobileUiDark ? { width: "100%" } : mobileDarkFieldStyle),
+                    }}
+                  />
+                </div>
+              </Form.Item>
+            ) : null}
             <Form.Item style={isMobilePortrait ? { width: "100%", marginBottom: 0 } : undefined}>
               <Space wrap style={isMobilePortrait ? { width: "100%", justifyContent: "flex-end" } : undefined}>
                 <Button type="primary" icon={<SearchOutlined />} style={staffPrimaryGreen} onClick={onSearchList}>
@@ -3466,9 +3758,9 @@ const NewReports: React.FC = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {getReportSubmittedAt(viewRow) ? (
+                  {resolveReportSubmittedDisplayMoment(viewRow) ? (
                     <>
-                      <span>{moment(getReportSubmittedAt(viewRow)).format("D MMM, YYYY")}</span>
+                      <span>{resolveReportSubmittedDisplayMoment(viewRow)!.format(dateFormat)}</span>
                       <span
                         style={{
                           display: "inline-flex",
@@ -3479,7 +3771,7 @@ const NewReports: React.FC = () => {
                         }}
                       >
                         <ClockCircleOutlined style={{ fontSize: 12, color: "#8c8c8c" }} aria-hidden />
-                        <span>{moment(getReportSubmittedAt(viewRow)).format("HH:mm")}</span>
+                        <span>{resolveReportSubmittedDisplayMoment(viewRow)!.format("HH:mm")}</span>
                       </span>
                     </>
                   ) : (
@@ -3727,7 +4019,7 @@ const NewReports: React.FC = () => {
           ...(modalUiDark ? { background: "#262626" } : {}),
         }}
       >
-        <Form layout="vertical" form={form} requiredMark="optional">
+        <Form layout="vertical" form={form} requiredMark="optional" preserve>
           <Row gutter={12}>
             <Form.Item name="staffId" style={{ display: "none" }}>
               <Input />
@@ -3769,6 +4061,17 @@ const NewReports: React.FC = () => {
             <Form.Item name="description" style={{ display: "none" }}>
               <Input />
             </Form.Item>
+            {isStaffUser && isEditMode
+              ? templateItemsForSubmit.map((it, idx) => {
+                  if (!isHiddenFromStaffCreate(it)) return null;
+                  const fieldKey = getTemplateFieldKey(it, idx);
+                  return (
+                    <Form.Item key={`staff-hidden-${fieldKey}`} name={fieldKey} hidden>
+                      <Input />
+                    </Form.Item>
+                  );
+                })
+              : null}
             {/* taskName is required by API but hidden from staff UI */}
             <Col span={24}>
               <Typography.Text
@@ -3855,12 +4158,13 @@ const NewReports: React.FC = () => {
                   const label = getTemplateLabel(it) || it.name;
                   const fieldType = String(it.type || "").toUpperCase();
                   const templateFieldColSpan = isMobilePortrait ? 24 : 12;
+                  const timeLike = isTimeLikeTemplateItem(it) || isTimeLikeLabel(label);
 
                   if (isAutoMergeTemplateField(it)) {
                     if (
-                      isStaffUser &&
-                      !isHiddenFromStaffCreate(it) &&
-                      (fieldType === "[REPORT_DATE]" || fieldType === "[REPORT_TIME]")
+                      (fieldType === "[REPORT_DATE]" || fieldType === "[REPORT_TIME]") &&
+                      // Staff: only show picker when allowed (otherwise read-only auto-merge).
+                      (!isStaffUser || !isHiddenFromStaffCreate(it))
                     ) {
                       return (
                         <Col span={templateFieldColSpan} key={key}>
@@ -3904,6 +4208,24 @@ const NewReports: React.FC = () => {
                     );
                   }
 
+                  // Some templates incorrectly define the "Time" field as TEXT/DATETIME.
+                  // Always show it as a time picker when the label/name is time-like.
+                  if (timeLike) {
+                    return (
+                      <Col span={templateFieldColSpan} key={key}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <TimePicker
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            style={{ width: "100%", borderRadius: 8 }}
+                            format="HH:mm:ss"
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
                   if (fieldType === "DATE" || fieldType === "DATE_PICKER") {
                     return (
                       <Col span={templateFieldColSpan} key={key}>
@@ -3929,7 +4251,7 @@ const NewReports: React.FC = () => {
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
                             style={{ width: "100%", borderRadius: 8 }}
-                            format="HH:mm"
+                            format="HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>
@@ -4066,6 +4388,121 @@ const NewReports: React.FC = () => {
                           className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                           style={{ borderRadius: 8 }}
                           placeholder="Enter value"
+                        />
+                      </Form.Item>
+                    </Col>
+                  );
+                })}
+              </Row>
+            </div>
+          ) : legacyReportsForRender.length > 0 ? (
+            <div
+              className={isMobilePortrait ? "nr-template-fields-mobile" : undefined}
+              style={{ marginTop: 20 }}
+            >
+              <Divider orientation="left" plain style={{ margin: "8px 0 16px", fontSize: 15, fontWeight: 600 }}>
+                Saved fields (legacy report)
+              </Divider>
+              <Row gutter={[16, 8]}>
+                {legacyReportsForRender.map((r: any, idx: number) => {
+                  const required = false;
+                  const fieldKey = legacyFieldKey(r, idx);
+                  const label = fixTextEncoding(String(r?.name || "").trim()) || `Field ${idx + 1}`;
+                  const fieldType = String(r?.type || "").toUpperCase();
+                  const templateFieldColSpan = isMobilePortrait ? 24 : 12;
+
+                  if (isTimeLikeLabel(label)) {
+                    return (
+                      <Col span={templateFieldColSpan} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <TimePicker
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            style={{ width: "100%", borderRadius: 8 }}
+                            format="HH:mm:ss"
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  if (fieldType === "DATE" || fieldType === "DATE_PICKER") {
+                    return (
+                      <Col span={templateFieldColSpan} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <DatePicker
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            style={{ width: "100%", borderRadius: 8 }}
+                            format="YYYY-MM-DD"
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  if (fieldType === "TIME") {
+                    return (
+                      <Col span={templateFieldColSpan} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <TimePicker
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            style={{ width: "100%", borderRadius: 8 }}
+                            format="HH:mm:ss"
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  if (isJsonMediaFieldType(fieldType)) {
+                    const multiple = fieldType === "IMAGES";
+                    const UploadComp = multiple ? TemplateImageUpload : TemplateVideoUpload;
+                    return (
+                      <Col span={24} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <UploadComp />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  if (fieldType === "FILE") {
+                    return (
+                      <Col span={24} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <TemplateFileUpload />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  if (fieldType === "TEXTAREA" || fieldType === "TEXT_AREA") {
+                    return (
+                      <Col span={24} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <Input.TextArea
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            style={{ borderRadius: 8 }}
+                            autoSize={{ minRows: 3, maxRows: 8 }}
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  return (
+                    <Col span={templateFieldColSpan} key={fieldKey}>
+                      <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                        <Input
+                          size={controlSize}
+                          className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                          style={{ borderRadius: 8 }}
                         />
                       </Form.Item>
                     </Col>

@@ -31,22 +31,99 @@ function getReportPdfSubmittedByLabel(row: any): string {
     return String(row?.user?.fullName || row?.user?.username || '').trim();
 }
 
+/** Australian Eastern — matches admin list/modal display (report-faults, attendance). */
+const REPORT_PDF_AU_OFFSET = '+10:00';
+
+function reportPdfAuMoment(raw: unknown): moment.Moment {
+    const m = moment(raw);
+    return m.isValid() ? m.utcOffset(REPORT_PDF_AU_OFFSET) : moment().utcOffset(REPORT_PDF_AU_OFFSET);
+}
+
+function inferReportDateTimeFromItems(reportItems: unknown): moment.Moment | null {
+    if (!Array.isArray(reportItems) || !reportItems.length) return null;
+    let dateStr: string | null = null;
+    let timeStr: string | null = null;
+    for (const it of reportItems) {
+        const t = String((it as any)?.type ?? '').toUpperCase();
+        const v = String((it as any)?.value ?? '').trim();
+        if (!v) continue;
+        if (t === '[REPORT_DATE]' && moment(v, 'YYYY-MM-DD', true).isValid()) {
+            dateStr = v;
+        } else if (t === '[REPORT_TIME]' && moment(v, 'HH:mm:ss', true).isValid()) {
+            timeStr = v;
+        }
+    }
+    if (!dateStr && !timeStr) return null;
+    const d = dateStr ?? moment().utcOffset(REPORT_PDF_AU_OFFSET).format('YYYY-MM-DD');
+    const t = timeStr ?? '00:00:00';
+    const m = moment(`${d} ${t}`, 'YYYY-MM-DD HH:mm:ss', true).utcOffset(REPORT_PDF_AU_OFFSET, true);
+    return m.isValid() ? m : null;
+}
+
+/** Admin uploads embed epoch ms in filenames; use when check_in predates actual submit. */
+function inferSubmissionMomentFromReportMedia(reports: unknown): moment.Moment | null {
+    if (!Array.isArray(reports)) return null;
+    let maxTs = 0;
+    for (const r of reports) {
+        const val = String(r?.value ?? '');
+        const re = /\/(\d{13})(?:-|\.)/g;
+        let match: RegExpExecArray | null;
+        while ((match = re.exec(val)) !== null) {
+            const ts = Number(match[1]);
+            if (Number.isFinite(ts) && ts > maxTs) maxTs = ts;
+        }
+    }
+    if (maxTs <= 0) return null;
+    const m = moment(maxTs);
+    return m.isValid() ? m : null;
+}
+
 /** When the report was actually submitted — not PDF regen time or DB touch time. */
-function getReportPdfReferenceMoment(row: any): moment.Moment {
+function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Moment {
+    const explicit = inferReportDateTimeFromItems(reportItems);
+    if (explicit) return reportPdfAuMoment(explicit);
+
+    const checkIn = row?.checkIn ?? row?.check_in;
+    const createdAt = row?.createdAt ?? row?.created_at;
     const candidates = [
-        row?.checkIn,
-        row?.check_in,
-        row?.createdAt,
-        row?.created_at,
+        createdAt,
+        checkIn,
         row?.startTime,
         row?.start_time,
     ];
+    let best: moment.Moment | null = null;
     for (const raw of candidates) {
         if (raw == null || raw === '') continue;
         const m = moment(raw);
-        if (m.isValid()) return m;
+        if (m.isValid()) {
+            best = m;
+            break;
+        }
     }
-    return moment();
+    if (checkIn && createdAt) {
+        const ci = moment(checkIn);
+        const ca = moment(createdAt);
+        if (ci.isValid() && ca.isValid()) {
+            const forwardSkewMin = ci.diff(ca, 'minutes');
+            if (forwardSkewMin >= 540 && forwardSkewMin <= 660) {
+                best = ca;
+            }
+        }
+    }
+    const reportsForMedia = Array.isArray(reportItems)
+        ? reportItems
+        : row?.reports;
+    const media = inferSubmissionMomentFromReportMedia(reportsForMedia);
+    if (media && best) {
+        const aheadMin = media.diff(best, 'minutes');
+        const behindMin = best.diff(media, 'minutes');
+        if (aheadMin > 30 || behindMin > 30) {
+            best = media;
+        }
+    } else if (media && !best) {
+        best = media;
+    }
+    return reportPdfAuMoment(best ?? undefined);
 }
 
 function formatReportPdfDateTimeValue(val: unknown): string {
@@ -55,7 +132,7 @@ function formatReportPdfDateTimeValue(val: unknown): string {
     const custom = moment(s, ['YYYY MMM DD h:mm a', 'YYYY MMM DD hh:mm a', 'DD MMM YYYY h:mm a'], true);
     if (custom.isValid()) return custom.format('DD MMM YYYY h:mm a');
     const loose = moment(s);
-    if (loose.isValid()) return loose.format('DD MMM YYYY h:mm a');
+    if (loose.isValid()) return reportPdfAuMoment(loose).format('DD MMM YYYY h:mm a');
     return s;
 }
 
@@ -570,7 +647,11 @@ async function buildImagesBlock(fieldName: string, value: unknown): Promise<stri
           <div class="images">${parts.join('')}</div>`;
 }
 
-async function renderReportField(row: any, it: any, opts: { hasNoteHeader: boolean }): Promise<string> {
+async function renderReportField(
+    row: any,
+    it: any,
+    opts: { hasNoteHeader: boolean; reportItems?: unknown },
+): Promise<string> {
     const rawType = it?.type;
     const type = normalizeReportFieldType(rawType);
     const name = String(it?.name ?? '');
@@ -605,12 +686,19 @@ async function renderReportField(row: any, it: any, opts: { hasNoteHeader: boole
     }
 
     if (rawType === '[REPORT_DATE]' || type === '[REPORT_DATE]') {
-        const ref = getReportPdfReferenceMoment(row);
-        return fieldRow(encName, `<span>${escapeHtml(ref.format('DD MMM YYYY h:mm:ss a'))}</span>`);
+        const ref = getReportPdfReferenceMoment(row, opts.reportItems);
+        const valStr = String(val ?? '').trim();
+        const dateOnly = moment(valStr, 'YYYY-MM-DD', true);
+        const display = dateOnly.isValid()
+            ? moment(`${valStr} ${ref.format('HH:mm:ss')}`, 'YYYY-MM-DD HH:mm:ss')
+                  .utcOffset(REPORT_PDF_AU_OFFSET, true)
+                  .format('DD MMM YYYY h:mm:ss a')
+            : ref.format('DD MMM YYYY h:mm:ss a');
+        return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
     }
 
     if (rawType === '[REPORT_TIME]' || type === '[REPORT_TIME]') {
-        const ref = getReportPdfReferenceMoment(row);
+        const ref = getReportPdfReferenceMoment(row, opts.reportItems);
         return fieldRow(encName, `<span>${escapeHtml(ref.format('h:mm:ss a'))}</span>`);
     }
 
@@ -715,9 +803,13 @@ async function renderReportField(row: any, it: any, opts: { hasNoteHeader: boole
 }
 
 async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
+    const newItems = Array.isArray(rItems) ? rItems : [];
+    if (!row.reports?.length && newItems.length) {
+        row.reports = newItems;
+    }
     const templatePath = resolveReportPdfTemplatePath();
     let html = fs.readFileSync(templatePath, 'utf8');
-    console.log('1. convert to pdf', { templatePath, items: rItems?.length });
+    console.log('1. convert to pdf', { templatePath, items: newItems.length });
 
     const legacyLogoUrl = 'http://3.104.215.45:8001/public/upload/files/logo-a8a4.png';
     const logoDataUri = await resolveReportPdfLogoDataUri();
@@ -734,7 +826,6 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     }
 
     let content = ``;
-    const newItems = Array.isArray(rItems) ? rItems : [];
     if (newItems.length > 0) {
         const checkNote = newItems.find((c: any) => c.name === 'Note');
         if (checkNote) {
@@ -743,14 +834,16 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
                 <div class="item100"><b>${escapeHtml(checkNote.value)}</b></div>
             </div>`;
         }
+        const fieldOpts = { hasNoteHeader: !!checkNote, reportItems: newItems };
         for (const it of newItems) {
-            content += await renderReportField(row, it, { hasNoteHeader: !!checkNote });
+            content += await renderReportField(row, it, fieldOpts);
         }
     }
 
     const title = row?.reportTemplate?.name ?? 'Report';
-    const reportWhen = getReportPdfReferenceMoment(row);
+    const reportWhen = getReportPdfReferenceMoment(row, newItems);
     html = html.replace('{{TITLE}}', escapeHtml(title));
+    // Header shows date only (time appears in report body fields).
     html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format('DD MMM YYYY')));
     html = html.replace('{{CONTENT}}', content);
 
@@ -817,7 +910,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     const pdfDoc = await PDFDocument.load(documentAsBytes);
     const numberOfPages = pdfDoc.getPages().length;
     const submittedByLabel = getReportPdfSubmittedByLabel(row);
-    const submittedStamp = getReportPdfReferenceMoment(row).format('DD MMM YYYY @ HH:mm:ss');
+    const submittedStamp = getReportPdfReferenceMoment(row, newItems).format('DD MMM YYYY @ HH:mm:ss');
     for (let i = 0; i < numberOfPages; i++) {
         const pg = pdfDoc.getPages()[i];
         if (pg) {

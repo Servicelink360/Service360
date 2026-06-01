@@ -1776,7 +1776,8 @@ export class UserTasksService {
       data.updatedBy = userInfo.userId;
       data.status = dJobStatus.COMPLETED;
       data.type = "CUSTOM"
-      data.checkIn = body.checkIn ? body.checkIn : new Date();
+      // Server clock at save — client checkIn can be hours stale on long admin uploads.
+      data.checkIn = new Date();
       data.checkOut = body.completed ? body.completed : new Date();
       // Not tied to a scheduled task; many DBs require NOT NULL on task_id / task_shift_id.
       const bAny = body as any;

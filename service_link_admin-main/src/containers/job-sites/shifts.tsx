@@ -7,7 +7,7 @@ import { ActionListBtn } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
 import { limitData, pageData } from "@app/config/data.config";
 import { Col, Popconfirm, Row, Form, Input, Tag } from "antd";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useIntl } from "react-intl";
 import { useDispatch, useSelector } from "react-redux";
 import FormInput from "@app/components/common/FormItem/Input";
@@ -97,19 +97,19 @@ const JobSite = (props: IProps) => {
         }
     ], [intl, handleOnClick, dispatch]);
 
-    const getDataInit = async (payload) => {
-        dispatch(actions.getDataInit(payload));
-    };
-
-
+    const getDataInit = useCallback(
+        (payload: string) => {
+            dispatch(actions.getDataInit(payload));
+        },
+        [dispatch],
+    );
 
     useEffect(() => {
         if (success) {
             handleResetSearch(page, limit);
         }
-    }, [success, handleResetSearch, page, limit]);
-
-
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [success]);
 
     const onTableChange = (pagination: any, filters, sorter, extra): void => {
         setPage(pagination.current);
@@ -124,11 +124,12 @@ const JobSite = (props: IProps) => {
             behavior: "smooth",
         });
         handleResetSearch(page, limit);
-        getDataInit("SITES");
+        dispatch(actions.getDataInit("SITES"));
         return () => {
             dispatch(actions.clearData());
         };
-    }, [dispatch, handleResetSearch, page, limit, getDataInit]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dispatch]);
 
     // const expandedRowRender = (item) => {
     //     const columnItems: ColDef[] | any = [
