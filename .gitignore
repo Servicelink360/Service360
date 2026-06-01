@@ -6,6 +6,8 @@
 # Logs and local artifacts
 **/log/
 *.log
+admin-artifact.tar.gz
+**/public/pdf/legacy/
 
 # Database dumps (large, may contain real data)
 *.sql
@@ -13,6 +15,8 @@
 *.dump
 data/
 deploy/aws-outputs.json
+deploy/global-bundle.pem
+global-bundle.pem
 
 # Duplicate / host copy (keep canonical api + admin folders only)
 app_from_host/

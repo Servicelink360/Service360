@@ -50,7 +50,7 @@ export class GetUserTasksByUserDto {
     @IsInt()
     reportId?: number
 
-    @ApiProperty({ required: false, description: 'Sort column: staffFullName, siteName, serviceName, customerName, updatedAt, status, readStatus' })
+    @ApiProperty({ required: false, description: 'Sort column: staffFullName, siteName, serviceName, customerName, submittedAt, updatedAt, status, readStatus' })
     @IsOptional()
     orderBy?: string
 

@@ -388,6 +388,16 @@ function reportPdfLinkLabel(row: any, href: string): string {
   return "PDF";
 }
 
+/** When the report was submitted — not last edit / PDF regen time. */
+function getReportSubmittedAt(row: any): string | Date | null | undefined {
+  return row?.checkIn ?? row?.check_in ?? row?.createdAt ?? row?.created_at ?? null;
+}
+
+function formatReportSubmittedAt(row: any): string {
+  const t = getReportSubmittedAt(row);
+  return t ? moment(t).format(dateTimeFormat) : "—";
+}
+
 /** List/view: staff name for field submissions; "Admin" when submitted via admin portal. */
 function formatSubmittedByRow(row: any): string {
   const staffName = String(row?.staff?.fullName || row?.staff?.username || "").trim();
@@ -929,7 +939,7 @@ const NewReports: React.FC = () => {
   const [listFilters, setListFilters] = useState<ListQueryFilters>({});
   const [reportListTab, setReportListTab] = useState<ReportListTab>("active");
   const [deletedReportCount, setDeletedReportCount] = useState(0);
-  const [listSort, setListSort] = useState({ orderBy: "updatedAt", orderValue: "DESC" });
+  const [listSort, setListSort] = useState({ orderBy: "submittedAt", orderValue: "DESC" });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [clearingDeleted, setClearingDeleted] = useState(false);
@@ -1298,18 +1308,20 @@ const NewReports: React.FC = () => {
       "siteName",
       "serviceName",
       "customerName",
+      "submittedAt",
       "updatedAt",
       "status",
       "readStatus",
     ]);
     if (!allowed.has(field)) return;
+    const orderField = field === "updatedAt" ? "submittedAt" : field;
 
     if (colSorter.order === "ascend") {
-      setListSort({ orderBy: field, orderValue: "ASC" });
+      setListSort({ orderBy: orderField, orderValue: "ASC" });
       return;
     }
     if (colSorter.order === "descend") {
-      setListSort({ orderBy: field, orderValue: "DESC" });
+      setListSort({ orderBy: orderField, orderValue: "DESC" });
       return;
     }
     // readStatus: two-state only (unread first ? read first), no �clear sort�
@@ -1321,7 +1333,7 @@ const NewReports: React.FC = () => {
       );
       return;
     }
-    setListSort({ orderBy: "updatedAt", orderValue: "DESC" });
+    setListSort({ orderBy: "submittedAt", orderValue: "DESC" });
   };
 
   useEffect(() => {
@@ -2527,8 +2539,7 @@ const NewReports: React.FC = () => {
     (r: any) => {
       const pdfHref = resolveReportPdfHref(getUserTaskPdfField(r));
       const title = String(r.taskName || reportPdfLinkLabel(r, pdfHref) || r.siteName || "Report").trim();
-      const submittedAt = r?.updatedAt || r?.createdAt;
-      const submittedLabel = submittedAt ? moment(submittedAt).format(dateTimeFormat) : "�";
+      const submittedLabel = formatReportSubmittedAt(r);
       const highlighted = linkedReportId != null && +r.id === +linkedReportId;
       const selectable = canUseBulkDelete && canSoftDeleteReport(r);
 
@@ -2716,14 +2727,12 @@ const NewReports: React.FC = () => {
       : []),
     {
       title: "Submitted",
-      dataIndex: "updatedAt",
+      key: "submittedAt",
+      dataIndex: "submittedAt",
       width: 155,
       ...tableSorter,
-      sortOrder: sortOrderFor("updatedAt"),
-      render: (_: unknown, r: any) => {
-        const t = r?.updatedAt || r?.createdAt;
-        return t ? moment(t).format(dateTimeFormat) : "�";
-      },
+      sortOrder: sortOrderFor("submittedAt"),
+      render: (_: unknown, r: any) => formatReportSubmittedAt(r),
     },
     {
       title: "Report file",
@@ -3457,9 +3466,9 @@ const NewReports: React.FC = () => {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {viewRow.updatedAt || viewRow.createdAt ? (
+                  {getReportSubmittedAt(viewRow) ? (
                     <>
-                      <span>{moment(viewRow.updatedAt || viewRow.createdAt).format("D MMM, YYYY")}</span>
+                      <span>{moment(getReportSubmittedAt(viewRow)).format("D MMM, YYYY")}</span>
                       <span
                         style={{
                           display: "inline-flex",
@@ -3470,7 +3479,7 @@ const NewReports: React.FC = () => {
                         }}
                       >
                         <ClockCircleOutlined style={{ fontSize: 12, color: "#8c8c8c" }} aria-hidden />
-                        <span>{moment(viewRow.updatedAt || viewRow.createdAt).format("HH:mm")}</span>
+                        <span>{moment(getReportSubmittedAt(viewRow)).format("HH:mm")}</span>
                       </span>
                     </>
                   ) : (

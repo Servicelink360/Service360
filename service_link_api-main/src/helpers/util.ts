@@ -31,6 +31,34 @@ function getReportPdfSubmittedByLabel(row: any): string {
     return String(row?.user?.fullName || row?.user?.username || '').trim();
 }
 
+/** When the report was actually submitted — not PDF regen time or DB touch time. */
+function getReportPdfReferenceMoment(row: any): moment.Moment {
+    const candidates = [
+        row?.checkIn,
+        row?.check_in,
+        row?.createdAt,
+        row?.created_at,
+        row?.startTime,
+        row?.start_time,
+    ];
+    for (const raw of candidates) {
+        if (raw == null || raw === '') continue;
+        const m = moment(raw);
+        if (m.isValid()) return m;
+    }
+    return moment();
+}
+
+function formatReportPdfDateTimeValue(val: unknown): string {
+    const s = String(val ?? '').trim();
+    if (!s) return '';
+    const custom = moment(s, ['YYYY MMM DD h:mm a', 'YYYY MMM DD hh:mm a', 'DD MMM YYYY h:mm a'], true);
+    if (custom.isValid()) return custom.format('DD MMM YYYY h:mm a');
+    const loose = moment(s);
+    if (loose.isValid()) return loose.format('DD MMM YYYY h:mm a');
+    return s;
+}
+
 const puppeteer = require('puppeteer');
 const AWS = require("aws-sdk");
 const fs = require('fs');
@@ -577,11 +605,13 @@ async function renderReportField(row: any, it: any, opts: { hasNoteHeader: boole
     }
 
     if (rawType === '[REPORT_DATE]' || type === '[REPORT_DATE]') {
-        return fieldRow(encName, `<span>${escapeHtml(moment().format('DD MMM YYYY h:mm:ss a'))}</span>`);
+        const ref = getReportPdfReferenceMoment(row);
+        return fieldRow(encName, `<span>${escapeHtml(ref.format('DD MMM YYYY h:mm:ss a'))}</span>`);
     }
 
     if (rawType === '[REPORT_TIME]' || type === '[REPORT_TIME]') {
-        return fieldRow(encName, `<span>${escapeHtml(moment().format('h:mm:ss a'))}</span>`);
+        const ref = getReportPdfReferenceMoment(row);
+        return fieldRow(encName, `<span>${escapeHtml(ref.format('h:mm:ss a'))}</span>`);
     }
 
     if (type === 'TEXT' && name !== 'Note' && val) {
@@ -602,7 +632,7 @@ async function renderReportField(row: any, it: any, opts: { hasNoteHeader: boole
     }
 
     if (type === 'DATETIME' && val) {
-        return fieldRow(encName, `<span>${escapeHtml(moment(val).format('DD MMM YYYY h:mm a'))}</span>`);
+        return fieldRow(encName, `<span>${escapeHtml(formatReportPdfDateTimeValue(val))}</span>`);
     }
 
     if (type === 'TIME' && val && String(val) !== 'Invalid date') {
@@ -719,8 +749,9 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     }
 
     const title = row?.reportTemplate?.name ?? 'Report';
+    const reportWhen = getReportPdfReferenceMoment(row);
     html = html.replace('{{TITLE}}', escapeHtml(title));
-    html = html.replace('{{CUR_DATE}}', escapeHtml(moment().format('DD MMM YYYY')));
+    html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format('DD MMM YYYY')));
     html = html.replace('{{CONTENT}}', content);
 
     const isWindows = process.platform === 'win32';
@@ -786,10 +817,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     const pdfDoc = await PDFDocument.load(documentAsBytes);
     const numberOfPages = pdfDoc.getPages().length;
     const submittedByLabel = getReportPdfSubmittedByLabel(row);
-    const submittedAt = row?.updatedAt || row?.createdAt;
-    const submittedStamp = submittedAt
-        ? moment(submittedAt).format('DD MMM YYYY @ HH:mm:ss')
-        : moment().format('DD MMM YYYY @ HH:mm:ss');
+    const submittedStamp = getReportPdfReferenceMoment(row).format('DD MMM YYYY @ HH:mm:ss');
     for (let i = 0; i < numberOfPages; i++) {
         const pg = pdfDoc.getPages()[i];
         if (pg) {

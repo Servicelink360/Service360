@@ -506,7 +506,7 @@ export class UserTasksService {
   async updateReport(id: number, userInfo: IUserInfo, body: ReportUserTaskDto) {
     const query = this.userTasksRepository.createQueryBuilder('userTasks')
       .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
-      // .leftJoinAndSelect('reportTemplate.items', 'temItems')
+      .leftJoinAndSelect('userTasks.reports', 'reports')
       .leftJoin('userTasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
       .leftJoin('userTasks.createdUser', 'createdUser')
       .addSelect(['createdUser.fullName', 'createdUser.username', 'createdUser.type'])
@@ -550,11 +550,11 @@ export class UserTasksService {
             ) as t
             WHERE t.id=${ut.id}
             `)
-      console.log('convertHtmlToPdf')
-      const pdfFile = await convertHtmlToPdf(ut, ut.reports.sort((a, b) => a.order - b.order), resultRownumber[0].row_num);
+      const reportsSorted = [...(ut.reports || [])].sort((a, b) => a.order - b.order);
+      const pdfFile = await convertHtmlToPdf(ut, reportsSorted, resultRownumber[0].row_num);
       ut.pdfFile = pdfFile;
     } catch (error) {
-      console.log(error);
+      this.logger.error(`[updateReport] PDF generation failed for task ${id}`, error);
     }
     await this.userTasksRepository.save(ut);
     return errorCode.SUCCESS
@@ -986,7 +986,13 @@ export class UserTasksService {
       }
 
       if (body.startDate && body.endDate) {
-        query.andWhere(`usertasks.updatedAt > :startDate AND usertasks.updatedAt <= :endDate`, { startDate: moment(body.startDate).format("YYYY-MM-DD 00:00:00"), endDate: moment(body.endDate).format("YYYY-MM-DD 23:59:59") })
+        query.andWhere(
+          `COALESCE(usertasks.checkIn, usertasks.createdAt) > :startDate AND COALESCE(usertasks.checkIn, usertasks.createdAt) <= :endDate`,
+          {
+            startDate: moment(body.startDate).format('YYYY-MM-DD 00:00:00'),
+            endDate: moment(body.endDate).format('YYYY-MM-DD 23:59:59'),
+          },
+        );
       }
       if (body.type) {
         query.andWhere(' usertasks.type =:type ', { type: body.type })
@@ -1030,16 +1036,26 @@ export class UserTasksService {
           query.orderBy('usertasks.id', 'DESC');
         }
       } else {
-        const allowedOrderBy: Record<string, string> = {
-          siteName: 'usertasks.siteName',
-          serviceName: 'usertasks.serviceName',
-          updatedAt: 'usertasks.updatedAt',
-          status: 'usertasks.status',
-        };
-        if (body.orderBy && allowedOrderBy[body.orderBy]) {
-          query.orderBy(allowedOrderBy[body.orderBy], orderDir).addOrderBy('usertasks.id', 'DESC');
+        const orderByKey = body.orderBy === 'updatedAt' ? 'submittedAt' : body.orderBy;
+        if (orderByKey === 'submittedAt' || orderByKey === 'updatedAt') {
+          query
+            .addSelect(
+              'COALESCE("usertasks"."check_in", "usertasks"."created_at")',
+              'report_submitted_at',
+            )
+            .orderBy('report_submitted_at', orderDir)
+            .addOrderBy('usertasks.id', 'DESC');
         } else {
-          query.orderBy('usertasks.id', 'DESC');
+          const allowedOrderBy: Record<string, string> = {
+            siteName: 'usertasks.siteName',
+            serviceName: 'usertasks.serviceName',
+            status: 'usertasks.status',
+          };
+          if (orderByKey && allowedOrderBy[orderByKey]) {
+            query.orderBy(allowedOrderBy[orderByKey], orderDir).addOrderBy('usertasks.id', 'DESC');
+          } else {
+            query.orderBy('usertasks.id', 'DESC');
+          }
         }
       }
 
@@ -1986,7 +2002,7 @@ export class UserTasksService {
 
           data.pdfFile = pdfFile;
         } catch (error) {
-          console.log(error);
+          this.logger.error(`[createCustomerReports] PDF generation failed for task ${taskSaved.id}`, error);
         }
       }
       if (data.pdfFile) {
@@ -2103,7 +2119,7 @@ export class UserTasksService {
           await this.userTasksRepository.update(+id, { pdfFile });
         }
       } catch (error) {
-        console.log('[updateCustomerReports] PDF generation failed', error);
+        this.logger.error(`[updateCustomerReports] PDF generation failed for task ${id}`, error);
       }
 
       return errorCode.SUCCESS;
@@ -2154,7 +2170,7 @@ export class UserTasksService {
       const pdfFile = await convertHtmlToPdf(newItem, newReports.sort((a, b) => a.order - b.order), resultRownumber[0].row_num);
       newItem.pdfFile = pdfFile;
     } catch (error) {
-      console.log(error);
+      this.logger.error(`[updateReportFile] PDF generation failed for task ${id}`, error);
     }
     const result = await this.userTasksRepository.save(newItem);
     if (!result)

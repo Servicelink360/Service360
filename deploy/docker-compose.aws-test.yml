@@ -32,7 +32,7 @@ services:
     depends_on:
       - redis
     volumes:
-      - api_uploads:/usr/src/app/public/uploads
+      - api_upload_files:/usr/src/app/public/upload/files
     mem_limit: 1536m
     mem_reservation: 384m
     healthcheck:
@@ -68,4 +68,4 @@ services:
       retries: 3
 
 volumes:
-  api_uploads:
+  api_upload_files:

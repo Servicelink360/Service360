@@ -23,8 +23,9 @@ import {
 } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
 import { dateTimeFormat, limitData, pageData } from "@app/config/data.config";
-import { Col, Popconfirm, Row, Form, Image, DatePicker, Input, Tooltip, Spin, message, Button, Select, Typography, Table } from "antd";
+import { Col, Popconfirm, Row, Form, Image, DatePicker, Input, Tooltip, Spin, message, Button, Select, Typography, Table, Empty, Pagination, Checkbox } from "antd";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import styled, { css } from "styled-components";
 import useMobilePortrait from "@app/lib/hooks/useMobilePortrait";
 import { useColorModeOptional } from "@app/context/ColorModeContext";
 import { useHistory, useLocation } from "react-router-dom";
@@ -180,6 +181,79 @@ function isFaultReadForViewer(row: any, viewerType: number): boolean {
     if (+viewerType === userType.CUSTOMER) return Boolean(row?.customerOpenedAt);
     return false;
 }
+
+type MobileStyledDark = { $dark?: boolean };
+
+const MobileFaultsList = styled.div<MobileStyledDark>`
+  display: flex;
+  flex-direction: column;
+  gap: ${(p) => (p.$dark ? "18px" : "16px")};
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 0 12px;
+`;
+
+const MobileFaultCard = styled.article<MobileStyledDark & { $highlight?: boolean }>`
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: ${(p) => (p.$dark ? "#1e1e1e" : "#ffffff")};
+  border: 2px solid ${(p) => (p.$dark ? "#525252" : "#c8c8c8")};
+  border-radius: 12px;
+  box-shadow: ${(p) =>
+    p.$dark
+      ? "0 0 0 1px #3d3d3d, 0 8px 28px rgba(0, 0, 0, 0.85)"
+      : "0 4px 14px rgba(0, 0, 0, 0.12)"};
+  overflow: hidden;
+  cursor: pointer;
+
+  ${(p) =>
+    p.$highlight &&
+    css`
+      border-color: #52c41a;
+      box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.45);
+    `}
+`;
+
+const MobileFaultCardHead = styled.div<MobileStyledDark>`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#e8e8e8")};
+`;
+
+const MobileFaultCardTitle = styled.div<MobileStyledDark>`
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: ${(p) => (p.$dark ? "#f5f5f5" : "#262626")};
+  word-break: break-word;
+`;
+
+const MobileFaultCardMeta = styled.div<MobileStyledDark>`
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: ${(p) => (p.$dark ? "#b0b0b0" : "#595959")};
+`;
+
+const MobileFaultCardBody = styled.div<MobileStyledDark>`
+  padding: 12px 14px;
+  color: ${(p) => (p.$dark ? "#e8e8e8" : "#434343")};
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+`;
+
+const MobileFaultCardActions = styled.div<MobileStyledDark>`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid ${(p) => (p.$dark ? "#404040" : "#e8e8e8")};
+`;
 
 const UnreadBookIcon: React.FC = () => (
     <svg width={22} height={22} viewBox="0 0 24 24" fill="none" aria-hidden style={{ display: "block" }}>
@@ -338,10 +412,12 @@ const ReportFaults: React.FC = () => {
     }, [location.search]);
     const scrollToHighlightedRow = useCallback(() => {
         window.setTimeout(() => {
-            document.querySelector("tr.report-row-highlight")?.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-            });
+            document
+                .querySelector("tr.report-row-highlight, .report-fault-mobile-card--highlight")
+                ?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                });
         }, 150);
     }, []);
     const { loading, rows: reduxRows, row, success, modalType, count, loadingAction } = useSelector((state: any) => state?.reportFaults);
@@ -557,6 +633,103 @@ const ReportFaults: React.FC = () => {
                 label: `${r.issue || r.subject || "Fault"} — ${r.siteName || "—"} (#${reportFaultIdOf(r)})`,
             })),
         [deletableRowsOnPage],
+    );
+
+    const toggleFaultRowSelected = useCallback((listRowId: React.Key, checked: boolean) => {
+        setSelectedRowKeys((prev) =>
+            checked ? [...prev, listRowId] : prev.filter((k) => k !== listRowId),
+        );
+    }, []);
+
+    const renderMobileFaultCard = useCallback(
+        (record: any) => {
+            const faultId = reportFaultIdOf(record);
+            const highlighted = linkedFaultId != null && faultId === linkedFaultId;
+            const title = record.issue || record.subject || `Fault #${faultId}`;
+            const siteLine = [record.siteName, record.serviceName].filter(Boolean).join(" · ") || "—";
+            const timeLabel = record.createdAt
+                ? moment(record.createdAt).utcOffset(600).format(dateTimeFormat)
+                : "—";
+            const messageText =
+                record.message == null ? "" : String(record.message).trim();
+            const selectable = canUseBulkDelete && canBulkDeleteRow(record);
+
+            return (
+                <MobileFaultCard
+                    key={record.listRowId}
+                    $dark={mobileUiDark}
+                    $highlight={highlighted}
+                    className={highlighted ? "report-fault-mobile-card--highlight" : undefined}
+                    onClick={(e) => {
+                        const el = e.target as HTMLElement;
+                        if (
+                            el.closest(
+                                ".report-fault-read-status, .ant-checkbox-wrapper, .report-faults-row-actions, .ant-btn, .btnLink, button",
+                            )
+                        ) {
+                            return;
+                        }
+                        openFaultView(record);
+                    }}
+                >
+                    <MobileFaultCardHead $dark={mobileUiDark}>
+                        {selectable ? (
+                            <Checkbox
+                                checked={selectedRowKeys.includes(record.listRowId)}
+                                onChange={(e) =>
+                                    toggleFaultRowSelected(record.listRowId, e.target.checked)
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Select fault ${title}`}
+                                style={{ marginTop: 2, flexShrink: 0 }}
+                            />
+                        ) : null}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <MobileFaultCardTitle $dark={mobileUiDark}>{title}</MobileFaultCardTitle>
+                            <MobileFaultCardMeta $dark={mobileUiDark}>{siteLine}</MobileFaultCardMeta>
+                            <MobileFaultCardMeta $dark={mobileUiDark}>{timeLabel}</MobileFaultCardMeta>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                                {renderFaultStatus(record, profileType, false)}
+                                {renderFaultPriority(record.priority, false, true)}
+                            </div>
+                        </div>
+                        {showReadUnread ? (
+                            <div style={{ flexShrink: 0 }} onClick={stopRowOpen}>
+                                <FaultReadStatusCell
+                                    row={record}
+                                    viewerType={profileType}
+                                    markingUnread={markingUnreadFaultId === faultId}
+                                    onMarkUnread={markFaultUnread}
+                                />
+                            </div>
+                        ) : null}
+                    </MobileFaultCardHead>
+                    {messageText ? (
+                        <MobileFaultCardBody $dark={mobileUiDark}>
+                            {messageText.length > 220
+                                ? `${messageText.slice(0, 220)}…`
+                                : messageText}
+                        </MobileFaultCardBody>
+                    ) : null}
+                    <MobileFaultCardActions $dark={mobileUiDark}>
+                        {renderFaultActionCell(record)}
+                    </MobileFaultCardActions>
+                </MobileFaultCard>
+            );
+        },
+        [
+            linkedFaultId,
+            mobileUiDark,
+            profileType,
+            showReadUnread,
+            markingUnreadFaultId,
+            markFaultUnread,
+            openFaultView,
+            canUseBulkDelete,
+            canBulkDeleteRow,
+            selectedRowKeys,
+            toggleFaultRowSelected,
+        ],
     );
 
     const renderFaultActionCell = (record: any) => (
@@ -1027,7 +1200,9 @@ const ReportFaults: React.FC = () => {
             limit,
             "createdAt",
             "DESC",
-            faultIdParam ? { clearDateFilter: true, faultId: +faultIdParam } : undefined,
+            faultIdParam
+                ? { clearDateFilter: true, faultId: +faultIdParam }
+                : { clearDateFilter: true },
         );
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location.search]);
@@ -1313,7 +1488,7 @@ const ReportFaults: React.FC = () => {
                     </Form>
                 </div>
                 {!isMobilePortrait ? <UsernameRow /> : null}
-                <InformationDiv>
+                <InformationDiv style={isMobilePortrait ? { overflow: "visible" } : undefined}>
                     {canUseBulkDelete ? (
                         <div
                             className={
@@ -1420,6 +1595,33 @@ const ReportFaults: React.FC = () => {
                             </Popconfirm>
                         </div>
                     ) : null}
+                    {isMobilePortrait ? (
+                        <Spin spinning={loading}>
+                            {!loading && listRows.length === 0 ? (
+                                <Empty
+                                    description={intl.formatMessage({ id: "sidebar.users.no_data" })}
+                                    style={{ margin: "32px 0" }}
+                                />
+                            ) : (
+                                <MobileFaultsList $dark={mobileUiDark}>
+                                    {listRows.map(renderMobileFaultCard)}
+                                </MobileFaultsList>
+                            )}
+                            {count > 0 ? (
+                                <Pagination
+                                    className="new-reports-mobile-pagination"
+                                    current={page}
+                                    pageSize={limit}
+                                    total={count}
+                                    size="small"
+                                    showSizeChanger={false}
+                                    showTotal={(t) => `${t} faults`}
+                                    onChange={(p) => handleResetSearch(p, limit)}
+                                    style={{ marginTop: 16, textAlign: "center" }}
+                                />
+                            ) : null}
+                        </Spin>
+                    ) : (
                     <TableComponent
                         heightTable="650px"
                         tableClassName={
@@ -1459,6 +1661,7 @@ const ReportFaults: React.FC = () => {
                                 : ""
                         }
                     />
+                    )}
                 </InformationDiv>
             </UsersDiv>
 
