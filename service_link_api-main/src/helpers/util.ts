@@ -33,6 +33,7 @@ function getReportPdfSubmittedByLabel(row: any): string {
 
 /** Australian Eastern — matches admin list/modal display (report-faults, attendance). */
 const REPORT_PDF_AU_OFFSET = '+10:00';
+const REPORT_PDF_DATE_FORMAT = 'D MMM YYYY';
 
 function reportPdfAuMoment(raw: unknown): moment.Moment {
     const m = moment(raw);
@@ -49,8 +50,9 @@ function inferReportDateTimeFromItems(reportItems: unknown): moment.Moment | nul
         if (!v) continue;
         if (t === '[REPORT_DATE]' && moment(v, 'YYYY-MM-DD', true).isValid()) {
             dateStr = v;
-        } else if (t === '[REPORT_TIME]' && moment(v, 'HH:mm:ss', true).isValid()) {
-            timeStr = v;
+        } else if (t === '[REPORT_TIME]') {
+            const parsed = parseReportWallClockTime(v);
+            if (parsed) timeStr = parsed;
         }
     }
     if (!dateStr && !timeStr) return null;
@@ -58,6 +60,61 @@ function inferReportDateTimeFromItems(reportItems: unknown): moment.Moment | nul
     const t = timeStr ?? '00:00:00';
     const m = moment(`${d} ${t}`, 'YYYY-MM-DD HH:mm:ss', true).utcOffset(REPORT_PDF_AU_OFFSET, true);
     return m.isValid() ? m : null;
+}
+
+/** Parse staff-selected wall-clock time stored as HH:mm:ss, HH:mm, or legacy date string. */
+function parseReportWallClockTime(raw: unknown): string | null {
+    const v = String(raw ?? '').trim();
+    if (!v || v === 'Invalid date') return null;
+    const strict = moment(v, ['HH:mm:ss', 'HH:mm'], true);
+    if (strict.isValid()) return strict.format('HH:mm:ss');
+    const loose = moment(v);
+    if (loose.isValid() && !moment(v, 'YYYY-MM-DD', true).isValid()) {
+        return loose.utcOffset(REPORT_PDF_AU_OFFSET).format('HH:mm:ss');
+    }
+    return null;
+}
+
+function parseReportWallClockDate(raw: unknown): string | null {
+    const v = String(raw ?? '').trim();
+    if (!v) return null;
+    if (moment(v, 'YYYY-MM-DD', true).isValid()) return v;
+    const m = moment(v);
+    return m.isValid() ? m.utcOffset(REPORT_PDF_AU_OFFSET, true).format('YYYY-MM-DD') : null;
+}
+
+function findReportTimeInItems(reportItems: unknown): string | null {
+    if (!Array.isArray(reportItems)) return null;
+    for (const it of reportItems) {
+        const t = String((it as any)?.type ?? '').toUpperCase();
+        if (t === '[REPORT_TIME]') {
+            const parsed = parseReportWallClockTime((it as any)?.value);
+            if (parsed) return parsed;
+        }
+    }
+    return null;
+}
+
+function formatReportPdfDateDisplay(raw: unknown): string {
+    const stored = parseReportWallClockDate(raw);
+    if (stored) {
+        return moment(stored, 'YYYY-MM-DD', true)
+            .utcOffset(REPORT_PDF_AU_OFFSET, true)
+            .format(REPORT_PDF_DATE_FORMAT);
+    }
+    const s = String(raw ?? '').trim();
+    if (!s) return '';
+    const m = moment(s);
+    return m.isValid() ? reportPdfAuMoment(m).format(REPORT_PDF_DATE_FORMAT) : s;
+}
+
+function formatReportPdfTimeDisplay(raw: unknown): string {
+    const parsed = parseReportWallClockTime(raw);
+    if (parsed) return moment(parsed, 'HH:mm:ss', true).format('HH:mm');
+    const s = String(raw ?? '').trim();
+    if (!s) return '';
+    const m = moment(s, ['HH:mm:ss', 'HH:mm'], true);
+    return m.isValid() ? m.format('HH:mm') : s;
 }
 
 /** Admin uploads embed epoch ms in filenames; use when check_in predates actual submit. */
@@ -129,10 +186,10 @@ function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Mo
 function formatReportPdfDateTimeValue(val: unknown): string {
     const s = String(val ?? '').trim();
     if (!s) return '';
-    const custom = moment(s, ['YYYY MMM DD h:mm a', 'YYYY MMM DD hh:mm a', 'DD MMM YYYY h:mm a'], true);
-    if (custom.isValid()) return custom.format('DD MMM YYYY h:mm a');
+    const custom = moment(s, ['YYYY MMM DD HH:mm:ss', 'YYYY MMM DD HH:mm', 'DD MMM YYYY HH:mm:ss', 'DD MMM YYYY HH:mm', 'YYYY MMM DD h:mm a', 'DD MMM YYYY h:mm a'], true);
+    if (custom.isValid()) return custom.format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
     const loose = moment(s);
-    if (loose.isValid()) return reportPdfAuMoment(loose).format('DD MMM YYYY h:mm a');
+    if (loose.isValid()) return reportPdfAuMoment(loose).format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
     return s;
 }
 
@@ -686,20 +743,19 @@ async function renderReportField(
     }
 
     if (rawType === '[REPORT_DATE]' || type === '[REPORT_DATE]') {
-        const ref = getReportPdfReferenceMoment(row, opts.reportItems);
         const valStr = String(val ?? '').trim();
-        const dateOnly = moment(valStr, 'YYYY-MM-DD', true);
-        const display = dateOnly.isValid()
-            ? moment(`${valStr} ${ref.format('HH:mm:ss')}`, 'YYYY-MM-DD HH:mm:ss')
-                  .utcOffset(REPORT_PDF_AU_OFFSET, true)
-                  .format('DD MMM YYYY h:mm:ss a')
-            : ref.format('DD MMM YYYY h:mm:ss a');
+        const display = formatReportPdfDateDisplay(valStr)
+            || getReportPdfReferenceMoment(row, opts.reportItems).format(REPORT_PDF_DATE_FORMAT);
         return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
     }
 
     if (rawType === '[REPORT_TIME]' || type === '[REPORT_TIME]') {
-        const ref = getReportPdfReferenceMoment(row, opts.reportItems);
-        return fieldRow(encName, `<span>${escapeHtml(ref.format('h:mm:ss a'))}</span>`);
+        const valStr = String(val ?? '').trim();
+        const storedTime = parseReportWallClockTime(valStr) ?? findReportTimeInItems(opts.reportItems);
+        const display = storedTime
+            ? formatReportPdfTimeDisplay(storedTime)
+            : getReportPdfReferenceMoment(row, opts.reportItems).format('HH:mm');
+        return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
     }
 
     if (type === 'TEXT' && name !== 'Note' && val) {
@@ -716,7 +772,7 @@ async function renderReportField(
     }
 
     if ((type === 'DATE' || type === 'DATE_PICKER') && val) {
-        return fieldRow(encName, `<span>${escapeHtml(val)}</span>`);
+        return fieldRow(encName, `<span>${escapeHtml(formatReportPdfDateDisplay(val))}</span>`);
     }
 
     if (type === 'DATETIME' && val) {
@@ -724,7 +780,7 @@ async function renderReportField(
     }
 
     if (type === 'TIME' && val && String(val) !== 'Invalid date') {
-        return fieldRow(encName, `<span>${escapeHtml(val)}</span>`);
+        return fieldRow(encName, `<span>${escapeHtml(formatReportPdfTimeDisplay(val))}</span>`);
     }
 
     if (type === 'SELECT' || type === 'DROPDOWN') {
@@ -844,7 +900,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     const reportWhen = getReportPdfReferenceMoment(row, newItems);
     html = html.replace('{{TITLE}}', escapeHtml(title));
     // Header shows date only (time appears in report body fields).
-    html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format('DD MMM YYYY')));
+    html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format(REPORT_PDF_DATE_FORMAT)));
     html = html.replace('{{CONTENT}}', content);
 
     const isWindows = process.platform === 'win32';
@@ -910,7 +966,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     const pdfDoc = await PDFDocument.load(documentAsBytes);
     const numberOfPages = pdfDoc.getPages().length;
     const submittedByLabel = getReportPdfSubmittedByLabel(row);
-    const submittedStamp = getReportPdfReferenceMoment(row, newItems).format('DD MMM YYYY @ HH:mm:ss');
+    const submittedStamp = getReportPdfReferenceMoment(row, newItems).format(`${REPORT_PDF_DATE_FORMAT} @ HH:mm`);
     for (let i = 0; i < numberOfPages; i++) {
         const pg = pdfDoc.getPages()[i];
         if (pg) {
