@@ -570,6 +570,10 @@ export class PostgresSchemaPatchService implements OnApplicationBootstrap {
         ADD COLUMN IF NOT EXISTS attach_files TEXT NULL;
       `);
       await this.dataSource.query(`
+        ALTER TABLE public.customer_admin_messages
+        ADD COLUMN IF NOT EXISTS cc_customer_ids TEXT NULL;
+      `);
+      await this.dataSource.query(`
         ALTER TABLE public.customer_admin_threads
         ALTER COLUMN customer_id DROP NOT NULL;
       `);
@@ -1098,6 +1102,24 @@ export class PostgresSchemaPatchService implements OnApplicationBootstrap {
       this.logger.log('site_items.company_id backfilled from customers');
     } catch (e) {
       this.logger.warn(`site_items.company_id patch: ${(e as Error).message}`);
+    }
+
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE public.site_items
+        ADD COLUMN IF NOT EXISTS frequency_count INT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.site_items
+        ADD COLUMN IF NOT EXISTS frequency_period VARCHAR(16) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.site_items
+        ADD COLUMN IF NOT EXISTS frequency_times INT NULL;
+      `);
+      this.logger.log('site_items frequency columns ensured');
+    } catch (e) {
+      this.logger.warn(`site_items frequency patch: ${(e as Error).message}`);
     }
   }
 

@@ -1,7 +1,5 @@
 ﻿import {
     CheckCircleFilled,
-    CheckCircleOutlined,
-    ClockCircleOutlined,
     DeleteOutlined,
     EditOutlined,
     EyeOutlined,
@@ -13,9 +11,7 @@
     FilterOutlined,
     DownOutlined,
     UpOutlined,
-    SyncOutlined,
     ThunderboltFilled,
-    UserOutlined,
 } from "@ant-design/icons";
 import {
     ActionBtn,
@@ -24,7 +20,7 @@ import {
 import Layout from "@app/components/layout/Layout";
 import { dateTimeFormat, limitData, pageData } from "@app/config/data.config";
 import { Col, Popconfirm, Row, Form, Image, DatePicker, Input, Tooltip, Spin, message, Button, Select, Typography, Table, Empty, Pagination, Checkbox } from "antd";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled, { css } from "styled-components";
 import useMobilePortrait from "@app/lib/hooks/useMobilePortrait";
 import { useColorModeOptional } from "@app/context/ColorModeContext";
@@ -46,7 +42,7 @@ import { checkRole } from "../../library/helpers/utility";
 import endPoint from "../../constants/endPoint";
 import serviceType from "../../constants/serviceType";
 import { callAPIAsync } from "../../library/helpers/api";
-import { reportFaultSender, reportFaultStatus, userType } from "../../constants/statusUser";
+import { reportFaultSender, userType } from "../../constants/statusUser";
 import moment from "moment";
 import { Link } from "react-router-dom";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
@@ -59,13 +55,8 @@ type PillTone = { bg: string; border: string; color: string };
 
 /** Semantic colors aligned with Ant Design tokens (warning / processing / success / danger / geekblue) */
 const BADGE_PALETTE = {
-    new: { bg: "#fffbe6", border: "#faad14", color: "#ad6800" } satisfies PillTone,
-    active: { bg: "#fff2e8", border: "#fa8c16", color: "#d46b08" } satisfies PillTone,
-    completed: { bg: "#f6ffed", border: "#52c41a", color: "#389e0d" } satisfies PillTone,
     urgent: { bg: "#fff1f0", border: "#ff4d4f", color: "#cf1322" } satisfies PillTone,
     normal: { bg: "#f0f5ff", border: "#adc6ff", color: "#1d39c4" } satisfies PillTone,
-    customer: { bg: "#fff7e6", border: "#ffa940", color: "#d46b08" } satisfies PillTone,
-    support: { bg: "#e6f4ff", border: "#4096ff", color: "#0958d9" } satisfies PillTone,
 } as const;
 
 const pillBadge = (
@@ -120,50 +111,6 @@ const canDeleteReportFault = (profile: any, record: any) => {
         return Boolean(reportFaultIdOf(record));
     }
     return false;
-};
-
-const renderFaultStatus = (r: any, viewerType?: number, large?: boolean) => {
-    if (r.status === reportFaultStatus.DELETED || r.isDeleted) {
-        return pillBadge(<DeleteOutlined />, "Deleted", BADGE_PALETTE.urgent, undefined, large);
-    }
-    if (r.status === reportFaultStatus.PENDING) {
-        return pillBadge(<ClockCircleOutlined />, "New", BADGE_PALETTE.new, undefined, large);
-    }
-    if (r.status === reportFaultStatus.INPROGRESS) {
-        if (+viewerType !== userType.STAFF) {
-            return pillBadge(<SyncOutlined />, "In progress", BADGE_PALETTE.active, undefined, large);
-        }
-        const sender = +r.sender;
-        const waiting =
-            sender === reportFaultSender.CUSTOMER
-                ? "Waiting for customer"
-                : sender === reportFaultSender.ADMIN
-                    ? "With admin"
-                    : "Waiting for support";
-        const hintColor =
-            sender === reportFaultSender.CUSTOMER
-                ? BADGE_PALETTE.new.color
-                : BADGE_PALETTE.support.color;
-        return (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
-                {pillBadge(<SyncOutlined />, "In progress", BADGE_PALETTE.active, undefined, large)}
-                <span
-                    style={{
-                        fontSize: large ? 13.2 : 11,
-                        color: hintColor,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontWeight: 500,
-                    }}
-                >
-                    <UserOutlined style={{ fontSize: large ? 13.2 : 11 }} />
-                    {waiting}
-                </span>
-            </div>
-        );
-    }
-    return pillBadge(<CheckCircleOutlined />, "Completed", BADGE_PALETTE.completed, undefined, large);
 };
 
 const renderFaultPriority = (priority: number | undefined, large?: boolean, small?: boolean) => {
@@ -500,16 +447,17 @@ const ReportFaults: React.FC = () => {
                         : null;
             if (!field) return;
             const now = new Date().toISOString();
-            setListRows((prev) =>
-                prev.map((r) =>
-                    reportFaultIdOf(r) === faultId ? { ...r, [field]: r[field] || now } : r,
-                ),
-            );
-            setViewFaultRow((prev) =>
-                prev && reportFaultIdOf(prev) === faultId
-                    ? { ...prev, [field]: prev[field] || now }
-                    : prev,
-            );
+            setListRows((prev) => {
+                const target = prev.find((r) => reportFaultIdOf(r) === faultId);
+                if (!target || target[field]) return prev;
+                return prev.map((r) =>
+                    reportFaultIdOf(r) === faultId ? { ...r, [field]: now } : r,
+                );
+            });
+            setViewFaultRow((prev) => {
+                if (!prev || reportFaultIdOf(prev) !== faultId || prev[field]) return prev;
+                return { ...prev, [field]: now };
+            });
         },
         [profile],
     );
@@ -563,11 +511,36 @@ const ReportFaults: React.FC = () => {
         [profile, clearFaultReadState, refreshDashboard],
     );
 
+    const listRowsRef = useRef(listRows);
+    listRowsRef.current = listRows;
+    const markFaultOpenedInFlightRef = useRef<Set<number>>(new Set());
+    const markFaultOpenedDoneRef = useRef<Set<number>>(new Set());
+    const markedModalFaultIdRef = useRef<number | null>(null);
+
     const markFaultOpenedForViewer = useCallback(
         async (recordOrId: any) => {
             const faultId =
                 typeof recordOrId === 'number' ? recordOrId : reportFaultIdOf(recordOrId);
+            if (!faultId) return false;
+            if (markFaultOpenedDoneRef.current.has(faultId)) return true;
+            if (markFaultOpenedInFlightRef.current.has(faultId)) return false;
+
             const userTypeNum = +profile?.type;
+            const openedField =
+                userTypeNum === userType.ADMIN
+                    ? 'adminOpenedAt'
+                    : userTypeNum === userType.CUSTOMER
+                        ? 'customerOpenedAt'
+                        : null;
+            const record =
+                typeof recordOrId === 'number'
+                    ? listRowsRef.current.find((r) => reportFaultIdOf(r) === faultId)
+                    : recordOrId;
+            if (openedField && record?.[openedField]) {
+                markFaultOpenedDoneRef.current.add(faultId);
+                return true;
+            }
+
             let markPath: string | null = null;
             if (faultId && userTypeNum === userType.ADMIN) {
                 markPath = `${endPoint.REPORT_FAULTS}/markAdminOpened/${faultId}`;
@@ -575,16 +548,24 @@ const ReportFaults: React.FC = () => {
                 markPath = `${endPoint.REPORT_FAULTS}/markCustomerOpened/${faultId}`;
             }
             if (!markPath) return false;
-            const res = await callAPIAsync(serviceType.COMMON, markPath, 'PATCH', {});
-            if (res?.code === 1) {
-                patchFaultReadState(faultId);
-                refreshDashboard();
-                return true;
+
+            markFaultOpenedInFlightRef.current.add(faultId);
+            patchFaultReadState(faultId);
+            try {
+                const res = await callAPIAsync(serviceType.COMMON, markPath, 'PATCH', {});
+                if (res?.code === 1) {
+                    markFaultOpenedDoneRef.current.add(faultId);
+                    return true;
+                }
+                return false;
+            } finally {
+                markFaultOpenedInFlightRef.current.delete(faultId);
             }
-            return false;
         },
-        [profile, refreshDashboard, patchFaultReadState],
+        [profile, patchFaultReadState],
     );
+
+    const linkedFaultAutoOpenedRef = useRef<number | null>(null);
 
     const openFaultView = useCallback(
         (record: any) => {
@@ -598,7 +579,10 @@ const ReportFaults: React.FC = () => {
     const closeFaultView = useCallback(() => {
         setViewFaultOpen(false);
         setViewFaultRow(null);
-    }, []);
+        if (new URLSearchParams(location.search).get('faultId')) {
+            history.replace({ pathname: '/report-faults', search: '' });
+        }
+    }, [history, location.search]);
 
     const getFilter = async () => {
         const res = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getSites`, 'GET');
@@ -689,7 +673,6 @@ const ReportFaults: React.FC = () => {
                             <MobileFaultCardMeta $dark={mobileUiDark}>{siteLine}</MobileFaultCardMeta>
                             <MobileFaultCardMeta $dark={mobileUiDark}>{timeLabel}</MobileFaultCardMeta>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                                {renderFaultStatus(record, profileType, false)}
                                 {renderFaultPriority(record.priority, false, true)}
                             </div>
                         </div>
@@ -739,13 +722,12 @@ const ReportFaults: React.FC = () => {
                     <EyeOutlined />
                 </ButtonMR>
             </Tooltip>
-            {+profile?.type === userType.STAFF && record.status === reportFaultStatus.PENDING && checkRole("EDIT") ? (
+            {+profile?.type === userType.STAFF && checkRole("EDIT") ? (
                 <ButtonMR onClick={() => handleOnClick(actionType.UPDATE, record)} className="btnLink">
                     <EditOutlined />
                 </ButtonMR>
             ) : null}
             {+profile?.type === userType.STAFF &&
-            record.status !== reportFaultStatus.COMPLETED &&
             +record.sender === reportFaultSender.STAFF ? (
                 <ButtonMR
                     onClick={() =>
@@ -758,8 +740,7 @@ const ReportFaults: React.FC = () => {
                     <MessageOutlined />
                 </ButtonMR>
             ) : null}
-            {(+profile?.type === userType.CUSTOMER || +profile?.type === userType.ADMIN) &&
-            record.status !== reportFaultStatus.COMPLETED ? (
+            {(+profile?.type === userType.CUSTOMER || +profile?.type === userType.ADMIN) ? (
                 <Link
                     to={`/messages?reportFaultId=${reportFaultIdOf(record)}`}
                     className="btnLink"
@@ -802,7 +783,7 @@ const ReportFaults: React.FC = () => {
     );
 
     const readStatusColumn = {
-        title: "Status",
+        title: "Read",
         key: "readStatus",
         dataIndex: "readStatus",
         width: isMobilePortrait ? 44 : 72,
@@ -835,7 +816,7 @@ const ReportFaults: React.FC = () => {
         if (isMobilePortrait) {
             return [
                 {
-                    title: "Time",
+                    title: "Date",
                     dataIndex: "createdAt",
                     width: 84,
                     sorter: true,
@@ -925,7 +906,7 @@ const ReportFaults: React.FC = () => {
                 ]
                 : []),
             {
-                title: "Time",
+                title: "Date",
                 dataIndex: "createdAt",
                 width: 155,
                 sorter: true,
@@ -1173,7 +1154,6 @@ const ReportFaults: React.FC = () => {
         }
         return () => {
             dispatch(actions.clearData());
-            refreshDashboard();
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -1185,7 +1165,10 @@ const ReportFaults: React.FC = () => {
             modalType === actionType.ADD_ITEM ||
             modalType === actionType.UPDATE_ITEM
         ) {
-            void markFaultOpenedForViewer(row);
+            const faultId = reportFaultIdOf(row);
+            if (!faultId || markedModalFaultIdRef.current === faultId) return;
+            markedModalFaultIdRef.current = faultId;
+            void markFaultOpenedForViewer(faultId);
         }
     }, [modalType, row, markFaultOpenedForViewer]);
 
@@ -1209,8 +1192,10 @@ const ReportFaults: React.FC = () => {
 
     useEffect(() => {
         if (!linkedFaultId || loading) return;
+        if (linkedFaultAutoOpenedRef.current === linkedFaultId) return;
         const match = listRows.find((r: any) => reportFaultIdOf(r) === linkedFaultId);
         if (match) {
+            linkedFaultAutoOpenedRef.current = linkedFaultId;
             scrollToHighlightedRow();
             void openFaultView(match);
         }
@@ -1694,7 +1679,6 @@ const ReportFaults: React.FC = () => {
                 onClose={closeFaultView}
                 record={viewFaultRow}
                 viewerType={profile ? +profile.type : 0}
-                renderStatus={(r, vt) => renderFaultStatus(r, vt, false)}
                 renderPriority={(p) => renderFaultPriority(p, false, true)}
                 readStatusNode={
                     showReadUnread && viewFaultRow ? (

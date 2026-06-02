@@ -28,7 +28,16 @@ export class SiteItemDto {
     @ApiProperty({ default: 0 })
     customerId: number
     @ApiProperty({ default: [{ staffId: 0 }], type: [StaffDto] })
-    staffs: StaffDto[]   
+    staffs: StaffDto[]
+
+    @ApiProperty({ default: 1, required: false, description: 'Times (e.g. 5 in 5 times per 5 months)' })
+    frequencyTimes?: number
+
+    @ApiProperty({ default: 1, required: false, description: 'Per-interval count (e.g. 5 in per 5 months)' })
+    frequencyCount?: number
+
+    @ApiProperty({ default: 'week', required: false, enum: ['day', 'week', 'month', 'year'] })
+    frequencyPeriod?: string
 }
 export class CreateSiteDto {
     @ApiProperty({ default: '' })

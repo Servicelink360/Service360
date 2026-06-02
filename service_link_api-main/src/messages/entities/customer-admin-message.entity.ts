@@ -41,6 +41,10 @@ export class CustomerAdminMessage {
   @Column({ name: 'attach_files', type: 'text', nullable: true })
   attachFiles?: string;
 
+  /** JSON array of customer user ids Cc'd on this message (same company peers). */
+  @Column({ name: 'cc_customer_ids', type: 'text', nullable: true })
+  ccCustomerIds?: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

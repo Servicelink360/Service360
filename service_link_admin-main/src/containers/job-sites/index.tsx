@@ -4,14 +4,15 @@ import {
     FileAddOutlined,
     SearchOutlined,
     EyeOutlined,
-    UserOutlined
+    UserOutlined,
+    AppstoreOutlined,
 } from "@ant-design/icons";
 import { ActionListBtn, TableWrapper } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
-import { dateFormat, dateTimeFormat, limitData, pageData } from "@app/config/data.config";
+import { dateFormat, dateTimeFormat, pageData } from "@app/config/data.config";
 import { Col, Popconfirm, Row, Form, Input, Tag } from "antd";
 import moment from "moment";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useIntl } from "react-intl";
 import { useDispatch, useSelector } from "react-redux";
 import FormInput from "@app/components/common/FormItem/Input";
@@ -31,14 +32,78 @@ import "./job-sites-table.css";
 type IProps = {
     staffId?: number
 }
+
 const SITE_SORT_FIELDS = new Set([
     "name",
+    "location",
     "addressName",
     "createdAt",
     "staffCount",
+    "serviceCount",
     "customer",
     "checkInDistance",
 ]);
+
+/** Fetch all sites once, paginate in UI — guarantees 33×2-service sites stay grouped. */
+const FULL_LIST_SORT_FIELDS = new Set(["serviceCount", "staffCount", "customer"]);
+const FETCH_ALL_SITES_LIMIT = 0;
+
+const usesFullListSort = (orderBy: string) => FULL_LIST_SORT_FIELDS.has(orderBy);
+
+const apiListLimit = (orderBy: string, pageLimit: number) =>
+    usesFullListSort(orderBy) ? FETCH_ALL_SITES_LIMIT : pageLimit;
+
+const apiListPage = (orderBy: string, pageNum: number) =>
+    usesFullListSort(orderBy) ? 1 : pageNum;
+
+const siteServiceCount = (row: any): number => {
+    if (typeof row.serviceCount === "number") {
+        return row.serviceCount;
+    }
+    return (row.items ?? []).filter((item: any) => {
+        const hasService = !!(item?.service?.id ?? item?.serviceId ?? item?.Service?.id);
+        const hasCustomer = !!(item?.customer?.id ?? item?.customerId ?? item?.customer);
+        return hasService && hasCustomer;
+    }).length;
+};
+
+const siteServiceNames = (row: any): string =>
+    (row.items ?? [])
+        .map((item: any) => item?.service?.name ?? item?.Service?.name)
+        .filter(Boolean)
+        .join(", ");
+
+const resolveSortField = (sorter: any): string | null => {
+    if (!sorter) {
+        return null;
+    }
+    const raw =
+        sorter.columnKey ??
+        sorter.field ??
+        sorter.column?.key ??
+        sorter.column?.dataIndex;
+    if (raw == null) {
+        return null;
+    }
+    const field = String(Array.isArray(raw) ? raw[raw.length - 1] : raw);
+    if (field === "customers") {
+        return "customer";
+    }
+    return field;
+};
+
+const pickActiveSorter = (sorter: any): any => {
+    if (!sorter) {
+        return null;
+    }
+    if (Array.isArray(sorter)) {
+        return (
+            sorter.find((s: { order?: string }) => s?.order) ??
+            sorter[sorter.length - 1]
+        );
+    }
+    return sorter;
+};
 
 const siteCustomerLabels = (row: any): string => {
     const names = new Set<string>();
@@ -53,14 +118,79 @@ const siteCustomerLabels = (row: any): string => {
     return Array.from(names).sort((a, b) => a.localeCompare(b)).join(", ");
 };
 
+const sortSiteRowsFullList = (
+    siteRows: any[],
+    orderBy: string,
+    orderValue: string,
+): any[] => {
+    if (!siteRows?.length) {
+        return siteRows;
+    }
+    const dir = orderValue === "ASC" ? 1 : -1;
+    const sorted = [...siteRows];
+    sorted.sort((a, b) => {
+        let cmp = 0;
+        switch (orderBy) {
+            case "serviceCount":
+                cmp = siteServiceCount(a) - siteServiceCount(b);
+                break;
+            case "staffCount": {
+                const staffA =
+                    typeof a.staffCount === "number"
+                        ? a.staffCount
+                        : new Set(
+                              (a.items ?? []).flatMap((it: any) =>
+                                  (it.staffs ?? [])
+                                      .filter((s: any) => s.staff)
+                                      .map((s: any) => s.staffId),
+                              ),
+                          ).size;
+                const staffB =
+                    typeof b.staffCount === "number"
+                        ? b.staffCount
+                        : new Set(
+                              (b.items ?? []).flatMap((it: any) =>
+                                  (it.staffs ?? [])
+                                      .filter((s: any) => s.staff)
+                                      .map((s: any) => s.staffId),
+                              ),
+                          ).size;
+                cmp = staffA - staffB;
+                break;
+            }
+            case "customer":
+                cmp = siteCustomerLabels(a).localeCompare(siteCustomerLabels(b), undefined, {
+                    sensitivity: "base",
+                });
+                break;
+            default:
+                return 0;
+        }
+        if (cmp === 0) {
+            cmp = String(a.name ?? "").localeCompare(String(b.name ?? ""), undefined, {
+                sensitivity: "base",
+            });
+        }
+        return cmp * dir;
+    });
+    return sorted;
+};
+
 /** Server-side sort only � avoid Ant Design client re-sort; cycle ASC ? DESC only. */
 const serverTableSorter = {
     sorter: () => 0,
     sortDirections: ["ascend", "descend"] as const,
 };
 
+const serverCountColumnSorter = {
+    sorter: () => 0,
+    sortDirections: ["descend", "ascend"] as const,
+};
+
+const JOB_SITES_LIST_LIMIT = 50;
+
 const JobSite = (props: IProps) => {
-    const [limit, setLimit] = useState(limitData);
+    const [limit, setLimit] = useState(JOB_SITES_LIST_LIMIT);
     const [page, setPage] = useState(pageData);
     const [listSort, setListSort] = useState({ orderBy: "createdAt", orderValue: "DESC" });
     const [form] = Form.useForm();
@@ -68,7 +198,6 @@ const JobSite = (props: IProps) => {
     const { staffId } = props;
     const { loading, rows, row, success, modalType, customers, count, loadingAction, services, staffs, reportTemplates } = useSelector((state: any) => state?.sites);
     const dispatch = useDispatch();
-    const appliedSortRef = useRef({ field: "", orderValue: "", at: 0 });
 
     const sortOrderFor = useCallback(
         (field: string) =>
@@ -78,6 +207,26 @@ const JobSite = (props: IProps) => {
         [listSort.orderBy, listSort.orderValue],
     );
 
+    const fetchSites = useCallback(
+        (
+            pageNum: number,
+            limitNum: number,
+            orderBy: string,
+            orderValue: string,
+        ) => {
+            const keyword = (form.getFieldValue("Name") as string | undefined)?.trim() ?? "";
+            dispatch(actions.getData({
+                keyword,
+                page: apiListPage(orderBy, pageNum),
+                limit: apiListLimit(orderBy, limitNum),
+                orderBy,
+                orderValue,
+                staffId: staffId ? staffId : 0,
+            }));
+        },
+        [dispatch, form, staffId],
+    );
+
     const loadSites = useCallback(
         (
             pageNum: number = page,
@@ -85,18 +234,27 @@ const JobSite = (props: IProps) => {
             orderBy: string = listSort.orderBy,
             orderValue: string = listSort.orderValue,
         ) => {
-            const keyword = (form.getFieldValue("Name") as string | undefined)?.trim() ?? "";
-            dispatch(actions.getData({
-                keyword,
-                page: pageNum,
-                limit: limitNum,
-                orderBy,
-                orderValue,
-                staffId: staffId ? staffId : 0,
-            }));
+            fetchSites(pageNum, limitNum, orderBy, orderValue);
         },
-        [dispatch, form, limit, listSort.orderBy, listSort.orderValue, page, staffId],
+        [fetchSites, limit, listSort.orderBy, listSort.orderValue, page],
     );
+
+    const sortedFullList = useMemo(() => {
+        if (!usesFullListSort(listSort.orderBy) || !rows?.length) {
+            return null;
+        }
+        return sortSiteRowsFullList(rows, listSort.orderBy, listSort.orderValue);
+    }, [rows, listSort.orderBy, listSort.orderValue]);
+
+    const displayRows = useMemo(() => {
+        if (sortedFullList) {
+            const start = (page - 1) * limit;
+            return sortedFullList.slice(start, start + limit);
+        }
+        return rows ?? [];
+    }, [sortedFullList, rows, page, limit]);
+
+    const displayCount = sortedFullList ? sortedFullList.length : count;
 
     const columns: ColDef[] | any = useMemo(() => [
         {
@@ -113,8 +271,12 @@ const JobSite = (props: IProps) => {
         },
         {
             title: 'Location',
+            key: 'location',
+            columnKey: 'location',
             dataIndex: "location",
-            width: 120,
+            ...serverTableSorter,
+            sortOrder: sortOrderFor('location'),
+            width: 160,
         },
         {
             title: 'Check-in Distance',
@@ -143,7 +305,7 @@ const JobSite = (props: IProps) => {
             key: "staffCount",
             columnKey: "staffCount",
             dataIndex: "staffCount",
-            ...serverTableSorter,
+            ...serverCountColumnSorter,
             sortOrder: sortOrderFor("staffCount"),
             width: 100,
             render: (_text: string, row: any) => {
@@ -160,6 +322,24 @@ const JobSite = (props: IProps) => {
                 return (
                     <span style={{ fontSize: 16 }}>
                         {count} <UserOutlined />
+                    </span>
+                );
+            },
+        },
+        {
+            title: "Services",
+            key: "serviceCount",
+            columnKey: "serviceCount",
+            dataIndex: "serviceCount",
+            ...serverCountColumnSorter,
+            sortOrder: sortOrderFor("serviceCount"),
+            width: 100,
+            render: (_text: string, row: any) => {
+                const count = siteServiceCount(row);
+                const names = siteServiceNames(row);
+                return (
+                    <span style={{ fontSize: 16 }} title={names || undefined}>
+                        {count} <AppstoreOutlined />
                     </span>
                 );
             },
@@ -183,10 +363,12 @@ const JobSite = (props: IProps) => {
             ...serverTableSorter,
             sortOrder: sortOrderFor("createdAt"),
             render: (text: string, row: any) => {
-                return <>
-                    <p>{row.createdUser ? row.createdUser?.fullName : ""}</p>
-                    <p>{moment(row.createdAt).utcOffset(600).format(dateTimeFormat)}</p>
-                </>
+                return (
+                    <div>
+                        <div>{row.createdUser ? row.createdUser?.fullName : ""}</div>
+                        <div>{moment(row.createdAt).utcOffset(600).format(dateTimeFormat)}</div>
+                    </div>
+                );
             },
         },
         {
@@ -291,58 +473,36 @@ const JobSite = (props: IProps) => {
         sorter: any,
         extra?: { action?: string },
     ): void => {
+        const pageNum = pagination?.current ?? page;
+        const limitNum = pagination?.pageSize ?? limit;
+        setPage(pageNum);
+        if (limitNum !== limit) {
+            setLimit(limitNum);
+        }
+
         if (extra?.action === "paginate") {
-            setPage(pagination.current);
-            if (pagination.pageSize !== limit) {
-                setLimit(pagination.pageSize);
+            if (!usesFullListSort(listSort.orderBy)) {
+                fetchSites(pageNum, limitNum, listSort.orderBy, listSort.orderValue);
             }
-            loadSites(pagination.current, pagination.pageSize);
-            return;
-        }
-        if (extra?.action !== "sort") {
             return;
         }
 
-        setPage(pagination.current);
-        if (pagination.pageSize !== limit) {
-            setLimit(pagination.pageSize);
-        }
+        const colSorter = pickActiveSorter(sorter);
+        const sortField = resolveSortField(colSorter);
+        const isSortClick =
+            extra?.action === "sort" ||
+            (!!colSorter?.order && sortField != null);
 
-        const colSorter = Array.isArray(sorter)
-            ? [...sorter].reverse().find((s: { order?: string }) => s?.order) ?? sorter[sorter.length - 1]
-            : sorter;
-        const rawField =
-            colSorter?.columnKey ??
-            colSorter?.column?.key ??
-            colSorter?.field;
-        if (rawField == null) {
-            return;
-        }
-        const field = String(Array.isArray(rawField) ? rawField[rawField.length - 1] : rawField);
-        if (!SITE_SORT_FIELDS.has(field)) {
+        if (!isSortClick || !sortField || !SITE_SORT_FIELDS.has(sortField)) {
+            fetchSites(pageNum, limitNum, listSort.orderBy, listSort.orderValue);
             return;
         }
 
-        let orderValue: string;
-        if (colSorter.order === "ascend") {
-            orderValue = "ASC";
-        } else if (colSorter.order === "descend") {
-            orderValue = "DESC";
-        } else if (listSort.orderBy === field) {
-            if (Date.now() - appliedSortRef.current.at < 200 && appliedSortRef.current.field === field) {
-                return;
-            }
-            orderValue = listSort.orderValue === "ASC" ? "DESC" : "ASC";
-        } else {
-            orderValue = "DESC";
-        }
-
-        appliedSortRef.current = { field, orderValue, at: Date.now() };
-        if (listSort.orderBy === field && listSort.orderValue === orderValue) {
-            return;
-        }
-        setListSort({ orderBy: field, orderValue });
-        loadSites(pagination.current, pagination.pageSize, field, orderValue);
+        const orderValue = colSorter.order === "ascend" ? "ASC" : "DESC";
+        const nextSort = { orderBy: sortField, orderValue };
+        setPage(1);
+        setListSort(nextSort);
+        fetchSites(1, limitNum, nextSort.orderBy, nextSort.orderValue);
     };
 
     useEffect(() => {
@@ -405,9 +565,13 @@ const JobSite = (props: IProps) => {
                                 return "";
                             return r.staffShifts.map((rr) => {
                                 const t = row.type === "E" ? <Tag>Everyday</Tag> : rr.type === "W" ? <Tag>Working day</Tag> : rr?.typeValue && rr?.typeValue.split(',').map((k) => <Tag key={row.id + "-" + r}>{+k === 0 ? "Mon" : +k === 1 ? "Tue" : +k === 2 ? "Wed" : +k === 3 ? "Thu" : +k === 4 ? "Fki" : +k === 5 ? "Sat" : +k === 6 ? "Sun" : ""}</Tag>);
-                                return <p style={{ marginBottom: 6 }} key={r.id + "-" + rr.id}>
-                                    <p>{r.staff.fullName} {formatTime(rr.startTime) + "-" + formatTime(rr.endTime) + "  "} {t}</p>
-                                </p>
+                                return (
+                                    <div style={{ marginBottom: 6 }} key={r.id + "-" + rr.id}>
+                                        {r.staff.fullName}{" "}
+                                        {formatTime(rr.startTime) + "-" + formatTime(rr.endTime)}{" "}
+                                        {t}
+                                    </div>
+                                );
                             })
                         })
                     return ""
@@ -433,13 +597,16 @@ const JobSite = (props: IProps) => {
             key: siteItem.id ?? i,
         }));
         return (
-            <TableWrapper
-                className="job-sites-items-table"
-                columns={columnItems}
-                dataSource={data}
-                pagination={false}
-                expandable={{ expandedRowRender: expandedRowRenderTask }}
-            />
+            <div className="job-sites-expanded-services">
+                <p className="job-sites-expanded-services__title">Services</p>
+                <TableWrapper
+                    className="job-sites-items-table"
+                    columns={columnItems}
+                    dataSource={data}
+                    pagination={false}
+                    expandable={{ expandedRowRender: expandedRowRenderTask }}
+                />
+            </div>
         );
     }
 
@@ -680,15 +847,17 @@ const JobSite = (props: IProps) => {
                         heightTable="650px"
                         onTableChange={onTableChange}
                         expandedRowRender={expandedRowRender}
+                        expandRowByClick={false}
                         pagination={true}
                         columns={columns}
                         keys="id"
                         page={page}
-                        count={count}
+                        count={displayCount}
                         limit={limit}
                         totalUnit="sites"
-                        data={rows}
+                        data={displayRows}
                         loading={loading}
+                        tableClassName="job-sites-main-table"
                     />
                 </InformationDiv>
             </UsersDiv>

@@ -51,6 +51,13 @@
   margin: 0 !important;
 }
 
+.job-sites-page .job-sites-expanded-services__title {
+  margin: 0 0 8px 33px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #397d36;
+}
+
 .job-sites-page .job-sites-items-table {
   padding-left: 33px;
 }

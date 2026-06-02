@@ -65,12 +65,25 @@ const hawbReducer = (state = initialState, action: any) => {
             return {
                 ...initialState,
             }
-        case actions.MODAL:
+        case actions.MODAL: {
+            const payload = action.payload;
+            if (
+                payload == null ||
+                payload === '' ||
+                (typeof payload === 'object' && payload.modalType == null)
+            ) {
+                return {
+                    ...state,
+                    modalType: null,
+                    row: {},
+                };
+            }
             return {
                 ...state,
-                modalType: action.payload.modalType,
-                row: action.payload.row,
-            }
+                modalType: payload.modalType,
+                row: payload.row ?? {},
+            };
+        }
 
         case actions.GET_INFO_SUCCESS:
             return {

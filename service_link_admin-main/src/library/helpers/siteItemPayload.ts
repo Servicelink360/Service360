@@ -8,6 +8,18 @@ export function serializeSiteItemsForApi(items: any[] = []) {
       row.customer?.customerInfo?.companyId ??
       row.customer?.customerInfo?.company_id,
     companyId: row.companyId ?? row.customer?.customerInfo?.companyId,
+    frequencyTimes:
+      row.frequencyPeriod == null || row.frequencyPeriod === '' || row.frequencyPeriod === 'na'
+        ? null
+        : row.frequencyTimes ?? null,
+    frequencyCount:
+      row.frequencyPeriod == null || row.frequencyPeriod === '' || row.frequencyPeriod === 'na'
+        ? null
+        : row.frequencyCount ?? null,
+    frequencyPeriod:
+      row.frequencyPeriod == null || row.frequencyPeriod === '' || row.frequencyPeriod === 'na'
+        ? null
+        : row.frequencyPeriod,
     staffs: (row.staffs || []).map((s: any) => ({
       staffId: s.staffId ?? s.staff?.id,
       staffShifts: (s.staffShifts || []).map((sh: any) => ({

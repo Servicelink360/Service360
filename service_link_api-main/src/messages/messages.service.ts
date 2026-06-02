@@ -190,6 +190,47 @@ export class MessagesService {
     )`;
   }
 
+  private parseCcCustomerIds(raw?: string | null): number[] {
+    if (!raw?.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return [...new Set(parsed.map((id) => +id).filter((id) => id > 0))];
+    } catch {
+      return [];
+    }
+  }
+
+  private async loadCcDisplayInfo(customerIds: number[]): Promise<Map<number, string>> {
+    const ids = [...new Set(customerIds.map((id) => +id).filter((id) => id > 0))];
+    if (!ids.length) return new Map();
+    const rows: { id: number; name: string; company_name: string | null }[] =
+      await this.threadRepo.query(
+        `SELECT u.id,
+          COALESCE(
+            NULLIF(TRIM(u.full_name), ''),
+            NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+            u.username
+          ) AS name,
+          COALESCE(
+            NULLIF(TRIM(org.name), ''),
+            NULLIF(TRIM(c.company_name), '')
+          ) AS company_name
+         FROM users u
+         INNER JOIN customers c ON c.user_id = u.id
+         LEFT JOIN customer_companies org ON org.id = c.company_id
+         WHERE u.id = ANY($1::int[])`,
+        [ids],
+      );
+    return new Map(
+      rows.map((r) => {
+        const org = r.company_name?.trim();
+        const label = org ? `${r.name} — ${org}` : r.name;
+        return [+r.id, label];
+      }),
+    );
+  }
+
   private async loadSenderDisplayInfo(
     senderIds: number[],
   ): Promise<Map<number, { name: string; companyName: string | null }>> {
@@ -225,8 +266,13 @@ export class MessagesService {
     m: CustomerAdminMessage,
     userInfo: IUserInfo,
     senderInfo: Map<number, { name: string; companyName: string | null }>,
+    ccInfo: Map<number, string>,
   ) {
     const sender = senderInfo.get(+m.senderId);
+    const ccIds = this.parseCcCustomerIds(m.ccCustomerIds);
+    const ccRecipients = ccIds
+      .map((id) => ccInfo.get(id))
+      .filter((name): name is string => Boolean(name?.trim()));
     return {
       id: m.id,
       threadId: m.threadId,
@@ -245,6 +291,8 @@ export class MessagesService {
         m.body,
       ),
       attachFiles: this.parseAttachFiles(m.attachFiles),
+      ccCustomerIds: ccIds,
+      ccRecipients,
       createdAt: m.createdAt,
       isMine: +m.senderId === +userInfo.userId,
     };
@@ -452,7 +500,11 @@ export class MessagesService {
     }));
   }
 
-  async listCompanyCcRecipients(userInfo: IUserInfo, customerId?: number) {
+  async listCompanyCcRecipients(
+    userInfo: IUserInfo,
+    customerId?: number,
+    forStaffThread = false,
+  ) {
     try {
       const type = await this.resolveUserType(+userInfo.userId, +userInfo.type);
       if (type === userType.STAFF) {
@@ -479,7 +531,11 @@ export class MessagesService {
           return { ...errorCode.SUCCESS, data: { rows: [] } };
         }
       }
-      const rows = await this.sameCompanyPeerRows(anchorId, anchorId);
+      // Admin → customer: omit the primary recipient from Cc list.
+      // Customer → colleagues: omit self from Cc list.
+      const excludeFromList =
+        forStaffThread ? 0 : type === userType.CUSTOMER ? anchorId : anchorId;
+      const rows = await this.sameCompanyPeerRows(anchorId, excludeFromList);
       return { ...errorCode.SUCCESS, data: { rows } };
     } catch (error) {
       this.logger.error(error);
@@ -490,12 +546,16 @@ export class MessagesService {
   private async resolveCcCustomerIds(
     primaryCustomerId: number,
     requested?: number[],
+    excludeCustomerIds: number[] = [],
   ): Promise<number[]> {
+    const exclude = new Set(
+      [primaryCustomerId, ...excludeCustomerIds].map((id) => +id).filter((id) => id > 0),
+    );
     let ids = [...new Set((requested || []).map((id) => +id).filter((id) => id > 0))];
-    ids = ids.filter((id) => id !== primaryCustomerId);
+    ids = ids.filter((id) => !exclude.has(id));
     if (!ids.length) {
       const peers = await this.sameCompanyPeerRows(primaryCustomerId, primaryCustomerId);
-      return peers.map((p) => p.id);
+      return peers.map((p) => p.id).filter((id) => !exclude.has(id));
     }
     const valid: number[] = [];
     for (const id of ids) {
@@ -503,7 +563,7 @@ export class MessagesService {
         valid.push(id);
       }
     }
-    return valid;
+    return valid.filter((id) => !exclude.has(id));
   }
 
   private async saveMessageToThread(
@@ -515,6 +575,7 @@ export class MessagesService {
       userTaskId?: number;
       reportReference?: string;
       attachFiles: string | null;
+      ccCustomerIds?: string | null;
     },
   ): Promise<CustomerAdminMessage> {
     const msg = this.messageRepo.create({
@@ -526,6 +587,7 @@ export class MessagesService {
       userTaskId: fields.userTaskId,
       reportReference: fields.reportReference,
       attachFiles: fields.attachFiles,
+      ccCustomerIds: fields.ccCustomerIds ?? null,
     });
     await this.messageRepo.save(msg);
     thread.lastMessagePreview = this.preview(fields.body);
@@ -536,24 +598,21 @@ export class MessagesService {
 
   private async deliverCcToCompanyPeers(
     userInfo: IUserInfo,
-    anchorCustomerId: number,
-    ccCustomerIds: number[] | undefined,
+    resolvedCcIds: number[],
     fields: {
       body: string;
       reportFaultId?: number;
       userTaskId?: number;
       reportReference?: string;
       attachFiles: string | null;
+      ccCustomerIds?: string | null;
     },
     alsoExcludeCustomerIds: number[] = [],
   ): Promise<void> {
     const exclude = new Set(
-      [anchorCustomerId, ...alsoExcludeCustomerIds]
-        .map((id) => +id)
-        .filter((id) => id > 0),
+      alsoExcludeCustomerIds.map((id) => +id).filter((id) => id > 0),
     );
-    let ccIds = await this.resolveCcCustomerIds(anchorCustomerId, ccCustomerIds);
-    ccIds = ccIds.filter((id) => !exclude.has(id));
+    const ccIds = resolvedCcIds.filter((id) => !exclude.has(id));
     for (const ccId of ccIds) {
       const ccThread = await this.getOrCreateCustomerThread(ccId);
       await this.saveMessageToThread(ccThread, userInfo, fields);
@@ -566,6 +625,26 @@ export class MessagesService {
     const thread = await this.threadRepo.findOne({ where: { id: msg.threadId } });
     if (!thread || !this.canAccessThread(userInfo, thread)) return null;
     return { msg, thread };
+  }
+
+  private async threadAlreadyReferencesReport(
+    threadId: number,
+    reportFaultId?: number,
+    userTaskId?: number,
+  ): Promise<boolean> {
+    if (reportFaultId) {
+      const n = await this.messageRepo.count({
+        where: { threadId, reportFaultId },
+      });
+      return n > 0;
+    }
+    if (userTaskId) {
+      const n = await this.messageRepo.count({
+        where: { threadId, userTaskId },
+      });
+      return n > 0;
+    }
+    return false;
   }
 
   private buildNewReportReferenceBlock(task: UserTask): { reference: string; fullBodyPrefix: string } {
@@ -722,7 +801,7 @@ export class MessagesService {
       }
 
       if (!isStaff) {
-        const peers = await this.sameCompanyPeerRows(viewerId, 0);
+        const peers = await this.sameCompanyPeerRows(viewerId, viewerId);
         for (const peer of peers) {
           const lastFromPeer = await this.messageRepo
             .createQueryBuilder('m')
@@ -1017,6 +1096,8 @@ export class MessagesService {
         .getMany();
 
       const senderInfo = await this.loadSenderDisplayInfo(messages.map((m) => m.senderId));
+      const allCcIds = messages.flatMap((m) => this.parseCcCustomerIds(m.ccCustomerIds));
+      const ccInfo = await this.loadCcDisplayInfo(allCcIds);
 
       const countBase = () =>
         this.messageRepo
@@ -1065,7 +1146,7 @@ export class MessagesService {
           deletedCount,
           receivedCount,
           sentCount,
-          rows: messages.map((m) => this.mapMessageRow(m, userInfo, senderInfo)),
+          rows: messages.map((m) => this.mapMessageRow(m, userInfo, senderInfo, ccInfo)),
         },
       };
     } catch (error) {
@@ -1159,6 +1240,7 @@ export class MessagesService {
       }
 
       const customerId = thread.customerId ? +thread.customerId : 0;
+
       const attachments = this.parseAttachFiles(body.attachFiles);
       let messageBody = (body.body || '').trim();
       if (!messageBody && attachments.length === 0) {
@@ -1200,17 +1282,16 @@ export class MessagesService {
         reportReference = ref.reference;
         reportFaultId = fault.id;
         reportCustomerIdForCc = +fault.customerId;
-        if (!messageBody.includes(this.reportFaultLink(fault.id))) {
+        const faultLink = this.reportFaultLink(fault.id);
+        const faultAlreadyInThread = await this.threadAlreadyReferencesReport(
+          thread.id,
+          fault.id,
+          undefined,
+        );
+        if (!messageBody.includes(faultLink) && !faultAlreadyInThread) {
           messageBody = ref.fullBodyPrefix + messageBody;
         }
-        if (+fault.status === reportFaultStatus.PENDING) {
-          fault.status = reportFaultStatus.INPROGRESS;
-          fault.updatedAt = new Date();
-          await this.reportFaultRepo.save(fault);
-        }
-      }
-
-      if (body.userTaskId) {
+      } else if (body.userTaskId) {
         const task = await this.userTaskRepo.findOne({
           where: { id: body.userTaskId },
         });
@@ -1233,7 +1314,13 @@ export class MessagesService {
         reportReference = ref.reference;
         userTaskId = task.id;
         reportCustomerIdForCc = +task.customerId;
-        if (!messageBody.includes(this.newReportLink(task.id))) {
+        const taskLink = this.newReportLink(task.id);
+        const taskAlreadyInThread = await this.threadAlreadyReferencesReport(
+          thread.id,
+          undefined,
+          task.id,
+        );
+        if (!messageBody.includes(taskLink) && !taskAlreadyInThread) {
           messageBody = ref.fullBodyPrefix + messageBody;
         }
         if (type === userType.CUSTOMER) {
@@ -1244,35 +1331,67 @@ export class MessagesService {
       }
 
       const attachJson = attachments.length > 0 ? JSON.stringify(attachments) : null;
+
+      const adminToStaff =
+        type === userType.ADMIN && body.staffId != null && +body.staffId > 0;
+      const ccAnchorId = adminToStaff
+        ? 0
+        : reportFaultOwnerId ||
+          reportCustomerIdForCc ||
+          (thread.customerId ? +thread.customerId : 0);
+      const senderCustomerId = type === userType.CUSTOMER ? +userInfo.userId : 0;
+      const ccExclude: number[] = senderCustomerId ? [senderCustomerId] : [];
+      const adminDirectCustomer =
+        type === userType.ADMIN &&
+        body.customerId != null &&
+        +body.customerId > 0 &&
+        !body.staffId;
+      let resolvedCcIds: number[] = [];
+      const isReportReply = Boolean(reportFaultId || userTaskId);
+      if (ccAnchorId) {
+        resolvedCcIds = await this.resolveCcCustomerIds(
+          ccAnchorId,
+          body.ccCustomerIds,
+          ccExclude,
+        );
+        const exclude = new Set(
+          [...ccExclude].map((id) => +id).filter((id) => id > 0),
+        );
+        if (adminDirectCustomer) {
+          exclude.add(ccAnchorId);
+        }
+        resolvedCcIds = resolvedCcIds.filter((id) => !exclude.has(id));
+        // Report replies always Cc same-company colleagues (except sender / primary recipient).
+        if (isReportReply && !resolvedCcIds.length) {
+          const peers = await this.sameCompanyPeerRows(ccAnchorId, ccAnchorId);
+          resolvedCcIds = peers
+            .map((p) => p.id)
+            .filter((id) => !exclude.has(id));
+        }
+      }
+      const ccCustomerIdsJson =
+        resolvedCcIds.length > 0 ? JSON.stringify(resolvedCcIds) : null;
+
       const messageFields = {
         body: messageBody,
         reportFaultId,
         userTaskId,
         reportReference,
         attachFiles: attachJson,
+        ccCustomerIds: ccCustomerIdsJson,
       };
 
       const msg = await this.saveMessageToThread(thread, userInfo, messageFields);
 
-      const senderCustomerId = type === userType.CUSTOMER ? +userInfo.userId : 0;
       if (reportFaultOwnerId && senderCustomerId && senderCustomerId !== reportFaultOwnerId) {
         const senderThread = await this.getOrCreateCustomerThread(senderCustomerId);
         await this.saveMessageToThread(senderThread, userInfo, messageFields);
       }
 
-      const ccAnchorId =
-        reportFaultOwnerId ||
-        reportCustomerIdForCc ||
-        (thread.customerId ? +thread.customerId : 0);
-      if (ccAnchorId) {
-        const ccExclude =
-          reportFaultOwnerId && senderCustomerId
-            ? [senderCustomerId]
-            : [];
+      if (ccAnchorId && resolvedCcIds.length > 0) {
         await this.deliverCcToCompanyPeers(
           userInfo,
-          ccAnchorId,
-          body.ccCustomerIds,
+          resolvedCcIds,
           messageFields,
           ccExclude,
         );

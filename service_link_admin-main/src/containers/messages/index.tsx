@@ -122,6 +122,8 @@ type MessageRow = {
   reportReference?: string | null;
   reportLink?: string | null;
   attachFiles?: string[];
+  ccCustomerIds?: number[];
+  ccRecipients?: string[];
 };
 
 const formatMessageTimestamp = (raw?: string) => {
@@ -178,11 +180,32 @@ const parseReportLink = (body: string): string | undefined => {
   return undefined;
 };
 
+const reportFaultIdOf = (msg: MessageRow | Record<string, unknown>) => {
+  const raw = msg as Record<string, unknown>;
+  const v = raw.reportFaultId ?? raw.report_fault_id;
+  return v != null && +v > 0 ? +v : 0;
+};
+
+const userTaskIdOf = (msg: MessageRow | Record<string, unknown>) => {
+  const raw = msg as Record<string, unknown>;
+  const v = raw.userTaskId ?? raw.user_task_id;
+  return v != null && +v > 0 ? +v : 0;
+};
+
+const normalizeMessageRow = (raw: Record<string, unknown>): MessageRow => {
+  const row = raw as MessageRow;
+  return {
+    ...row,
+    reportFaultId: reportFaultIdOf(row) || null,
+    userTaskId: userTaskIdOf(row) || null,
+  };
+};
+
 const resolveMessageReportLink = (msg: MessageRow): string | undefined => {
   if (msg.reportLink) return msg.reportLink;
-  const faultId = msg.reportFaultId != null ? +msg.reportFaultId : 0;
+  const faultId = reportFaultIdOf(msg);
   if (faultId > 0) return `/report-faults?faultId=${faultId}`;
-  const taskId = msg.userTaskId != null ? +msg.userTaskId : 0;
+  const taskId = userTaskIdOf(msg);
   if (taskId > 0) return `/new-reports?reportId=${taskId}`;
   const fromBody = parseReportLink(msg.body);
   if (fromBody) return fromBody;
@@ -192,6 +215,23 @@ const resolveMessageReportLink = (msg: MessageRow): string | undefined => {
   const faultRef = ref.match(/Fault report #(\d+)/i);
   if (faultRef?.[1]) return `/report-faults?faultId=${faultRef[1]}`;
   return undefined;
+};
+
+const extractLinkedReportFromMessage = (
+  m: MessageRow,
+): { kind: 'fault' | 'task'; id: number } | null => {
+  const faultId = reportFaultIdOf(m);
+  if (faultId > 0) return { kind: 'fault', id: faultId };
+  const taskId = userTaskIdOf(m);
+  if (taskId > 0) return { kind: 'task', id: taskId };
+  const link = resolveMessageReportLink(m);
+  if (link) {
+    const fault = link.match(/faultId=(\d+)/i);
+    if (fault?.[1]) return { kind: 'fault', id: +fault[1] };
+    const task = link.match(/reportId=(\d+)/i);
+    if (task?.[1]) return { kind: 'task', id: +task[1] };
+  }
+  return null;
 };
 
 const isImageUrl = (url: string) => /\.(jpe?g|png|gif|webp)(\?|$)/i.test(url);
@@ -235,6 +275,9 @@ const MessageBubble: React.FC<{
   const attachments = msg.attachFiles || [];
   const timestamp = formatMessageTimestamp(msg.createdAt || msg.created_at);
   const bodyText = (msg.body || '').trim();
+  const ccLabels = (msg.ccRecipients || [])
+    .map((label) => ccPeerShortName(label))
+    .filter(Boolean);
 
   return (
     <div
@@ -265,6 +308,20 @@ const MessageBubble: React.FC<{
           {roleLabel}
         </Tag>
       </div>
+      {ccLabels.length > 0 ? (
+        <Text
+          type="secondary"
+          style={{
+            fontSize: 12,
+            marginBottom: 4,
+            display: 'block',
+            textAlign: msg.isMine ? 'right' : 'left',
+            maxWidth: 'min(520px, 92%)',
+          }}
+        >
+          Cc: {ccLabels.join(', ')}
+        </Text>
+      ) : null}
       <div
         style={{
           maxWidth: 'min(520px, 92%)',
@@ -347,6 +404,10 @@ const MessagesPage: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const reportContextKeyRef = useRef('');
+  /** Report link pinned for this conversation (from URL or send with link) — not global. */
+  const pinnedReportByConversationRef = useRef<
+    Record<string, { faultId?: number; taskId?: number }>
+  >({});
 
   const scrollToLatestMessage = useCallback(() => {
     const run = () => {
@@ -359,8 +420,7 @@ const MessagesPage: React.FC = () => {
 
   const params = new URLSearchParams(location.search);
   const reportFaultIdParam = params.get('reportFaultId');
-  const userTaskIdParam = params.get('userTaskId');
-  const hasReportContext = Boolean(reportFaultIdParam || userTaskIdParam);
+  const userTaskIdParam = params.get('userTaskId') || params.get('reportId');
 
   const profileRaw = localStorage.getItem('profile');
   const profile = profileRaw ? JSON.parse(profileRaw) : null;
@@ -435,6 +495,19 @@ const MessagesPage: React.FC = () => {
     [selectedThread, selectedConversation],
   );
 
+  const activeConversationKey = useMemo(() => {
+    if (!activeConversation) return 'none';
+    return [
+      activeConversation.threadId,
+      activeConversation.conversationKind ?? '',
+      activeConversation.peerType,
+      activeConversation.peerId,
+      activeConversation.peerStaffId ?? '',
+      activeConversation.filterSenderType ?? '',
+      activeConversation.filterSenderId ?? '',
+    ].join('|');
+  }, [activeConversation]);
+
   const showConversationSidebar = isAdmin || isCustomer || isStaff;
 
   const filteredMessages = useMemo(() => {
@@ -444,6 +517,51 @@ const MessagesPage: React.FC = () => {
     return messages;
   }, [messages, messageTab]);
 
+  const pinnedReportForConversation = pinnedReportByConversationRef.current[activeConversationKey];
+
+  const activeReportFaultId = useMemo(() => {
+    if (reportFaultIdParam) return +reportFaultIdParam;
+    if (reportFaultId != null && reportFaultId > 0) return reportFaultId;
+    if (pinnedReportForConversation?.faultId) return pinnedReportForConversation.faultId;
+    return null;
+  }, [reportFaultIdParam, reportFaultId, pinnedReportForConversation?.faultId, activeConversationKey]);
+
+  const activeUserTaskId = useMemo(() => {
+    if (reportFaultIdParam) return null;
+    if (reportFaultId != null && reportFaultId > 0) return null;
+    if (pinnedReportForConversation?.faultId) return null;
+    if (userTaskIdParam) return +userTaskIdParam;
+    if (userTaskId != null && userTaskId > 0) return userTaskId;
+    if (pinnedReportForConversation?.taskId) return pinnedReportForConversation.taskId;
+    return null;
+  }, [
+    reportFaultIdParam,
+    reportFaultId,
+    userTaskIdParam,
+    userTaskId,
+    pinnedReportForConversation?.faultId,
+    pinnedReportForConversation?.taskId,
+    activeConversationKey,
+  ]);
+
+  const hasLinkedReport = activeReportFaultId != null || activeUserTaskId != null;
+
+  const activeReportHref = useMemo(() => {
+    if (activeReportFaultId) return `/report-faults?faultId=${activeReportFaultId}`;
+    if (activeUserTaskId) return `/new-reports?reportId=${activeUserTaskId}`;
+    return null;
+  }, [activeReportFaultId, activeUserTaskId]);
+
+  const clearReportLinkContext = useCallback(() => {
+    setReportFaultId(null);
+    setUserTaskId(null);
+    setReportCustomerId(null);
+    reportContextKeyRef.current = '';
+    if (activeConversationKey !== 'none') {
+      delete pinnedReportByConversationRef.current[activeConversationKey];
+    }
+  }, [activeConversationKey]);
+
   const lastMessageKey = useMemo(() => {
     if (!messages.length) return 'empty';
     const last = messages[messages.length - 1];
@@ -451,7 +569,7 @@ const MessagesPage: React.FC = () => {
   }, [messages]);
 
   const loadCompanyCc = useCallback(async (customerId?: number) => {
-    // Only needed for ADMIN view; customer/staff use recipients list (no network call).
+    // Admin → customer only; customer/staff use recipients list (no network call).
     if (!isAdmin) return;
     const id = customerId != null ? +customerId : 0;
     if (!id) {
@@ -621,19 +739,6 @@ const MessagesPage: React.FC = () => {
     [],
   );
 
-  const activeConversationKey = useMemo(() => {
-    if (!activeConversation) return 'none';
-    return [
-      activeConversation.threadId,
-      activeConversation.conversationKind ?? '',
-      activeConversation.peerType,
-      activeConversation.peerId,
-      activeConversation.peerStaffId ?? '',
-      activeConversation.filterSenderType ?? '',
-      activeConversation.filterSenderId ?? '',
-    ].join('|');
-  }, [activeConversation]);
-
   const loadMessages = useCallback(async (opts?: { forceTab?: MessageTab }) => {
     if (opts?.forceTab) {
       setMessageTab(opts.forceTab);
@@ -663,7 +768,9 @@ const MessagesPage: React.FC = () => {
       }
 
       const res = await callAPIAsync(serviceType.COMMON, endPoint.MESSAGES, 'GET', query);
-      const rows: MessageRow[] = res?.data?.rows || [];
+      const rows: MessageRow[] = (res?.data?.rows || []).map((row: Record<string, unknown>) =>
+        normalizeMessageRow(row),
+      );
       const resolvedThreadId = res?.data?.threadId ?? null;
       setMessages(rows);
       setActiveCount(res?.data?.activeCount ?? 0);
@@ -688,7 +795,23 @@ const MessagesPage: React.FC = () => {
           );
         }
 
-        refreshDashboard();
+        if (
+          activeConversationKey !== 'none' &&
+          !reportFaultIdParam &&
+          !userTaskIdParam &&
+          rows.length
+        ) {
+          for (let i = rows.length - 1; i >= 0; i--) {
+            const linked = extractLinkedReportFromMessage(rows[i]);
+            if (linked) {
+              pinnedReportByConversationRef.current[activeConversationKey] =
+                linked.kind === 'fault'
+                  ? { faultId: linked.id }
+                  : { taskId: linked.id };
+              break;
+            }
+          }
+        }
       }
     } finally {
       setLoadingMessages(false);
@@ -703,7 +826,8 @@ const MessagesPage: React.FC = () => {
     loadThreads,
     messageTab,
     debouncedSearch,
-    refreshDashboard,
+    reportFaultIdParam,
+    userTaskIdParam,
   ]);
 
   const filteredThreads = useMemo(() => {
@@ -794,22 +918,26 @@ const MessagesPage: React.FC = () => {
   }, [showConversationSidebar, loadThreads]);
 
   useEffect(() => {
+    if (showConversationSidebar && (isCustomer || isStaff)) {
+      loadNewMessageRecipients();
+    }
+  }, [showConversationSidebar, isCustomer, isStaff, loadNewMessageRecipients]);
+
+  useEffect(() => {
     // Prevent background reloads while the New message modal is open (can cause UI jitter).
     if (newMessageOpen) return;
     if (isAdmin && selectedConversation?.peerType === 'customer') {
       loadCompanyCc(selectedConversation.peerId);
       return;
     }
-    if (isAdmin && selectedConversation?.peerType === 'staff' && reportCustomerId) {
-      loadCompanyCc(reportCustomerId);
-      return;
-    }
     if (isCustomer && activeConversation?.conversationKind === 'admin') {
-      // Use recipients list for CC options (no API calls).
-      const opts = colleagueRecipientOptions.map((c) => ({
-        value: c.id,
-        label: c.name,
-      }));
+      const selfId = profile?.id ? +profile.id : 0;
+      const opts = colleagueRecipientOptions
+        .filter((c) => +c.id !== selfId)
+        .map((c) => ({
+          value: c.id,
+          label: c.name,
+        }));
       setCcOptions(opts);
       setCcCustomerIds(opts.map((o) => o.value));
       return;
@@ -823,8 +951,8 @@ const MessagesPage: React.FC = () => {
     activeConversation?.conversationKind,
     colleagueRecipientOptions,
     selectedConversation,
-    reportCustomerId,
     loadCompanyCc,
+    profile?.id,
   ]);
 
   useEffect(() => {
@@ -848,8 +976,6 @@ const MessagesPage: React.FC = () => {
     debouncedSearch,
   ]);
 
-  useEffect(() => () => refreshDashboard(), [refreshDashboard]);
-
   useEffect(() => {
     if (reportFaultIdParam) {
       setReportFaultId(+reportFaultIdParam);
@@ -867,18 +993,34 @@ const MessagesPage: React.FC = () => {
   }, [reportFaultIdParam, userTaskIdParam]);
 
   useEffect(() => {
-    if (!hasReportContext) {
-      setReportCustomerId(null);
+    if (activeConversationKey === 'none') return;
+    if (reportFaultIdParam) {
+      pinnedReportByConversationRef.current[activeConversationKey] = {
+        faultId: +reportFaultIdParam,
+      };
+    } else if (userTaskIdParam) {
+      pinnedReportByConversationRef.current[activeConversationKey] = {
+        taskId: +userTaskIdParam,
+      };
     }
-  }, [hasReportContext]);
+  }, [reportFaultIdParam, userTaskIdParam, activeConversationKey]);
 
   useEffect(() => {
-    if (!isAdmin || !hasReportContext) {
-      reportContextKeyRef.current = '';
+    if (!hasLinkedReport) {
+      setReportCustomerId(null);
+    }
+  }, [hasLinkedReport]);
+
+  useEffect(() => {
+    setMessages([]);
+  }, [activeConversationKey]);
+
+  useEffect(() => {
+    if (!isAdmin || !(reportFaultIdParam || userTaskIdParam)) {
       return;
     }
     const contextKey = `${reportFaultIdParam || ''}|${userTaskIdParam || ''}`;
-    if (reportContextKeyRef.current === contextKey) return;
+    if (reportContextKeyRef.current === contextKey && reportCustomerId) return;
 
     let cancelled = false;
     (async () => {
@@ -899,12 +1041,27 @@ const MessagesPage: React.FC = () => {
       const existing = findAdminThreadRow(rowList, peerType, peerId);
       reportContextKeyRef.current = contextKey;
       setReportCustomerId(customerId);
-      setSelectedConversation({
+      const sel: SelectedConversation = {
         threadId: existing?.threadId ?? res.data.threadId ?? 0,
         peerType,
         peerId,
         displayName: existing?.customerName || res.data.displayName,
-      });
+      };
+      setSelectedConversation(sel);
+      const pinKey = [
+        sel.threadId,
+        sel.conversationKind ?? '',
+        sel.peerType,
+        sel.peerId,
+        sel.peerStaffId ?? '',
+        sel.filterSenderType ?? '',
+        sel.filterSenderId ?? '',
+      ].join('|');
+      if (reportFaultIdParam) {
+        pinnedReportByConversationRef.current[pinKey] = { faultId: +reportFaultIdParam };
+      } else if (userTaskIdParam) {
+        pinnedReportByConversationRef.current[pinKey] = { taskId: +userTaskIdParam };
+      }
     })();
 
     return () => {
@@ -912,7 +1069,6 @@ const MessagesPage: React.FC = () => {
     };
   }, [
     isAdmin,
-    hasReportContext,
     reportFaultIdParam,
     userTaskIdParam,
     threads.length,
@@ -964,10 +1120,7 @@ const MessagesPage: React.FC = () => {
     ccOptions.length > 0 &&
     ((isCustomer && activeConversation?.conversationKind === 'admin') ||
       (isAdmin && selectedConversation?.peerType === 'customer') ||
-      (isAdmin &&
-        selectedConversation?.peerType === 'staff' &&
-        reportCustomerId != null &&
-        reportCustomerId > 0));
+      (hasLinkedReport && (isCustomer || isAdmin)));
 
   const sendMessage = async () => {
     const text = draft.trim();
@@ -978,8 +1131,11 @@ const MessagesPage: React.FC = () => {
     try {
       const payload: Record<string, unknown> = { body: text };
       if (attachUrls.length > 0) payload.attachFiles = JSON.stringify(attachUrls);
-      if (reportFaultId) payload.reportFaultId = reportFaultId;
-      if (userTaskId) payload.userTaskId = userTaskId;
+      if (activeReportFaultId) {
+        payload.reportFaultId = activeReportFaultId;
+      } else if (activeUserTaskId) {
+        payload.userTaskId = activeUserTaskId;
+      }
       if (isAdmin && selectedConversation?.peerType === 'customer') {
         payload.customerId = selectedConversation.peerId;
       } else if (isAdmin && selectedConversation?.peerType === 'staff') {
@@ -989,18 +1145,24 @@ const MessagesPage: React.FC = () => {
         payload.peerStaffId = activeConversation.peerStaffId;
       }
       if (isCustomer && activeConversation?.conversationKind === 'colleague') {
-        if (activeConversation.filterSenderId) {
-          payload.ccCustomerIds = [activeConversation.filterSenderId];
+        const peerId = activeConversation.filterSenderId;
+        if (peerId && +peerId !== +profile?.id) {
+          payload.ccCustomerIds = [peerId];
         }
+      } else if (hasLinkedReport && ccCustomerIds.length > 0) {
+        const selfId = profile?.id ? +profile.id : 0;
+        payload.ccCustomerIds = ccCustomerIds.filter((id) => +id !== selfId);
       } else if (showCcComposer && ccCustomerIds.length > 0) {
         payload.ccCustomerIds = ccCustomerIds;
       }
 
       await callAPIAsync(serviceType.COMMON, `${endPoint.MESSAGES}/send`, 'POST', payload);
-      clearComposer();
-      if (hasReportContext) {
-        history.replace('/messages');
+      if (activeConversationKey !== 'none' && (activeReportFaultId || activeUserTaskId)) {
+        pinnedReportByConversationRef.current[activeConversationKey] = activeReportFaultId
+          ? { faultId: activeReportFaultId }
+          : { taskId: activeUserTaskId! };
       }
+      clearComposer();
       const nextTab: MessageTab = messageTab === 'sent' ? 'sent' : 'all';
       if (showConversationSidebar) await loadThreads();
       await loadMessages({ forceTab: nextTab });
@@ -1020,12 +1182,12 @@ const MessagesPage: React.FC = () => {
       if (!threads.length) await loadThreads();
       return;
     }
-    setNewMessageCustomerId(
-      selectedConversation?.peerType === 'customer' ? selectedConversation.peerId : null,
-    );
-    setNewMessageStaffId(
-      selectedConversation?.peerType === 'staff' ? selectedConversation.peerId : null,
-    );
+    clearReportLinkContext();
+    if (reportFaultIdParam || userTaskIdParam) {
+      history.replace('/messages');
+    }
+    setNewMessageCustomerId(null);
+    setNewMessageStaffId(null);
     setNewMessageOpen(true);
     loadRecipientOptions();
   };
@@ -1105,12 +1267,16 @@ const MessagesPage: React.FC = () => {
       setMessageTab('all');
       setNewMessageOpen(false);
       clearComposer();
-      setReportFaultId(null);
-      setUserTaskId(null);
+      clearReportLinkContext();
       window.setTimeout(() => composerRef.current?.focus(), 0);
       return;
     }
     const rowList = threads.length ? threads : (await loadThreads()) || [];
+
+    clearReportLinkContext();
+    if (reportFaultIdParam || userTaskIdParam) {
+      history.replace('/messages');
+    }
 
     if (newMessageStaffId) {
       const peerId = +newMessageStaffId;
@@ -1152,8 +1318,6 @@ const MessagesPage: React.FC = () => {
     setMessageTab('all');
     setNewMessageOpen(false);
     clearComposer();
-    setReportFaultId(null);
-    setUserTaskId(null);
   };
 
   const canUseMessageTabs = Boolean(
@@ -1180,6 +1344,19 @@ const MessagesPage: React.FC = () => {
   const goBackToConversationList = () => {
     setSelectedConversation(null);
     setSearchKeyword('');
+    clearReportLinkContext();
+    if (reportFaultIdParam || userTaskIdParam) {
+      history.replace('/messages');
+    }
+  };
+
+  const selectConversation = (t: ThreadRow) => {
+    if (reportFaultIdParam || userTaskIdParam) {
+      history.replace('/messages');
+    }
+    clearReportLinkContext();
+    setSelectedConversation(threadToSelection(t));
+    setMessageTab('all');
   };
 
   return (
@@ -1239,8 +1416,7 @@ const MessagesPage: React.FC = () => {
                     key={`${t.threadId}-${t.peerId}-${t.conversationKind ?? 'thread'}`}
                     type="button"
                     onClick={() => {
-                      setSelectedConversation(threadToSelection(t));
-                      setMessageTab('all');
+                      selectConversation(t);
                       if (t.unreadCount > 0) {
                         setThreads((prev) =>
                           prev.map((row) =>
@@ -1378,26 +1554,38 @@ const MessagesPage: React.FC = () => {
                 }}
               />
             ) : null}
-            {isAdmin && (reportFaultId || userTaskId) && (
+            {isAdmin && hasLinkedReport && (
               <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                {reportFaultId
-                  ? `Linked to fault report #${reportFaultId}`
-                  : `Linked to new report #${userTaskId}`}
+                {activeReportFaultId
+                  ? `Replying about fault report #${activeReportFaultId}`
+                  : `Replying about new report #${activeUserTaskId}`}
+                {activeReportHref ? (
+                  <>
+                    {' — '}
+                    <Link to={activeReportHref}>Open report</Link>
+                  </>
+                ) : null}
                 {' — messaging '}
                 {selectedConversation?.peerType === 'staff'
                   ? selectedConversation.displayName || 'staff'
                   : 'customer'}
-                ; reference will be attached when you send. You can Cc company colleagues below.
+                . Replies stay linked to this report. Colleagues are Cc&apos;d automatically.
               </Text>
             )}
             {isCustomer &&
               activeConversation?.conversationKind === 'admin' &&
-              (reportFaultId || userTaskId) && (
+              hasLinkedReport && (
               <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                {reportFaultId
-                  ? `Linked to fault report #${reportFaultId}`
-                  : `Linked to new report #${userTaskId}`}
-                {' — reference will be attached when you send.'}
+                {activeReportFaultId
+                  ? `Replying about fault report #${activeReportFaultId}`
+                  : `Replying about new report #${activeUserTaskId}`}
+                {activeReportHref ? (
+                  <>
+                    {' — '}
+                    <Link to={activeReportHref}>Open report</Link>
+                  </>
+                ) : null}
+                . Replies stay linked to this report. Colleagues are Cc&apos;d automatically.
               </Text>
             )}
             {canUseMessageTabs ? (
@@ -1609,7 +1797,7 @@ const MessagesPage: React.FC = () => {
                   gap: 8,
                 }}
               >
-                {activeConversation?.conversationKind === 'admin' && (reportFaultId || userTaskId) && (
+                {activeConversation?.conversationKind === 'admin' && hasLinkedReport && (
                   <Button
                     block={isMobilePortrait}
                     onClick={() => {

@@ -48,6 +48,16 @@ export class SiteItem {
     })
     createdAt: Date;
 
+    /** e.g. 5 in "5 times per 5 months". */
+    @Column({ name: 'frequency_times', nullable: true })
+    frequencyTimes?: number | null;
+
+    /** Interval count e.g. 5 in "per 5 months". */
+    @Column({ name: 'frequency_count', nullable: true })
+    frequencyCount?: number | null;
+
+    @Column({ name: 'frequency_period', nullable: true, length: 16 })
+    frequencyPeriod?: string | null;
 
     @OneToMany(() => SiteItemStaff, t => t.siteItem, { cascade: true })
     staffs?: SiteItemStaff[]

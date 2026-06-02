@@ -40,26 +40,52 @@ function reportPdfAuMoment(raw: unknown): moment.Moment {
     return m.isValid() ? m.utcOffset(REPORT_PDF_AU_OFFSET) : moment().utcOffset(REPORT_PDF_AU_OFFSET);
 }
 
-function inferReportDateTimeFromItems(reportItems: unknown): moment.Moment | null {
-    if (!Array.isArray(reportItems) || !reportItems.length) return null;
-    let dateStr: string | null = null;
-    let timeStr: string | null = null;
+function findReportDateInItems(reportItems: unknown): string | null {
+    if (!Array.isArray(reportItems)) return null;
     for (const it of reportItems) {
         const t = String((it as any)?.type ?? '').toUpperCase();
         const v = String((it as any)?.value ?? '').trim();
         if (!v) continue;
-        if (t === '[REPORT_DATE]' && moment(v, 'YYYY-MM-DD', true).isValid()) {
-            dateStr = v;
-        } else if (t === '[REPORT_TIME]') {
-            const parsed = parseReportWallClockTime(v);
-            if (parsed) timeStr = parsed;
+        if (t === '[REPORT_DATE]') {
+            const stored = parseReportWallClockDate(v);
+            if (stored) return stored;
+        }
+        if (t === 'DATE' || t === 'DATE_PICKER') {
+            const stored = parseReportWallClockDate(v);
+            if (stored) return stored;
         }
     }
-    if (!dateStr && !timeStr) return null;
+    return null;
+}
+
+function findReportTimeInItems(reportItems: unknown): string | null {
+    if (!Array.isArray(reportItems)) return null;
+    for (const it of reportItems) {
+        const t = String((it as any)?.type ?? '').toUpperCase();
+        const v = String((it as any)?.value ?? '').trim();
+        if (!v) continue;
+        if (t === '[REPORT_TIME]' || t === 'TIME') {
+            const parsed = parseReportWallClockTime(v);
+            if (parsed) return parsed;
+        }
+    }
+    return null;
+}
+
+/** Both date and time from form fields — never invent midnight when only a date exists. */
+function inferReportDateTimeFromItems(reportItems: unknown): moment.Moment | null {
+    const dateStr = findReportDateInItems(reportItems);
+    const timeStr = findReportTimeInItems(reportItems);
+    if (!timeStr) return null;
     const d = dateStr ?? moment().utcOffset(REPORT_PDF_AU_OFFSET).format('YYYY-MM-DD');
-    const t = timeStr ?? '00:00:00';
-    const m = moment(`${d} ${t}`, 'YYYY-MM-DD HH:mm:ss', true).utcOffset(REPORT_PDF_AU_OFFSET, true);
+    const m = moment(`${d} ${timeStr}`, 'YYYY-MM-DD HH:mm:ss', true).utcOffset(REPORT_PDF_AU_OFFSET, true);
     return m.isValid() ? m : null;
+}
+
+function combineReportDateWithMoment(dateStr: string, ref: moment.Moment): moment.Moment {
+    const t = ref.isValid() ? ref.format('HH:mm:ss') : '00:00:00';
+    const m = moment(`${dateStr} ${t}`, 'YYYY-MM-DD HH:mm:ss', true).utcOffset(REPORT_PDF_AU_OFFSET, true);
+    return m.isValid() ? m : ref;
 }
 
 /** Parse staff-selected wall-clock time stored as HH:mm:ss, HH:mm, or legacy date string. */
@@ -81,18 +107,6 @@ function parseReportWallClockDate(raw: unknown): string | null {
     if (moment(v, 'YYYY-MM-DD', true).isValid()) return v;
     const m = moment(v);
     return m.isValid() ? m.utcOffset(REPORT_PDF_AU_OFFSET, true).format('YYYY-MM-DD') : null;
-}
-
-function findReportTimeInItems(reportItems: unknown): string | null {
-    if (!Array.isArray(reportItems)) return null;
-    for (const it of reportItems) {
-        const t = String((it as any)?.type ?? '').toUpperCase();
-        if (t === '[REPORT_TIME]') {
-            const parsed = parseReportWallClockTime((it as any)?.value);
-            if (parsed) return parsed;
-        }
-    }
-    return null;
 }
 
 function formatReportPdfDateDisplay(raw: unknown): string {
@@ -135,19 +149,10 @@ function inferSubmissionMomentFromReportMedia(reports: unknown): moment.Moment |
     return m.isValid() ? m : null;
 }
 
-/** When the report was actually submitted — not PDF regen time or DB touch time. */
-function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Moment {
-    const explicit = inferReportDateTimeFromItems(reportItems);
-    if (explicit) return reportPdfAuMoment(explicit);
-
+function resolveReportPdfRowMoment(row: any, reportItems?: unknown): moment.Moment {
     const checkIn = row?.checkIn ?? row?.check_in;
     const createdAt = row?.createdAt ?? row?.created_at;
-    const candidates = [
-        createdAt,
-        checkIn,
-        row?.startTime,
-        row?.start_time,
-    ];
+    const candidates = [createdAt, checkIn, row?.startTime, row?.start_time];
     let best: moment.Moment | null = null;
     for (const raw of candidates) {
         if (raw == null || raw === '') continue;
@@ -167,9 +172,7 @@ function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Mo
             }
         }
     }
-    const reportsForMedia = Array.isArray(reportItems)
-        ? reportItems
-        : row?.reports;
+    const reportsForMedia = Array.isArray(reportItems) ? reportItems : row?.reports;
     const media = inferSubmissionMomentFromReportMedia(reportsForMedia);
     if (media && best) {
         const aheadMin = media.diff(best, 'minutes');
@@ -180,7 +183,44 @@ function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Mo
     } else if (media && !best) {
         best = media;
     }
-    return reportPdfAuMoment(best ?? undefined);
+    if (!best || !moment(best).isValid()) {
+        return reportPdfAuMoment(undefined);
+    }
+    const ci = checkIn != null && checkIn !== '' ? moment(checkIn) : null;
+    const ca = createdAt != null && createdAt !== '' ? moment(createdAt) : null;
+    const wallClockStorage =
+        ci?.isValid() &&
+        ca?.isValid() &&
+        Math.abs(ci.diff(ca, 'minutes')) <= 2;
+    if (wallClockStorage) {
+        return moment(best).utcOffset(REPORT_PDF_AU_OFFSET, true);
+    }
+    return reportPdfAuMoment(best);
+}
+
+/** When the report was actually submitted — not PDF regen time or DB touch time. */
+function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Moment {
+    const fromItems = inferReportDateTimeFromItems(reportItems);
+    if (fromItems) return fromItems;
+
+    const rowMoment = resolveReportPdfRowMoment(row, reportItems);
+    const itemDate = findReportDateInItems(reportItems);
+    if (itemDate && rowMoment.isValid()) {
+        return combineReportDateWithMoment(itemDate, rowMoment);
+    }
+    return rowMoment;
+}
+
+/** PDF footer: "2 Jun 2026 14:30" (single separator before stamp is added by caller). */
+function formatReportPdfSubmittedStamp(row: any, reportItems?: unknown): string {
+    const m = getReportPdfReferenceMoment(row, reportItems);
+    const stamp = m.format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
+    if (!stamp.endsWith(' 00:00')) return stamp;
+    const createdAt = row?.createdAt ?? row?.created_at;
+    if (!createdAt) return stamp;
+    const alt = reportPdfAuMoment(createdAt);
+    if (!alt.isValid() || alt.format('HH:mm') === '00:00') return stamp;
+    return alt.format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
 }
 
 function formatReportPdfDateTimeValue(val: unknown): string {
@@ -966,7 +1006,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     const pdfDoc = await PDFDocument.load(documentAsBytes);
     const numberOfPages = pdfDoc.getPages().length;
     const submittedByLabel = getReportPdfSubmittedByLabel(row);
-    const submittedStamp = getReportPdfReferenceMoment(row, newItems).format(`${REPORT_PDF_DATE_FORMAT} @ HH:mm`);
+    const submittedStamp = formatReportPdfSubmittedStamp(row, newItems);
     for (let i = 0; i < numberOfPages; i++) {
         const pg = pdfDoc.getPages()[i];
         if (pg) {

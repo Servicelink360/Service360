@@ -4,7 +4,7 @@ import { Button, Image, Modal, Typography } from "antd";
 import moment from "moment";
 import React from "react";
 import { Link } from "react-router-dom";
-import { reportFaultStatus, userType } from "../../constants/statusUser";
+import { userType } from "../../constants/statusUser";
 
 const valueStyle: React.CSSProperties = {
   fontSize: 14,
@@ -51,7 +51,6 @@ type Props = {
   onClose: () => void;
   record: any | null;
   viewerType: number;
-  renderStatus: (r: any, viewerType?: number) => React.ReactNode;
   renderPriority: (priority: number | undefined) => React.ReactNode;
   readStatusNode?: React.ReactNode;
 };
@@ -152,7 +151,6 @@ const FaultReportViewModal: React.FC<Props> = ({
   onClose,
   record,
   viewerType,
-  renderStatus,
   renderPriority,
   readStatusNode,
 }) => {
@@ -164,8 +162,7 @@ const FaultReportViewModal: React.FC<Props> = ({
   const customerLabel =
     record.companyName || record.customerName || record.customer?.fullName || "—";
   const canMessage =
-    (viewerType === userType.ADMIN || viewerType === userType.CUSTOMER) &&
-    record.status !== reportFaultStatus.COMPLETED;
+    (viewerType === userType.ADMIN || viewerType === userType.CUSTOMER) && Boolean(faultId);
 
   return (
     <Modal
@@ -226,9 +223,9 @@ const FaultReportViewModal: React.FC<Props> = ({
           flexWrap: "nowrap",
         }}
       >
-        <InlineLabelValue label="Status">
-          {readStatusNode ?? renderStatus(record, viewerType)}
-        </InlineLabelValue>
+        {readStatusNode ? (
+          <InlineLabelValue label="Read">{readStatusNode}</InlineLabelValue>
+        ) : null}
         <InlineLabelValue label="Priority">
           {renderPriority(record.priority)}
         </InlineLabelValue>

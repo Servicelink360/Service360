@@ -32,6 +32,23 @@ const ItemModal = (props: IProps) => {
     const [staffShifts, setStaffShifts] = useState(data && data.staffs ? data.staffs : [])
     const [staffShiftInfo, setStaffShiftInfo] = useState(null)
     const [form] = Form.useForm()
+    const watchedServiceId = Form.useWatch('serviceId', form)
+    const watchedCustomerId = Form.useWatch('customerId', form)
+
+    const itemCompanyId = (row: any) =>
+        +(row.companyId ??
+            row.customerId ??
+            row.customer?.customerInfo?.companyId ??
+            row.customer?.customerInfo?.company_id ??
+            0)
+
+    const isServiceCustomerPairTaken = (serviceId: number, companyId: number) => {
+        if (!serviceId || !companyId) return false
+        return items.some((row: any) => {
+            if (data?.id != null && +row.id === +data.id) return false
+            return +row.serviceId === +serviceId && itemCompanyId(row) === +companyId
+        })
+    }
 
     useEffect(() => {
         if (isSuccess) {
@@ -78,6 +95,7 @@ const ItemModal = (props: IProps) => {
                     r = {
                         ...r,
                         ...values,
+                        service: Service,
                         Service,
                         customer,
                         companyId: company?.id ?? values.customerId,
@@ -92,10 +110,14 @@ const ItemModal = (props: IProps) => {
 
             const n = {
                 ...values,
+                service: Service,
                 Service,
                 customer,
                 companyId: company?.id ?? values.customerId,
                 id: Date.now(),
+                frequencyTimes: null,
+                frequencyCount: null,
+                frequencyPeriod: null,
                 staffs: staffShifts,
             }
             setItems([...items, n])
@@ -228,7 +250,10 @@ const ItemModal = (props: IProps) => {
                                     label={"Service"}
                                     options={services && services.map(c => {
                                         const n = { ...c };
-                                        if (items.findIndex(t => +t.serviceId === +c.id) > -1) {
+                                        if (
+                                            watchedCustomerId &&
+                                            isServiceCustomerPairTaken(+c.id, +watchedCustomerId)
+                                        ) {
                                             n.disabled = true
                                         }
                                         return n;
@@ -249,11 +274,8 @@ const ItemModal = (props: IProps) => {
                                     options={customers && customers.map(c => {
                                         const n = { ...c };
                                         if (
-                                            items.findIndex(
-                                                (t) =>
-                                                    +t.companyId === +c.id ||
-                                                    +t.customerId === +c.id,
-                                            ) > -1
+                                            watchedServiceId &&
+                                            isServiceCustomerPairTaken(+watchedServiceId, +c.id)
                                         ) {
                                             n.disabled = true
                                         }

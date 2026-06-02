@@ -1,7 +1,7 @@
 import { ReloadOutlined} from "@ant-design/icons";
 import { ActionBtn, TableWrapper,} from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
-import { dateFormat, limitData, pageData } from "@app/config/data.config";
+import { dateFormat, pageData } from "@app/config/data.config";
 import { Col, Row, Form, Input, Tag } from "antd";
 import moment from "moment";
 import React, { useEffect, useMemo, useState } from "react";
@@ -19,8 +19,10 @@ import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 import { formatTime } from "../../library/helpers/utility";
 
+const JOB_SITES_LIST_LIMIT = 50;
+
 const Unit: React.FC = () => {
-    const [limit, setLimit] = useState(limitData);
+    const [limit, setLimit] = useState(JOB_SITES_LIST_LIMIT);
     const [page, setPage] = useState(pageData);
     const [form] = Form.useForm();
     const intl = useIntl();
@@ -326,8 +328,6 @@ const Unit: React.FC = () => {
                         onTableChange={onTableChange}
                         expandedRowRender={expandedRowRender}
                         columns={columns}
-                        pagination={false}
-                        // expandable={true}
                         keys="id"
                         page={page}
                         count={count}

@@ -42,13 +42,19 @@ export class MessagesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('company-cc')
-  async companyCc(@Res() res, @Query('customerId') customerId: string, @Request() req) {
+  async companyCc(
+    @Res() res,
+    @Query('customerId') customerId: string,
+    @Query('forStaff') forStaff: string,
+    @Request() req,
+  ) {
     const user: IUserInfo = req.user;
     return customHttpCode(
       res,
       await this.messagesService.listCompanyCcRecipients(
         user,
         customerId ? +customerId : undefined,
+        forStaff === '1' || forStaff === 'true',
       ),
     );
   }

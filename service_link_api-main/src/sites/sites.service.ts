@@ -69,6 +69,37 @@ function countDistinctActiveStaff(site: Site): number {
   return ids.size;
 }
 
+/** Valid site_items rows (service + customer), matches job-sites Services column. */
+const SITE_SERVICE_COUNT_SQL = `(
+  SELECT COUNT(*)::int
+  FROM site_items si
+  INNER JOIN services dep ON dep.id = si.service_id
+  INNER JOIN users cu ON cu.id = si.customer_id AND cu.status <> 4
+  WHERE si.site_id = s.id
+)`;
+
+function countSiteServices(site: Site): number {
+  let n = 0;
+  for (const item of site.items ?? []) {
+    if (item.service != null && item.customer != null) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function withSiteListCounts(site: Site, staffCount?: number) {
+  const n =
+    site.items.length > 0
+      ? { ...site, items: site.items.filter((cc) => cc.customer != null && cc.service != null) }
+      : { ...site };
+  return {
+    ...n,
+    staffCount: staffCount !== undefined ? staffCount : countDistinctActiveStaff(n as Site),
+    serviceCount: countSiteServices(n as Site),
+  };
+}
+
 @Injectable()
 export class SitesService {
   constructor(
@@ -168,6 +199,38 @@ export class SitesService {
     }
   }
 
+  private applySiteItemFrequency(
+    target: SiteItem,
+    source: {
+      frequencyTimes?: number | null;
+      frequencyCount?: number | null;
+      frequencyPeriod?: string | null;
+    },
+  ): void {
+    const periodRaw = source.frequencyPeriod;
+    const period =
+      periodRaw == null || periodRaw === '' || String(periodRaw).trim().toLowerCase() === 'na'
+        ? null
+        : String(periodRaw).trim();
+    if (period == null) {
+      target.frequencyPeriod = null;
+      target.frequencyCount = null;
+      target.frequencyTimes = null;
+      return;
+    }
+    target.frequencyPeriod = period;
+    if (source.frequencyTimes != null && Number.isFinite(+source.frequencyTimes)) {
+      target.frequencyTimes = Math.max(1, Math.floor(+source.frequencyTimes));
+    } else if (target.frequencyTimes == null) {
+      target.frequencyTimes = 1;
+    }
+    if (source.frequencyCount != null && Number.isFinite(+source.frequencyCount)) {
+      target.frequencyCount = Math.max(1, Math.floor(+source.frequencyCount));
+    } else if (target.frequencyCount == null) {
+      target.frequencyCount = 1;
+    }
+  }
+
   private siteItemRowMatches(
     incoming: { serviceId: number; customerId: number; companyId: number | null },
     existing: SiteItem,
@@ -222,6 +285,7 @@ export class SitesService {
           nDe.companyId = ref.companyId;
 
           nDe.createdAt = new Date();
+          this.applySiteItemFrequency(nDe, de);
           nDe.staffs = this.buildSiteItemStaffEntities(de.staffs);
           items.push(nDe)
         }
@@ -371,15 +435,93 @@ export class SitesService {
     return { sql, params };
   }
 
+  /** limit=0 → return all rows (admin client-side pagination for count columns). */
+  private siteListSqlLimitClause(
+    body: GetSitesDto,
+    paramCount: number,
+  ): { sql: string; extraParams: number[] } {
+    if (body.limit != null && +body.limit === 0) {
+      return { sql: '', extraParams: [] };
+    }
+    const limit = +body.limit || 10;
+    const offset = Math.max(0, ((+body.page || 1) - 1) * limit);
+    const limitIdx = paramCount + 1;
+    const offsetIdx = paramCount + 2;
+    return {
+      sql: ` LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      extraParams: [limit, offset],
+    };
+  }
+
+  /** Paginate site ids by service (site_item) count. */
+  private async findAllSortedByServiceCount(userInfo: IUserInfo, body: GetSitesDto) {
+    const sortDir =
+      String(body.orderValue ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    const { sql: filterSql, params: filterParams } = this.buildSiteListFilterSql(userInfo, body);
+    const paging = this.siteListSqlLimitClause(body, filterParams.length);
+
+    const idRows: { site_id: string | number; service_cnt: string | number }[] =
+      await this.sitesRepository.query(
+        `SELECT uniq.site_id, uniq.service_cnt
+         FROM (
+           SELECT DISTINCT ON (s.id)
+             s.id AS site_id,
+             ${SITE_SERVICE_COUNT_SQL} AS service_cnt
+           FROM sites s
+           WHERE 1=1${filterSql}
+           ORDER BY s.id
+         ) uniq
+         INNER JOIN sites s2 ON s2.id = uniq.site_id
+         ORDER BY uniq.service_cnt ${sortDir}, LOWER(s2.name) ASC, uniq.site_id DESC${paging.sql}`,
+        [...filterParams, ...paging.extraParams],
+      );
+
+    const serviceCountBySiteId = new Map<number, number>();
+    const siteIds: number[] = [];
+    const seenSiteIds = new Set<number>();
+    for (const row of idRows) {
+      const id = Number(row.site_id);
+      if (Number.isFinite(id) && !seenSiteIds.has(id)) {
+        seenSiteIds.add(id);
+        siteIds.push(id);
+        serviceCountBySiteId.set(id, Number(row.service_cnt) || 0);
+      }
+    }
+
+    const countRows: { cnt: string }[] = await this.sitesRepository.query(
+      `SELECT COUNT(*) AS cnt
+       FROM (SELECT DISTINCT s.id FROM sites s WHERE 1=1${filterSql}) site_ids`,
+      filterParams,
+    );
+    const total = Number(countRows[0]?.cnt ?? 0);
+
+    if (!siteIds.length) {
+      return { ...errorCode.SUCCESS, data: { count: total, rows: [] } };
+    }
+
+    const rows = await this.loadSitesWithRelationsByIds(userInfo, body, siteIds);
+    return {
+      ...errorCode.SUCCESS,
+      data: {
+        count: total,
+        rows: rows.map((c) => {
+          const sqlCount = serviceCountBySiteId.get(c.id);
+          const base = withSiteListCounts(c);
+          return {
+            ...base,
+            serviceCount: sqlCount !== undefined ? sqlCount : base.serviceCount,
+          };
+        }),
+      },
+    };
+  }
+
   /** Paginate site ids by staff count without joining tasks/shifts (avoids slow DISTINCT + spinners). */
   private async findAllSortedByStaffCount(userInfo: IUserInfo, body: GetSitesDto) {
     const sortDir =
       String(body.orderValue ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     const { sql: filterSql, params: filterParams } = this.buildSiteListFilterSql(userInfo, body);
-    const limit = +body.limit || 10;
-    const offset = Math.max(0, (+body.page - 1) * limit);
-    const limitIdx = filterParams.length + 1;
-    const offsetIdx = filterParams.length + 2;
+    const paging = this.siteListSqlLimitClause(body, filterParams.length);
 
     const idRows: { site_id: string | number; staff_cnt: string | number }[] =
       await this.sitesRepository.query(
@@ -392,9 +534,8 @@ export class SitesService {
            WHERE 1=1${filterSql}
            ORDER BY s.id
          ) uniq
-         ORDER BY uniq.staff_cnt ${sortDir}, uniq.site_id DESC
-         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-        [...filterParams, limit, offset],
+         ORDER BY uniq.staff_cnt ${sortDir}, uniq.site_id DESC${paging.sql}`,
+        [...filterParams, ...paging.extraParams],
       );
     const staffCountBySiteId = new Map<number, number>();
     const siteIds: number[] = [];
@@ -425,16 +566,8 @@ export class SitesService {
       data: {
         count: total,
         rows: rows.map((c) => {
-          const n =
-            c.items.length > 0
-              ? { ...c, items: c.items.filter((cc) => cc.customer != null && cc.service != null) }
-              : { ...c };
           const sqlCount = staffCountBySiteId.get(c.id);
-          return {
-            ...n,
-            staffCount:
-              sqlCount !== undefined ? sqlCount : countDistinctActiveStaff(n as Site),
-          };
+          return withSiteListCounts(c, sqlCount);
         }),
       },
     };
@@ -543,10 +676,7 @@ export class SitesService {
       String(body.orderValue ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     const nulls = sortDir === 'ASC' ? 'NULLS FIRST' : 'NULLS LAST';
     const { sql: filterSql, params: filterParams } = this.buildSiteListFilterSql(userInfo, body);
-    const limit = +body.limit || 10;
-    const offset = Math.max(0, (+body.page - 1) * limit);
-    const limitIdx = filterParams.length + 1;
-    const offsetIdx = filterParams.length + 2;
+    const paging = this.siteListSqlLimitClause(body, filterParams.length);
 
     const idRows: { site_id: string | number; customer_sort: string | null }[] =
       await this.sitesRepository.query(
@@ -559,9 +689,8 @@ export class SitesService {
            WHERE 1=1${filterSql}
            ORDER BY s.id
          ) uniq
-         ORDER BY uniq.customer_sort ${sortDir} ${nulls}, uniq.site_id DESC
-         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-        [...filterParams, limit, offset],
+         ORDER BY uniq.customer_sort ${sortDir} ${nulls}, uniq.site_id DESC${paging.sql}`,
+        [...filterParams, ...paging.extraParams],
       );
 
     const siteIds: number[] = [];
@@ -590,21 +719,21 @@ export class SitesService {
       ...errorCode.SUCCESS,
       data: {
         count: total,
-        rows: rows.map((c) => {
-          const n =
-            c.items.length > 0
-              ? { ...c, items: c.items.filter((cc) => cc.customer != null && cc.service != null) }
-              : { ...c };
-          return { ...n, staffCount: countDistinctActiveStaff(n as Site) };
-        }),
+        rows: rows.map((c) => withSiteListCounts(c)),
       },
     };
   }
 
   async findAll(userInfo: IUserInfo, body: GetSitesDto) {
     try {
+      if (body.orderBy === 'services') {
+        body.orderBy = 'serviceCount';
+      }
       if (body.orderBy === 'staffCount') {
         return this.findAllSortedByStaffCount(userInfo, body);
+      }
+      if (body.orderBy === 'serviceCount') {
+        return this.findAllSortedByServiceCount(userInfo, body);
       }
       if (body.orderBy === 'customer' || body.orderBy === 'customers') {
         return this.findAllSortedByCustomer(userInfo, body);
@@ -671,7 +800,9 @@ export class SitesService {
       }
 
       query.leftJoinAndSelect('staffs.staffShifts', 'staffShifts')
-      if (+body.limit) {
+      if (body.limit != null && +body.limit === 0) {
+        /* all rows — client paginates */
+      } else if (+body.limit) {
         query.take(body.limit).skip((body.page - 1) * body.limit)
       }
       const sortDir = body.orderValue === 'ASC' ? 'ASC' : 'DESC';
@@ -698,13 +829,7 @@ export class SitesService {
 
       return {
         ...errorCode.SUCCESS, data: {
-          count: result[1], rows: result[0].map((c) => {
-            const n =
-              c.items.length > 0
-                ? { ...c, items: c.items.filter((cc) => cc.customer != null && cc.service != null) }
-                : { ...c };
-            return { ...n, staffCount: countDistinctActiveStaff(n as Site) };
-          }),
+          count: result[1], rows: result[0].map((c) => withSiteListCounts(c)),
         }
       };
     } catch (error) {
@@ -809,6 +934,9 @@ export class SitesService {
         customerId: number;
         companyId: number | null;
         staffs: SiteItemDto['staffs'];
+        frequencyTimes?: number | null;
+        frequencyCount?: number | null;
+        frequencyPeriod?: string | null;
       }> = [];
       for (const de of incomingItems) {
         const ref = await this.resolveSiteItemCustomerRef(
@@ -820,6 +948,9 @@ export class SitesService {
           customerId: ref.customerId,
           companyId: ref.companyId,
           staffs: de.staffs,
+          frequencyTimes: de.frequencyTimes,
+          frequencyCount: de.frequencyCount,
+          frequencyPeriod: de.frequencyPeriod,
         });
       }
 
@@ -850,6 +981,7 @@ export class SitesService {
         if (checkService) {
           checkService.customerId = de.customerId;
           checkService.companyId = de.companyId;
+          this.applySiteItemFrequency(checkService, de);
           await this.siteItemsRepository.save(checkService);
           await this.replaceSiteItemStaffs(checkService.id, de.staffs);
           await this.tasksService.updateTaskStaffs(checkService.id, de.staffs ?? []);
@@ -860,6 +992,7 @@ export class SitesService {
           nDe.companyId = de.companyId;
           nDe.siteId = data.id;
           nDe.createdAt = new Date();
+          this.applySiteItemFrequency(nDe, de);
           const saved = await this.siteItemsRepository.save(nDe);
           await this.replaceSiteItemStaffs(saved.id, de.staffs);
         }

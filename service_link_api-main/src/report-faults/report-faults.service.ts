@@ -366,11 +366,8 @@ export class ReportFaultsService {
     return { ...errorCode.SUCCESS, data: { count: rows.length, rows } };
   }
 
-  /** Default list hides soft-deleted and in-progress faults (show New/Pending/Completed only). */
-  private readonly listExcludedStatuses = [
-    reportFaultStatus.DELETED,
-    reportFaultStatus.INPROGRESS,
-  ];
+  /** Default list hides soft-deleted faults only; in-progress reports stay visible. */
+  private readonly listExcludedStatuses = [reportFaultStatus.DELETED];
 
   private applyListStatusFilter(
     query: { andWhere: (sql: string, params?: object) => unknown },
@@ -862,9 +859,6 @@ export class ReportFaultsService {
       if (!fault || +fault.status === reportFaultStatus.DELETED) {
         return errorCode.NOT_FOUND;
       }
-      if (+fault.status === reportFaultStatus.COMPLETED) {
-        return { ...errorCode.VALIDATION_ERROR, message: 'This report fault is already completed' };
-      }
 
       const actorType = +userInfo.type;
 
@@ -911,7 +905,6 @@ export class ReportFaultsService {
       const nextSender = this.nextSenderAfterComment(actorType);
       const faultUpdate: Partial<ReportFault> = {
         sender: nextSender,
-        status: reportFaultStatus.INPROGRESS,
         updatedAt: new Date(),
         updatedBy: +userInfo.userId,
       };

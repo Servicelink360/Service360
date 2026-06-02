@@ -1,4 +1,4 @@
-import { all, fork, put, takeEvery } from 'redux-saga/effects';
+import { all, fork, put, takeLatest } from 'redux-saga/effects';
 import actions from './actions';
 import { notificationComponent } from '../../components/common/Notification';
 import errorCode from '../../constants/errorCode';
@@ -8,7 +8,7 @@ import serviceType from '../../constants/serviceType';
 import endPoint from '../../constants/endPoint';
 
 function* getData() {
-  yield takeEvery(actions.GET_DATA, function* ({ payload }: any) {
+  yield takeLatest(actions.GET_DATA, function* ({ payload }: any) {
     try {
       const response: ListResponse<any> = yield callAPI(serviceType.COMMON, `${endPoint.COMMON}/dashboardData`, "GET", payload);
             if (response?.code === errorCode.SUCCESS) {
@@ -21,9 +21,14 @@ function* getData() {
                 yield put({
                     type: actions.GET_DATA_FAILURE,
                 })
-                notificationComponent('error', 3, response.message, '');
+                if (response?.message) {
+                    notificationComponent('error', 3, response.message, '');
+                }
             }
     } catch (error) {
+      yield put({
+        type: actions.GET_DATA_FAILURE,
+      });
       notificationComponent('error', 3, error?.message, '');
     }
   })

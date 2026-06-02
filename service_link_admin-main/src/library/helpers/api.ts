@@ -67,18 +67,6 @@ export function* callAPI(
     } catch (error: any) {
         console.log('error', error);
         notification("error", "Please check the network connection", "");
-        //   if (error.name === 'AbortError') {
-        if (
-            method === "GET" ||
-            (method === "POST" && endPoint.indexOf("getAll") !== -1)
-        ) {
-            setTimeout(async () => {
-                await callAPIAsync(service, endPoint, method, payload);
-            }, 10000);
-        }
-
-        // }
-
         return null;
     }
 }
@@ -228,14 +216,6 @@ export async function callAPIAsync(
         if (result) return result
     } catch (error) {
         notification("error", "Please check the network connection", "");
-        if (
-            method === "GET" ||
-            (method === "POST" && endPoint.indexOf("getAll") !== -1)
-        ) {
-            setTimeout(async () => {
-                await callAPIAsync(service, endPoint, method, payload);
-            }, 10000);
-        }
     }
 }
 

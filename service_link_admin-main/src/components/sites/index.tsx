@@ -7,9 +7,9 @@ import { BodyModalWrap } from '@app/components/common/modal.style'
 import { dateTimeFormat } from '@app/config/data.config'
 import { sprintf } from '@app/lib/helpers/utility'
 import actions from '@app/redux/sites/actions'
-import { Col, Form, Modal, Row, Popconfirm, Button, Tag } from 'antd'
+import { Col, Form, Modal, Row, Popconfirm, Button, Tag, Select, Space } from 'antd'
 import moment from 'moment'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useIntl } from 'react-intl'
 import { useDispatch } from 'react-redux'
 import { ButtonMR, InformationDiv } from '../common/container.style'
@@ -17,6 +17,17 @@ import { ColDef } from 'ag-grid-community'
 import TableComponent from "@app/components/common/Table/index";
 import ItemModal from '@app/components/sites/item'
 import { serializeSiteItemsForApi } from '@app/lib/helpers/siteItemPayload';
+import useDesktopViewport from '@app/lib/hooks/useDesktopViewport';
+import {
+    SITE_ITEM_FREQUENCY_NA,
+    SITE_ITEM_FREQUENCY_UNITS,
+    formatSiteItemFrequency,
+    frequencyCountOptions,
+    frequencyTimesSelectOptions,
+    isSiteItemFrequencyNa,
+    resolveFrequencyPerCount,
+    resolveFrequencyTimes,
+} from '@app/lib/helpers/siteItemFrequency';
 
 type IProps = {
     loadingAction: boolean
@@ -34,6 +45,7 @@ const Index = (props: IProps) => {
     const { modalType, isSuccess, loadingAction, data, title, services, customers, staffs, } = props
     const dispatch = useDispatch()
     const intl = useIntl()
+    const isDesktop = useDesktopViewport()
     const [changed, setChanged] = useState(false)
     const [items, setItems] = useState(data && data.items ? data.items : [])
     const [showModal, setShowModal] = useState(false)
@@ -76,8 +88,25 @@ const Index = (props: IProps) => {
         }
     }
 
-    const columns: ColDef[] | any = useMemo(() => [
+    const updateItemFrequency = useCallback(
+        (
+            itemId: number,
+            patch: {
+                frequencyTimes?: number | null;
+                frequencyCount?: number | null;
+                frequencyPeriod?: string | null;
+            },
+        ) => {
+            setItems((prev) =>
+                prev.map((r) => (+r.id === +itemId ? { ...r, ...patch } : r)),
+            );
+            setChanged(true);
+        },
+        [],
+    );
 
+    const columns: ColDef[] | any = useMemo(() => {
+        const cols: ColDef[] | any = [
         {
             title: 'Service',
             dataIndex: "services",
@@ -114,8 +143,88 @@ const Index = (props: IProps) => {
                 return ""
             },
         },
-       
-        {
+        ];
+
+        if (isDesktop) {
+            cols.push({
+                title: 'Frequency',
+                key: 'frequency',
+                width: 380,
+                render: (_text: string, row: any) => {
+                    const frequencyNa = isSiteItemFrequencyNa(row);
+                    const times = resolveFrequencyTimes(row);
+                    const perCount = resolveFrequencyPerCount(row);
+                    const period = row.frequencyPeriod;
+                    return (
+                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                            <Space size={4} wrap align="center">
+                                <Select
+                                    value={frequencyNa ? SITE_ITEM_FREQUENCY_NA : times}
+                                    options={frequencyTimesSelectOptions(30)}
+                                    onChange={(v) => {
+                                        if (v === SITE_ITEM_FREQUENCY_NA) {
+                                            updateItemFrequency(row.id, {
+                                                frequencyTimes: null,
+                                                frequencyCount: null,
+                                                frequencyPeriod: null,
+                                            });
+                                        } else {
+                                            updateItemFrequency(row.id, {
+                                                frequencyTimes: +v,
+                                                frequencyCount: perCount,
+                                                frequencyPeriod:
+                                                    period && period !== SITE_ITEM_FREQUENCY_NA
+                                                        ? period
+                                                        : 'week',
+                                            });
+                                        }
+                                    }}
+                                    style={{ width: 72 }}
+                                    aria-label="Times"
+                                />
+                                {!frequencyNa ? (
+                                    <>
+                                        <span style={{ fontSize: 12 }}>times,</span>
+                                        <span style={{ fontSize: 12 }}>per</span>
+                                        <Select
+                                            value={perCount}
+                                            options={frequencyCountOptions(30)}
+                                            onChange={(v) =>
+                                                updateItemFrequency(row.id, {
+                                                    frequencyCount: +v,
+                                                })
+                                            }
+                                            style={{ width: 56 }}
+                                            aria-label="Per interval number"
+                                        />
+                                        <Select
+                                            value={period}
+                                            options={[...SITE_ITEM_FREQUENCY_UNITS]}
+                                            onChange={(v) =>
+                                                updateItemFrequency(row.id, {
+                                                    frequencyPeriod: v,
+                                                })
+                                            }
+                                            style={{ width: 88 }}
+                                            aria-label="Period"
+                                        />
+                                    </>
+                                ) : null}
+                            </Space>
+                            <span style={{ fontSize: 12, color: '#595959', lineHeight: 1.3 }}>
+                                {formatSiteItemFrequency(
+                                    row.frequencyTimes,
+                                    row.frequencyCount,
+                                    row.frequencyPeriod,
+                                )}
+                            </span>
+                        </Space>
+                    );
+                },
+            });
+        }
+
+        cols.push({
             title: intl.formatMessage({ id: "table.column.action" }),
             width: 120,
             fixed: "right",
@@ -147,8 +256,10 @@ const Index = (props: IProps) => {
                     </Popconfirm>
                 </div>
             ),
-        },
-    ], [items, intl]);
+        });
+
+        return cols;
+    }, [items, intl, isDesktop, updateItemFrequency]);
 
     const ActionBTN = () => {
         return (<>
@@ -167,7 +278,9 @@ const Index = (props: IProps) => {
                 <ActionBtn
                     type="secondary"
                     icon={<CloseCircleOutlined />}
-                    onClick={() => dispatch({ type: actions.MODAL, payload: '' })}
+                    onClick={() =>
+                        dispatch({ type: actions.MODAL, payload: { modalType: null, row: {} } })
+                    }
                 >
                     {intl.formatMessage({ id: 'button.Close' })}
                 </ActionBtn>
@@ -175,10 +288,14 @@ const Index = (props: IProps) => {
         </>)
     }
 
+    const closeSiteModal = () => {
+        dispatch({ type: actions.MODAL, payload: { modalType: null, row: {} } });
+    };
+
     return (
         <Modal
             visible={modalType ? true : false}
-            onCancel={() => dispatch({ type: actions.MODAL, payload: null })}
+            onCancel={closeSiteModal}
             title={title}
             closable={false}
             width={'60%'}

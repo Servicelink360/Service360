@@ -13,7 +13,7 @@ export class GetSitesDto extends BaseRequest {
     @ApiProperty({
       required: false,
       default: 'createdAt',
-      description: 'createdAt | name | addressName | staffCount | customer | updatedAt | location',
+      description: 'createdAt | name | addressName | staffCount | serviceCount | customer | updatedAt | location | checkInDistance',
     })
     orderBy: string
     @ApiProperty({ required: false, default: '', enum: ['', 'TODAY'] })

@@ -5,7 +5,7 @@ import { UsersDiv } from "@app/components/common/container.style";
 import endPoint from "@app/constants/endPoint";
 import serviceType from "@app/constants/serviceType";
 import urlConfig from "@app/config/site.config";
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined, UploadOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined, UploadOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync, callAPIUploadAsync } from "../../library/helpers/api";
 import { dateFormat, dateTimeFormat } from "@app/config/data.config";
@@ -16,6 +16,7 @@ import moment from "moment";
 import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled, { createGlobalStyle, css } from "styled-components";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
+import MobileReportPdfOverlay from "@app/components/common/MobileReportPdfOverlay";
 import useMobilePortrait from "@app/lib/hooks/useMobilePortrait";
 import { useColorModeOptional } from "@app/context/ColorModeContext";
 import { useDispatch } from "react-redux";
@@ -1270,10 +1271,15 @@ const NewReports: React.FC = () => {
             ? "customerOpenedAt"
             : "staffOpenedAt";
       const now = new Date().toISOString();
-      setRows((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, [field]: r[field] || now } : r)),
-      );
-      setViewRow((prev) => (prev?.id === id ? { ...prev, [field]: prev[field] || now } : prev));
+      setRows((prev) => {
+        const target = prev.find((r) => r.id === id);
+        if (!target || target[field]) return prev;
+        return prev.map((r) => (r.id === id ? { ...r, [field]: now } : r));
+      });
+      setViewRow((prev) => {
+        if (!prev || prev.id !== id || prev[field]) return prev;
+        return { ...prev, [field]: now };
+      });
     },
     [profileType],
   );
@@ -1322,10 +1328,34 @@ const NewReports: React.FC = () => {
     [profileType, clearRowReadState, refreshDashboard],
   );
 
+  const linkedReportAutoOpenedRef = useRef<number | null>(null);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const markReportOpenedInFlightRef = useRef<Set<number>>(new Set());
+  const markReportOpenedDoneRef = useRef<Set<number>>(new Set());
+
   const markReportOpenedForViewer = useCallback(
     async (rowOrId: { id?: number } | number | null | undefined) => {
       const id = typeof rowOrId === "number" ? rowOrId : rowOrId?.id;
       if (!id) return false;
+      if (markReportOpenedDoneRef.current.has(id)) return true;
+      if (markReportOpenedInFlightRef.current.has(id)) return false;
+
+      const openedField =
+        +profileType === userType.ADMIN
+          ? "adminOpenedAt"
+          : +profileType === userType.CUSTOMER
+            ? "customerOpenedAt"
+            : +profileType === userType.STAFF
+              ? "staffOpenedAt"
+              : null;
+      const row =
+        typeof rowOrId === "number" ? rowsRef.current.find((r) => +r.id === id) : rowOrId;
+      if (openedField && row?.[openedField]) {
+        markReportOpenedDoneRef.current.add(id);
+        return true;
+      }
+
       const markPath =
         +profileType === userType.ADMIN
           ? `${endPoint.USER_TASKS}/markAdminOpened/${id}`
@@ -1335,21 +1365,27 @@ const NewReports: React.FC = () => {
               ? `${endPoint.USER_TASKS}/markStaffOpened/${id}`
               : null;
       if (!markPath) return false;
-      const res = await callAPIAsync(serviceType.COMMON, markPath, "PATCH", {});
-      if (res?.code === 1) {
-        if (
-          +profileType === userType.ADMIN ||
-          +profileType === userType.CUSTOMER ||
-          +profileType === userType.STAFF
-        ) {
-          patchRowReadState(id);
-        }
-        refreshDashboard();
-        return true;
+
+      markReportOpenedInFlightRef.current.add(id);
+      if (
+        +profileType === userType.ADMIN ||
+        +profileType === userType.CUSTOMER ||
+        +profileType === userType.STAFF
+      ) {
+        patchRowReadState(id);
       }
-      return false;
+      try {
+        const res = await callAPIAsync(serviceType.COMMON, markPath, "PATCH", {});
+        if (res?.code === 1) {
+          markReportOpenedDoneRef.current.add(id);
+          return true;
+        }
+        return false;
+      } finally {
+        markReportOpenedInFlightRef.current.delete(id);
+      }
     },
-    [profileType, refreshDashboard, patchRowReadState],
+    [profileType, patchRowReadState],
   );
 
   const linkedReportId = useMemo(() => {
@@ -1509,8 +1545,6 @@ const NewReports: React.FC = () => {
     })();
   }, [profile, refreshDashboard]);
 
-  useEffect(() => () => refreshDashboard(), [refreshDashboard]);
-
   useEffect(() => {
     const reportIdFromUrl = new URLSearchParams(location.search).get("reportId");
     if (reportIdFromUrl) {
@@ -1570,9 +1604,13 @@ const NewReports: React.FC = () => {
 
   useEffect(() => {
     if (!linkedReportId || listLoading) return;
+    if (linkedReportAutoOpenedRef.current === linkedReportId) return;
     const row = rows.find((r) => +r.id === linkedReportId);
-    if (row) scrollToHighlightedRow();
-    void markReportOpenedForViewer(linkedReportId);
+    if (row) {
+      linkedReportAutoOpenedRef.current = linkedReportId;
+      scrollToHighlightedRow();
+      void markReportOpenedForViewer(linkedReportId);
+    }
   }, [linkedReportId, listLoading, rows, scrollToHighlightedRow, markReportOpenedForViewer]);
 
   const onListFilterSiteChange = async (siteId: number | undefined) => {
@@ -4635,57 +4673,7 @@ const NewReports: React.FC = () => {
       </Modal>
 
       {isMobilePortrait && mobilePdfUrl ? (
-        <div
-          className="nr-mobile-pdf-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Report PDF"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 2500,
-            background: "#1a1a1a",
-          }}
-        >
-          <button
-            type="button"
-            aria-label="Close PDF"
-            onClick={closeMobilePdf}
-            style={{
-              position: "absolute",
-              top: "max(12px, env(safe-area-inset-top))",
-              left: "max(12px, env(safe-area-inset-left))",
-              zIndex: 2501,
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              border: "none",
-              background: "rgba(255,255,255,0.95)",
-              color: "#141414",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 26,
-              lineHeight: 1,
-              boxShadow: "0 2px 12px rgba(0,0,0,0.45)",
-              cursor: "pointer",
-              padding: 0,
-            }}
-          >
-            <CloseCircleOutlined />
-          </button>
-          <iframe
-            title="Report PDF"
-            src={mobilePdfUrl}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              border: 0,
-            }}
-          />
-        </div>
+        <MobileReportPdfOverlay url={mobilePdfUrl} onClose={closeMobilePdf} />
       ) : null}
     </Layout>
   );
