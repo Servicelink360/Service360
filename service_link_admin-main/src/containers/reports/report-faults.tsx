@@ -783,7 +783,7 @@ const ReportFaults: React.FC = () => {
     );
 
     const readStatusColumn = {
-        title: "Read",
+        title: "Status",
         key: "readStatus",
         dataIndex: "readStatus",
         width: isMobilePortrait ? 44 : 72,
@@ -895,16 +895,6 @@ const ReportFaults: React.FC = () => {
         }
 
         return [
-            ...(Number(profile?.type) !== userType.STAFF
-                ? [
-                    {
-                        title: "Customer name",
-                        dataIndex: "companyName",
-                        sorter: true,
-                        render: (_: string, r: any) => r.companyName || r.customerName || "",
-                    },
-                ]
-                : []),
             {
                 title: "Date",
                 dataIndex: "createdAt",
@@ -915,6 +905,16 @@ const ReportFaults: React.FC = () => {
                     return t ? moment(t).utcOffset(600).format(dateTimeFormat) : "—";
                 },
             },
+            ...(Number(profile?.type) !== userType.STAFF
+                ? [
+                    {
+                        title: "Customer name",
+                        dataIndex: "companyName",
+                        sorter: true,
+                        render: (_: string, r: any) => r.companyName || r.customerName || "",
+                    },
+                ]
+                : []),
             { title: "Issue", dataIndex: "issue", sorter: true, render: (_: string, r: any) => r.issue || r.subject || "—" },
             {
                 title: "Message",

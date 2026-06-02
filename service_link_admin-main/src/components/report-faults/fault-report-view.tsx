@@ -224,7 +224,7 @@ const FaultReportViewModal: React.FC<Props> = ({
         }}
       >
         {readStatusNode ? (
-          <InlineLabelValue label="Read">{readStatusNode}</InlineLabelValue>
+          <InlineLabelValue label="Status">{readStatusNode}</InlineLabelValue>
         ) : null}
         <InlineLabelValue label="Priority">
           {renderPriority(record.priority)}
