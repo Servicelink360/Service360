@@ -62,10 +62,33 @@ function* changePassword({ payload }: any) {
     yield put(actions.changePasswordFailure(error));
   }
 }
+
+function* updateNotificationSettings({ payload }: any) {
+  try {
+    const res: IData = yield callAPI(
+      serviceType.COMMON,
+      endPoint.UPDATE_NOTIFICATION_SETTINGS,
+      'PUT',
+      payload,
+    );
+    if (res && res?.code === 1) {
+      notification('success', intl.formatMessage({ id: 'notification.success' }), '');
+      yield put(actions.updateNotificationSettingsSuccess());
+    } else {
+      if (res?.message) notification('error', res?.message, '');
+      yield put(actions.updateNotificationSettingsFailure(res?.message));
+    }
+  } catch (error) {
+    notification('error', (error as Error).message, '');
+    yield put(actions.updateNotificationSettingsFailure(error));
+  }
+}
+
 export default function* profileSaga() {
   yield all([
     takeEvery(actions.FETCH_PROFILE_DATA_START, fetchProfileDataEffect),
     takeEvery(actions.CHANGE_PROFILE, updateProfile),
     takeEvery(actions.CHANGE_PASSWORD, changePassword),
+    takeEvery(actions.UPDATE_NOTIFICATION_SETTINGS, updateNotificationSettings),
   ]);
 }

@@ -7,7 +7,7 @@ import Button from '@app/components/uielements/button';
 import authAction from '@app/redux/auth/actions';
 // import appActions from '@app/redux/app/actions';
 import IntlMessages from '@app/components/utility/intlMessages';
-import logo_mini from '@app/assets/images/signin/logo.jpg'
+import logo_mini from '@app/assets/images/signin/logo.png'
 import { Form } from 'antd'
 import SignUpStyleWrapper from './SignUp.styles';
 import { useIntl } from 'react-intl'

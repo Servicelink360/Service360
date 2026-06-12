@@ -24,6 +24,15 @@ type IProps = {
     services: any
     staffs: any
 }
+function nextTempSiteItemId(items: { id?: unknown }[]): number {
+  let min = 0;
+  for (const row of items) {
+    const id = Number(row?.id);
+    if (Number.isFinite(id) && id < min) min = id;
+  }
+  return min - 1;
+}
+
 const ItemModal = (props: IProps) => {
     const { isSuccess, loadingAction, data, title, setShowModal, setChanged, services, customers, items, setItems, staffs } = props
 
@@ -114,7 +123,7 @@ const ItemModal = (props: IProps) => {
                 Service,
                 customer,
                 companyId: company?.id ?? values.customerId,
-                id: Date.now(),
+                id: nextTempSiteItemId(items),
                 frequencyTimes: null,
                 frequencyCount: null,
                 frequencyPeriod: null,

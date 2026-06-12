@@ -19,10 +19,14 @@ apply_api() {
 
 apply_admin() {
   local dir="${ARTIFACT_ROOT}/admin/build"
+  local nginx_conf="${ARTIFACT_ROOT}/admin/nginx.conf"
   [ -d "$dir" ] || { echo "missing ${dir}" >&2; exit 1; }
   echo "=== apply admin static files ==="
   docker exec "${ADMIN_CONTAINER}" sh -c 'rm -rf /usr/share/nginx/html/*'
   docker cp "${dir}/." "${ADMIN_CONTAINER}:/usr/share/nginx/html/"
+  if [ -f "$nginx_conf" ]; then
+    docker cp "$nginx_conf" "${ADMIN_CONTAINER}:/etc/nginx/conf.d/default.conf"
+  fi
   docker restart "${ADMIN_CONTAINER}" >/dev/null
   echo "=== admin live ==="
 }

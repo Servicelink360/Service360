@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Service360 | Enterprise Facility Management Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #0f5c3f;
+      --primary-dark: #0a4230;
+      --primary-light: #e1f3ed;
+      --accent: #2c7a4d;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.01);
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: white;
+      color: var(--gray-800);
+      overflow-x: hidden;
+    }
+
+    /* modern header / navbar */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      padding: 0 5%;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 22px;
+      color: white;
+      box-shadow: 0 10px 15px -6px rgba(15, 92, 63, 0.2);
+    }
+
+    .logo-text h2 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--gray-900);
+    }
+
+    .logo-text span {
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--gray-600);
+      letter-spacing: 0.02em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--gray-700);
+      transition: 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--primary);
+    }
+
+    .btn-outline {
+      border: 1.5px solid var(--gray-200);
+      background: transparent;
+      padding: 8px 20px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 40px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: 0.2s;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+    }
+
+    /* hero section */
+    .hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 40px;
+      padding: 80px 5% 70px;
+      background: linear-gradient(135deg, #f9fefb 0%, #ffffff 100%);
+    }
+
+    .hero-content {
+      flex: 1;
+      max-width: 600px;
+    }
+
+    .badge {
+      background: var(--primary-light);
+      padding: 5px 14px;
+      border-radius: 50px;
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin-bottom: 24px;
+      letter-spacing: 0.01em;
+    }
+
+    .hero-content h1 {
+      font-size: 3.4rem;
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      color: var(--gray-900);
+      margin-bottom: 20px;
+    }
+
+    .hero-highlight {
+      color: var(--primary);
+      border-bottom: 3px solid var(--primary-light);
+    }
+
+    .hero-description {
+      font-size: 1.08rem;
+      color: var(--gray-600);
+      line-height: 1.6;
+      margin-bottom: 32px;
+      max-width: 540px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .hero-visual {
+      flex: 1;
+      background: var(--gray-50);
+      border-radius: 32px;
+      padding: 20px;
+      box-shadow: var(--shadow-xl);
+      border: 1px solid rgba(0, 0, 0, 0.03);
+      background: linear-gradient(145deg, #ffffff, #fafcfb);
+    }
+
+    .dashboard-mock {
+      background: white;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.1);
+      border: 1px solid var(--gray-200);
+    }
+
+    .mock-header {
+      background: var(--gray-100);
+      padding: 14px 20px;
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .mock-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #cbd5e1;
+    }
+
+    .mock-content {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .mock-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .mock-bar {
+      height: 42px;
+      background: var(--primary-light);
+      border-radius: 12px;
+      width: 100%;
+    }
+
+    .mock-small {
+      background: var(--gray-200);
+      border-radius: 12px;
+      height: 38px;
+      flex: 1;
+    }
+
+    .insight {
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .mock-card {
+      background: #f9f9ff;
+      border-radius: 18px;
+      height: 90px;
+      flex: 1;
+      border: 1px solid var(--gray-200);
+    }
+
+    /* platform values */
+    .section {
+      padding: 80px 5%;
+    }
+
+    .section-light {
+      background: var(--gray-50);
+    }
+
+    .section-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 56px;
+    }
+
+    .section-header h3 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+      color: var(--gray-900);
+    }
+
+    .section-header p {
+      font-size: 1rem;
+      color: var(--gray-600);
+      line-height: 1.6;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 32px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .feature-card {
+      background: white;
+      border-radius: 28px;
+      padding: 32px 24px;
+      transition: all 0.25s ease;
+      border: 1px solid var(--gray-200);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--primary-light);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      background: var(--primary-light);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      font-size: 28px;
+      color: var(--primary);
+    }
+
+    .feature-card h4 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .feature-card p {
+      color: var(--gray-600);
+      line-height: 1.5;
+      font-size: 0.9rem;
+    }
+
+    /* industries / trust */
+    .trust-row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 48px;
+      margin-top: 48px;
+      align-items: center;
+    }
+
+    .trust-item {
+      font-weight: 600;
+      color: var(--gray-700);
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .testimonial {
+      background: var(--primary);
+      color: white;
+      border-radius: 32px;
+      padding: 48px 36px;
+      text-align: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .testimonial i {
+      font-size: 2rem;
+      opacity: 0.7;
+      margin-bottom: 20px;
+    }
+
+    .testimonial p {
+      font-size: 1.2rem;
+      line-height: 1.5;
+      font-weight: 500;
+      max-width: 700px;
+      margin: 0 auto 24px;
+    }
+
+    .cta-section {
+      background: linear-gradient(120deg, #0e2b24, #0a4230);
+      border-radius: 48px;
+      margin: 0 5% 60px;
+      padding: 64px 48px;
+      text-align: center;
+      color: white;
+    }
+
+    .cta-section h3 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      opacity: 0.9;
+      margin-bottom: 32px;
+      max-width: 540px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .btn-white {
+      background: white;
+      color: var(--primary-dark);
+      border: none;
+      padding: 12px 32px;
+      border-radius: 60px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    footer {
+      background: var(--gray-900);
+      color: #9ca3af;
+      padding: 56px 5% 32px;
+    }
+
+    .footer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 32px;
+      max-width: 1200px;
+      margin: 0 auto 48px;
+    }
+
+    .footer-col h5 {
+      color: white;
+      font-weight: 700;
+      margin-bottom: 20px;
+      font-size: 0.85rem;
+    }
+
+    .footer-col a {
+      display: block;
+      color: #9ca3af;
+      text-decoration: none;
+      font-size: 0.8rem;
+      margin-bottom: 12px;
+    }
+
+    .footer-bottom {
+      text-align: center;
+      padding-top: 32px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.75rem;
+    }
+
+    @media (max-width: 860px) {
+      .hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 48px 5%;
+      }
+      .hero-content h1 {
+        font-size: 2.4rem;
+      }
+      .hero-buttons {
+        justify-content: center;
+      }
+      .nav-links {
+        display: none;
+      }
+      .navbar {
+        height: 70px;
+      }
+      .section-header h3 {
+        font-size: 1.7rem;
+      }
+      .cta-section {
+        padding: 40px 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">
+      <div class="logo-icon">360°</div>
+      <div class="logo-text">
+        <h2>Service360</h2>
+        <span>Facility Management Platform</span>
+      </div>
+    </div>
+    <div class="nav-links">
+      <a href="#">Platform</a>
+      <a href="#">Solutions</a>
+      <a href="#">Industries</a>
+      <a href="#">Resources</a>
+      <a href="#">Contact</a>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button class="btn-outline" id="demoLoginBtn">Sign in</button>
+      <button class="btn-primary" id="demoRequestBtn">Request demo</button>
+    </div>
+  </nav>
+
+  <main>
+    <!-- Hero section: external facing, no internal dashboard complexity, just a mock visual -->
+    <div class="hero">
+      <div class="hero-content">
+        <span class="badge"><i class="fas fa-chart-line"></i> Next‑gen facility ops</span>
+        <h1>Command your facilities with <span class="hero-highlight">360° intelligence</span></h1>
+        <p class="hero-description">
+          Service360 empowers property leaders, facility managers, and service partners to streamline maintenance, compliance, and asset performance — all from a single cloud platform.
+        </p>
+        <div class="hero-buttons">
+          <button class="btn-primary" id="heroCta">Start free trial →</button>
+          <button class="btn-outline" id="heroTourBtn"><i class="fas fa-play"></i> Watch demo</button>
+        </div>
+        <div class="trust-row" style="justify-content: flex-start; margin-top: 36px;">
+          <div class="trust-item"><i class="fas fa-check-circle" style="color: var(--primary);"></i> ISO 27001</div>
+          <div class="trust-item"><i class="fas fa-shield-alt"></i> SOC 2 Type II</div>
+          <div class="trust-item"><i class="fas fa-cloud-upload-alt"></i> 99.9% SLA</div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="dashboard-mock">
+          <div class="mock-header">
+            <div class="mock-dot"></div><div class="mock-dot"></div><div class="mock-dot"></div>
+          </div>
+          <div class="mock-content">
+            <div class="mock-row"><div class="mock-bar" style="width: 70%;"></div><div class="mock-small"></div></div>
+            <div class="insight">
+              <div class="mock-card"></div><div class="mock-card"></div>
+            </div>
+            <div class="mock-row"><div class="mock-small"></div><div class="mock-bar" style="width: 50%;"></div></div>
+            <div style="display: flex; justify-content: flex-end;"><div style="width: 90px; height: 28px; background: var(--primary-light); border-radius: 30px;"></div></div>
+          </div>
+        </div>
+        <p style="text-align: center; margin-top: 18px; font-size: 0.7rem; color: var(--gray-600);"><i class="fas fa-chart-simple"></i> Unified view: work orders, assets, inspections</p>
+      </div>
+    </div>
+
+    <!-- Key features / value props (no internal guts, just marketing) -->
+    <div class="section">
+      <div class="section-header">
+        <h3>Everything you need to run world‑class facilities</h3>
+        <p>From multi‑site portfolios to compliance management — Service360 centralizes data and drives efficiency.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fas fa-building"></i></div>
+          <h4>Multi‑site command</h4>
+          <p>Manage hundreds of properties, zones, and assets in one secure workspace. Perfect for enterprises and contractors.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fas fa-clipboard-list"></i></div>
+          <h4>Intelligent work orders</h4>
+          <p>Automated assignment, real‑time status tracking, SLA monitoring, and mobile‑ready field execution.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fas fa-chart-pie"></i></div>
+          <h4>Analytics & forecasts</h4>
+          <p>Predictive maintenance dashboards, cost trends, and compliance heatmaps — data‑driven decisions.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
+          <h4>Risk & compliance</h4>
+          <p>Automated inspection checklists, audit trails, certifications, and regulator‑ready reports.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fas fa-people-arrows"></i></div>
+          <h4>Partner ecosystem</h4>
+          <p>Onboard vendors, contractors and tenants with role‑based portals and service‑level agreements.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon"><i class="fas fa-mobile-alt"></i></div>
+          <h4>Mobile field suite</h4>
+          <p>Empower technicians with offline access, photo capture, and real‑time sync for any job.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Industries / Use cases -->
+    <div class="section section-light">
+      <div class="section-header">
+        <h3>Trusted across sectors</h3>
+        <p>Designed for the complexity of modern facility operations.</p>
+      </div>
+      <div class="features-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+        <div class="feature-card" style="text-align: center;"><i class="fas fa-city" style="font-size: 32px; color: var(--primary); margin-bottom: 12px;"></i><h4>Corporate Real Estate</h4><p style="font-size: 0.8rem;">Portfolio optimization, energy monitoring, space management</p></div>
+        <div class="feature-card" style="text-align: center;"><i class="fas fa-school" style="font-size: 32px; color: var(--primary); margin-bottom: 12px;"></i><h4>Education & Public</h4><p style="font-size: 0.8rem;">Campus maintenance, safety inspections, budget transparency</p></div>
+        <div class="feature-card" style="text-align: center;"><i class="fas fa-warehouse" style="font-size: 32px; color: var(--primary); margin-bottom: 12px;"></i><h4>Logistics & Industrial</h4><p style="font-size: 0.8rem;">Asset uptime, preventive schedules, compliance documentation</p></div>
+        <div class="feature-card" style="text-align: center;"><i class="fas fa-hospital" style="font-size: 32px; color: var(--primary); margin-bottom: 12px;"></i><h4>Healthcare</h4><p style="font-size: 0.8rem;">Critical environment monitoring, regulatory adherence</p></div>
+      </div>
+    </div>
+
+    <!-- Testimonial / trust -->
+    <div class="section">
+      <div class="testimonial">
+        <i class="fas fa-quote-right"></i>
+        <p>“Service360 gave us end‑to‑end visibility across 120+ locations. Our response time improved by 43% and we finally consolidated spreadsheets into a single source of truth.”</p>
+        <div style="font-weight: 600;">— Elena Marchetti, Director of Facilities, NexGen Properties</div>
+        <div style="font-size: 0.7rem; margin-top: 8px; opacity: 0.7;">Enterprise customer since 2024</div>
+      </div>
+    </div>
+
+    <!-- call to action: platform demo -->
+    <div class="cta-section">
+      <h3>Ready to transform your facility operations?</h3>
+      <p>Join hundreds of organizations using Service360 to reduce costs, improve uptime, and exceed compliance.</p>
+      <button class="btn-white" id="ctaFooterBtn"><i class="fas fa-calendar-check"></i> Get a personalized demo</button>
+      <div style="margin-top: 24px; font-size: 0.7rem;">No credit card required · Free 30‑day trial available</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h5>Platform</h5>
+        <a href="#">Work order management</a>
+        <a href="#">Asset lifecycle</a>
+        <a href="#">Inspections & compliance</a>
+        <a href="#">Analytics & reports</a>
+      </div>
+      <div class="footer-col">
+        <h5>Solutions</h5>
+        <a href="#">Facility managers</a>
+        <a href="#">Property owners</a>
+        <a href="#">Service contractors</a>
+        <a href="#">Public sector</a>
+      </div>
+      <div class="footer-col">
+        <h5>Resources</h5>
+        <a href="#">Case studies</a>
+        <a href="#">Help center</a>
+        <a href="#">API documentation</a>
+        <a href="#">System status</a>
+      </div>
+      <div class="footer-col">
+        <h5>Company</h5>
+        <a href="#">About Service360</a>
+        <a href="#">Careers</a>
+        <a href="#">Press</a>
+        <a href="#">Contact sales</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 Service360 — Enterprise Facility Management Cloud. All rights reserved. Mock interface for demonstration.</p>
+      <div style="margin-top: 12px; display: flex; gap: 24px; justify-content: center;">
+        <a href="#" style="color: #9ca3af; text-decoration: none; font-size: 0.7rem;">Privacy</a>
+        <a href="#" style="color: #9ca3af; text-decoration: none; font-size: 0.7rem;">Terms</a>
+        <a href="#" style="color: #9ca3af; text-decoration: none; font-size: 0.7rem;">GDPR</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Simple mock modal for "demo mode" - simulate real actions without exposing internal dashboard
+    (function() {
+      // Create modal overlay (lightweight)
+      const modalOverlay = document.createElement('div');
+      modalOverlay.id = 'mockGlobalModal';
+      modalOverlay.style.position = 'fixed';
+      modalOverlay.style.top = '0';
+      modalOverlay.style.left = '0';
+      modalOverlay.style.width = '100%';
+      modalOverlay.style.height = '100%';
+      modalOverlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+      modalOverlay.style.display = 'none';
+      modalOverlay.style.alignItems = 'center';
+      modalOverlay.style.justifyContent = 'center';
+      modalOverlay.style.zIndex = '1000';
+      modalOverlay.style.backdropFilter = 'blur(4px)';
+      
+      const modalCard = document.createElement('div');
+      modalCard.style.backgroundColor = '#fff';
+      modalCard.style.maxWidth = '420px';
+      modalCard.style.width = '90%';
+      modalCard.style.borderRadius = '32px';
+      modalCard.style.padding = '28px 24px';
+      modalCard.style.textAlign = 'center';
+      modalCard.style.boxShadow = '0 40px 70px rgba(0,0,0,0.2)';
+      modalCard.innerHTML = `
+        <i class="fas fa-chalkboard-user" style="font-size: 3rem; color: #0f5c3f; margin-bottom: 16px;"></i>
+        <h3 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 12px;" id="mockModalTitle">Service360 Demo</h3>
+        <p style="color: #4b5563; line-height: 1.5; margin-bottom: 24px;" id="mockModalMsg">This is a mock facility management homepage. Explore our platform capabilities.</p>
+        <button id="closeMockModalBtn" style="background: #0f5c3f; color: white; border: none; padding: 10px 24px; border-radius: 80px; font-weight: 600; cursor: pointer;">Continue exploring</button>
+      `;
+      modalOverlay.appendChild(modalCard);
+      document.body.appendChild(modalOverlay);
+      
+      function showMockMessage(title, msg) {
+        document.getElementById('mockModalTitle').innerText = title;
+        document.getElementById('mockModalMsg').innerHTML = msg;
+        modalOverlay.style.display = 'flex';
+      }
+      
+      document.getElementById('closeMockModalBtn').addEventListener('click', () => {
+        modalOverlay.style.display = 'none';
+      });
+      modalOverlay.addEventListener('click', (e) => {
+        if(e.target === modalOverlay) modalOverlay.style.display = 'none';
+      });
+      
+      // attach interactivity to buttons – all mock actions with professional FMS messaging
+      const btns = [
+        { id: 'demoLoginBtn', title: 'Secure sign in', msg: 'Access your facility workspace. This is a mock demo — real platform includes SSO, MFA, and role‑based dashboards for each organisation.' },
+        { id: 'demoRequestBtn', title: 'Request a demo', msg: 'Our team will show you how Service360 streamlines work orders, compliance, and asset performance. (Mock simulation — thank you for your interest!)' },
+        { id: 'heroCta', title: 'Start free trial', msg: 'Experience next‑gen facility management. Mock demo: In production, start a 30‑day trial with full access to scheduling, inspections, and reporting.' },
+        { id: 'heroTourBtn', title: 'Watch platform tour', msg: 'Explore the core modules: work order automation, site portfolio, and analytics. Video walkthrough available on request (mock environment).' },
+        { id: 'ctaFooterBtn', title: 'Personalized demo', msg: 'Connect with a facilities expert. Service360 helps enterprises reduce operational downtime by 32% on average — mock interaction.' }
+      ];
+      
+      btns.forEach(btn => {
+        const el = document.getElementById(btn.id);
+        if(el) {
+          el.addEventListener('click', (e) => {
+            e.preventDefault();
+            showMockMessage(btn.title, btn.msg);
+          });
+        }
+      });
+      
+      // any additional nav links can be mock demo
+      const navMockLinks = document.querySelectorAll('.nav-links a');
+      navMockLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          showMockMessage('Explore Service360', 'Our platform delivers end‑to‑end facility management — from asset registry to compliance reporting. This is a marketing homepage mockup.');
+        });
+      });
+      
+      // footer links
+      const footerLinks = document.querySelectorAll('.footer-col a');
+      footerLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          showMockMessage('Service360 Resources', 'Access detailed whitepapers, case studies, and API docs via our resource center. (Demo environment)');
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

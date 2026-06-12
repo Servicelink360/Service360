@@ -41,7 +41,7 @@ const Index = (props: IProps) => {
 
     useEffect(() => {
         getDataInit()
-    }, [])
+    }, [getDataInit])
 
     useEffect(() => {
         if (isSuccess) {

@@ -58,6 +58,21 @@ export class Customer {
     @Column({ name: 'company_email' })
     companyEmail: string
 
+    /** Opt-in: email for non-urgent fault reports. */
+    @Column({ name: 'email_notify_normal_fault_reports', default: false })
+    emailNotifyNormalFaultReports: boolean
+
+    /** Opt-in: email for urgent (priority 1) fault reports. */
+    @Column({ name: 'email_notify_urgent_fault_reports', default: false })
+    emailNotifyUrgentFaultReports: boolean
+
+    /** Opt-in: email when a new submitted report is available. */
+    @Column({ name: 'email_notify_new_reports', default: false })
+    emailNotifyNewReports: boolean
+
+    /** Opt-in: email when Servicelink/staff sends an in-app message. */
+    @Column({ name: 'email_notify_messages', default: false })
+    emailNotifyMessages: boolean
 
 
 }

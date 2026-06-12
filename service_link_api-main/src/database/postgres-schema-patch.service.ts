@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,12 +9,12 @@ import { DataSource } from 'typeorm';
  * Fixes: column items.required does not exist (relation alias `items` = report_template_items).
  */
 @Injectable()
-export class PostgresSchemaPatchService implements OnApplicationBootstrap {
+export class PostgresSchemaPatchService implements OnModuleInit {
   private readonly logger = new Logger(PostgresSchemaPatchService.name);
 
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
-  async onApplicationBootstrap(): Promise<void> {
+  async onModuleInit(): Promise<void> {
     const opts = this.dataSource.options;
     if (opts.type !== 'postgres') return;
 
@@ -206,7 +206,10 @@ export class PostgresSchemaPatchService implements OnApplicationBootstrap {
     await this.ensureUserTaskCustomerVisibilityTable();
     await this.ensureAdminDashboardBadgeVisibilityTables();
     await this.ensureReportFaultCustomerVisibilityTable();
+    await this.ensureTicketVisibilityTables();
     await this.applyCustomerOpenedAtBackfillFromLegacy();
+    await this.applyCustomerEmailNotificationPrefs();
+    await this.applyCustomerFaultNotificationSubtypes();
     await this.repairCustomerReadStateFromLegacy();
     await this.ensureDashboardUnreadIndexes();
 
@@ -733,6 +736,48 @@ export class PostgresSchemaPatchService implements OnApplicationBootstrap {
     }
   }
 
+  private async ensureTicketVisibilityTables(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.ticket_admin_visibility (
+          id SERIAL PRIMARY KEY,
+          ticket_id INTEGER NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL,
+          badge_dismissed_at TIMESTAMP NULL,
+          UNIQUE (ticket_id, user_id)
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_tav_user_id
+          ON public.ticket_admin_visibility(user_id);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_tav_ticket_id
+          ON public.ticket_admin_visibility(ticket_id);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.ticket_customer_visibility (
+          id SERIAL PRIMARY KEY,
+          ticket_id INTEGER NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL,
+          badge_dismissed_at TIMESTAMP NULL,
+          UNIQUE (ticket_id, user_id)
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_tcv_user_id
+          ON public.ticket_customer_visibility(user_id);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_tcv_ticket_id
+          ON public.ticket_customer_visibility(ticket_id);
+      `);
+      this.logger.log('ticket visibility tables ensured.');
+    } catch (e) {
+      this.logger.warn(`ticket visibility tables: ${(e as Error).message}`);
+    }
+  }
+
   private async ensureReportFaultCustomerVisibilityTable(): Promise<void> {
     try {
       await this.dataSource.query(`
@@ -838,6 +883,80 @@ export class PostgresSchemaPatchService implements OnApplicationBootstrap {
       this.logger.log('customer_opened_at backfill into visibility tables applied.');
     } catch (e) {
       this.logger.warn(`customer_opened visibility backfill: ${(e as Error).message}`);
+    }
+  }
+
+  private async applyCustomerEmailNotificationPrefs(): Promise<void> {
+    const patchName = 'customer_email_notification_prefs_v1';
+    try {
+      const existing = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (Array.isArray(existing) && existing.length > 0) {
+        return;
+      }
+      await this.dataSource.query(`
+        ALTER TABLE public.customers
+          ADD COLUMN IF NOT EXISTS email_notify_fault_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customers
+          ADD COLUMN IF NOT EXISTS email_notify_urgent_faults_only BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customers
+          ADD COLUMN IF NOT EXISTS email_notify_new_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customers
+          ADD COLUMN IF NOT EXISTS email_notify_messages BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('customer email notification preference columns ensured.');
+    } catch (e) {
+      this.logger.warn(`customer email notification prefs: ${(e as Error).message}`);
+    }
+  }
+
+  private async applyCustomerFaultNotificationSubtypes(): Promise<void> {
+    const patchName = 'customer_fault_notification_subtypes_v1';
+    try {
+      const existing = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (Array.isArray(existing) && existing.length > 0) {
+        return;
+      }
+      await this.dataSource.query(`
+        ALTER TABLE public.customers
+          ADD COLUMN IF NOT EXISTS email_notify_normal_fault_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customers
+          ADD COLUMN IF NOT EXISTS email_notify_urgent_fault_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        UPDATE public.customers
+        SET
+          email_notify_normal_fault_reports = COALESCE(email_notify_fault_reports, FALSE)
+            AND NOT COALESCE(email_notify_urgent_faults_only, FALSE),
+          email_notify_urgent_fault_reports = COALESCE(email_notify_fault_reports, FALSE)
+        WHERE COALESCE(email_notify_fault_reports, FALSE) = TRUE
+          AND email_notify_normal_fault_reports = FALSE
+          AND email_notify_urgent_fault_reports = FALSE;
+      `);
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('customer fault notification normal/urgent subtypes applied.');
+    } catch (e) {
+      this.logger.warn(`customer fault notification subtypes: ${(e as Error).message}`);
     }
   }
 
@@ -1117,9 +1236,145 @@ export class PostgresSchemaPatchService implements OnApplicationBootstrap {
         ALTER TABLE public.site_items
         ADD COLUMN IF NOT EXISTS frequency_times INT NULL;
       `);
+      await this.dataSource.query(`
+        ALTER TABLE public.site_items
+        ADD COLUMN IF NOT EXISTS frequency_mode VARCHAR(16) NULL;
+      `);
       this.logger.log('site_items frequency columns ensured');
     } catch (e) {
       this.logger.warn(`site_items frequency patch: ${(e as Error).message}`);
+    }
+
+    await this.ensureServiceFrequencyTypeColumn();
+    await this.ensureSiteItemFrequencyTypeColumn();
+    await this.ensureSiteItemActivityNameColumn();
+    await this.ensureGroundMaintenanceScheduleConstraints();
+  }
+
+  private async ensureServiceFrequencyTypeColumn(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE public.services
+        ADD COLUMN IF NOT EXISTS frequency_type VARCHAR(16) NOT NULL DEFAULT 'simple';
+      `);
+      await this.dataSource.query(`
+        UPDATE public.services SET frequency_type = 'detailed'
+        WHERE LOWER(TRIM(name)) = 'ground maintenance'
+          AND frequency_type = 'simple';
+      `);
+      await this.dataSource.query(`
+        UPDATE public.services SET frequency_type = 'simple'
+        WHERE LOWER(TRIM(name)) IN ('roof and gutter', 'roof and gutter cleaning')
+          AND frequency_type <> 'simple';
+      `);
+      this.logger.log('services.frequency_type ensured');
+    } catch (e) {
+      this.logger.warn(`services frequency_type patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureSiteItemFrequencyTypeColumn(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE public.site_items
+        ADD COLUMN IF NOT EXISTS frequency_type VARCHAR(16) NULL;
+      `);
+      this.logger.log('site_items.frequency_type ensured');
+    } catch (e) {
+      this.logger.warn(`site_items frequency_type patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureSiteItemActivityNameColumn(): Promise<void> {
+    try {
+      const table = await this.dataSource.query(`
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'site_item_activity_schedules'
+        LIMIT 1
+      `);
+      if (!table?.length) return;
+
+      await this.dataSource.query(`
+        ALTER TABLE public.site_item_activity_schedules
+        ADD COLUMN IF NOT EXISTS activity_name VARCHAR(255) NULL;
+      `);
+      await this.dataSource.query(`
+        UPDATE public.site_item_activity_schedules s
+        SET activity_name = a.name
+        FROM public.service_activities a
+        WHERE a.id = s.activity_id
+          AND (s.activity_name IS NULL OR TRIM(s.activity_name) = '');
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.site_item_activity_schedules
+        DROP CONSTRAINT IF EXISTS uq_site_item_activity_schedules;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.site_item_activity_schedules
+        ALTER COLUMN activity_id DROP NOT NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sias_site_item_activity_name
+        ON public.site_item_activity_schedules (site_item_id, LOWER(TRIM(activity_name)))
+        WHERE activity_name IS NOT NULL AND TRIM(activity_name) <> '';
+      `);
+      this.logger.log('site_item_activity_schedules.activity_name ensured');
+    } catch (e) {
+      this.logger.warn(`site item activity_name patch: ${(e as Error).message}`);
+    }
+  }
+
+  /** weekly/monthly/fortnight/daily month cells — replaces legacy once-only checks. */
+  private async ensureGroundMaintenanceScheduleConstraints(): Promise<void> {
+    try {
+      const table = await this.dataSource.query(`
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'site_item_activity_schedules'
+        LIMIT 1
+      `);
+      if (!table?.length) return;
+
+      for (let m = 1; m <= 12; m += 1) {
+        const col = String(m).padStart(2, '0');
+        await this.dataSource.query(
+          `ALTER TABLE public.site_item_activity_schedules DROP CONSTRAINT IF EXISTS chk_sias_month_${col}`,
+        );
+      }
+
+      await this.dataSource.query(`
+        UPDATE public.site_item_activity_schedules SET
+          month_01 = CASE month_01 WHEN 'once' THEN 'weekly' ELSE month_01 END,
+          month_02 = CASE month_02 WHEN 'once' THEN 'weekly' ELSE month_02 END,
+          month_03 = CASE month_03 WHEN 'once' THEN 'weekly' ELSE month_03 END,
+          month_04 = CASE month_04 WHEN 'once' THEN 'weekly' ELSE month_04 END,
+          month_05 = CASE month_05 WHEN 'once' THEN 'weekly' ELSE month_05 END,
+          month_06 = CASE month_06 WHEN 'once' THEN 'weekly' ELSE month_06 END,
+          month_07 = CASE month_07 WHEN 'once' THEN 'weekly' ELSE month_07 END,
+          month_08 = CASE month_08 WHEN 'once' THEN 'weekly' ELSE month_08 END,
+          month_09 = CASE month_09 WHEN 'once' THEN 'weekly' ELSE month_09 END,
+          month_10 = CASE month_10 WHEN 'once' THEN 'weekly' ELSE month_10 END,
+          month_11 = CASE month_11 WHEN 'once' THEN 'weekly' ELSE month_11 END,
+          month_12 = CASE month_12 WHEN 'once' THEN 'weekly' ELSE month_12 END
+      `);
+
+      await this.dataSource.query(`
+        ALTER TABLE public.site_item_activity_schedules
+          ADD CONSTRAINT chk_sias_month_01 CHECK (month_01 IS NULL OR month_01 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_02 CHECK (month_02 IS NULL OR month_02 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_03 CHECK (month_03 IS NULL OR month_03 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_04 CHECK (month_04 IS NULL OR month_04 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_05 CHECK (month_05 IS NULL OR month_05 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_06 CHECK (month_06 IS NULL OR month_06 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_07 CHECK (month_07 IS NULL OR month_07 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_08 CHECK (month_08 IS NULL OR month_08 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_09 CHECK (month_09 IS NULL OR month_09 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_10 CHECK (month_10 IS NULL OR month_10 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_11 CHECK (month_11 IS NULL OR month_11 IN ('weekly', 'monthly', 'fortnight', 'daily')),
+          ADD CONSTRAINT chk_sias_month_12 CHECK (month_12 IS NULL OR month_12 IN ('weekly', 'monthly', 'fortnight', 'daily'))
+      `);
+      this.logger.log('site_item_activity_schedules month constraints ensured (weekly/monthly/fortnight/daily)');
+    } catch (e) {
+      this.logger.warn(`ground maintenance schedule constraints patch: ${(e as Error).message}`);
     }
   }
 

@@ -1,11 +1,18 @@
-// Some dependencies still expect a Node-like `process.env` in the browser.
-// CRA used to shim this; newer bundlers may not.
+// Browser shim for deps / dev overlay that read `process.env` (no npm `process` import).
 export {};
 
-if (typeof window !== 'undefined') {
-  const g = globalThis as unknown as { process?: { env?: Record<string, any> } };
-  if (!g.process) g.process = { env: {} };
-  if (!g.process.env) g.process.env = {};
-  // Keep common fields some libs read.
-  if (g.process.env.NODE_ENV == null) g.process.env.NODE_ENV = 'development';
-}
+(function installProcessShim() {
+  if (typeof globalThis === 'undefined') return;
+  const root = globalThis as { process?: { env: Record<string, string | undefined> } };
+  if (!root.process) {
+    root.process = { env: { NODE_ENV: 'development' } };
+    return;
+  }
+  if (!root.process.env) {
+    root.process.env = { NODE_ENV: 'development' };
+    return;
+  }
+  if (root.process.env.NODE_ENV == null) {
+    root.process.env = { ...root.process.env, NODE_ENV: 'development' };
+  }
+})();

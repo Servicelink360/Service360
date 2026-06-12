@@ -23,6 +23,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { SignUpDto } from '../auth/dto/sign-up.dto';
 import { SendMail } from '../helpers/sendEmail';
+import { emailSignInUrl, emailSupportFooterHtml } from '../helpers/emailContent';
 import { v4 as uuidv4 } from 'uuid';
 import { Chr6, makeOTP } from '../helpers/util';
 import { ForgotPassword2Dto, ForgotPasswordDto } from '../auth/dto/forgot-password.dto';
@@ -36,6 +37,7 @@ import { Customer } from './entities/customer.entity';
 import { CustomerCompany } from './entities/customer-company.entity';
 import { Staff } from './entities/staff.entity';
 import { SettingsService } from '../settings/settings.service';
+import { UpdateCustomerNotificationDto } from './dto/update-customer-notification.dto';
 @Injectable()
 export class UsersService {
   /** Login identifier stored in `users.username`; always mirrors email when email is set. */
@@ -212,6 +214,12 @@ export class UsersService {
     user.customerInfo.companyName = this.sanitizeCompanyDisplayName(
       user.customerInfo.companyName || user.fullName,
     );
+    (user as User & { notificationPrefs?: Record<string, boolean> }).notificationPrefs = {
+      emailNotifyNormalFaultReports: !!user.customerInfo.emailNotifyNormalFaultReports,
+      emailNotifyUrgentFaultReports: !!user.customerInfo.emailNotifyUrgentFaultReports,
+      emailNotifyNewReports: !!user.customerInfo.emailNotifyNewReports,
+      emailNotifyMessages: !!user.customerInfo.emailNotifyMessages,
+    };
     return user;
   }
 
@@ -476,6 +484,42 @@ export class UsersService {
     }
   }
 
+  async updateCustomerNotificationSettings(
+    userId: number,
+    body: UpdateCustomerNotificationDto,
+  ) {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['customerInfo'],
+      });
+      if (!user || +user.type !== userType.CUSTOMER || !user.customerInfo) {
+        return {
+          ...errorCode.VALIDATION_ERROR,
+          message: 'Email notification settings are only available for customer accounts',
+        };
+      }
+      const info = user.customerInfo;
+      if (body.emailNotifyNormalFaultReports !== undefined) {
+        info.emailNotifyNormalFaultReports = !!body.emailNotifyNormalFaultReports;
+      }
+      if (body.emailNotifyUrgentFaultReports !== undefined) {
+        info.emailNotifyUrgentFaultReports = !!body.emailNotifyUrgentFaultReports;
+      }
+      if (body.emailNotifyNewReports !== undefined) {
+        info.emailNotifyNewReports = !!body.emailNotifyNewReports;
+      }
+      if (body.emailNotifyMessages !== undefined) {
+        info.emailNotifyMessages = !!body.emailNotifyMessages;
+      }
+      await this.userRepository.manager.getRepository(Customer).save(info);
+      return this.profile(userId);
+    } catch (error) {
+      this.logger.error(error);
+      return errorCode.EXCEPTION;
+    }
+  }
+
   createQueryGetAll(userInfo: IUserInfo, body: GetUsersDto) {
     const roleUser = userInfo.roleIds.find(c => c === 'USER');
     const query = this.userRepository.createQueryBuilder('users');
@@ -634,9 +678,8 @@ export class UsersService {
           <p>Your account:</p>
           <p>email (login): <b>${body.email}</b></p>
           <p>password: <b>${body.password}</b></p>
-          <p>link: <b>http://3.104.215.45:8002/signin</b></p>
-          <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-          <p>ServiceLink Support Team</p>`
+          <p>link: <b>${emailSignInUrl()}</b></p>
+          ${emailSupportFooterHtml()}`
           SendMail(body.email, "Your Account", html);
         }
         if (body.userRoles) {
@@ -830,9 +873,22 @@ export class UsersService {
 
   async forgotPassword(body: ForgotPassword2Dto) {
     try {
-      const user = await this.userRepository.createQueryBuilder('users')
-        .where(" ((phone = :phone AND  phone IS NOT NULL) and email = :email)", { phone: body.phone, email: body.email })
-        .getOne();
+      const email = (body.email || '').trim().toLowerCase();
+      const phone = (body.phone || '').trim();
+      if (!email) {
+        return errorCode.NOT_FOUND;
+      }
+
+      const qb = this.userRepository
+        .createQueryBuilder('users')
+        .where('users.status = :status', { status: userStatus.ACTIVE })
+        .andWhere('LOWER(TRIM(users.email)) = :email', { email });
+
+      if (phone) {
+        qb.andWhere('users.phone = :phone AND users.phone IS NOT NULL', { phone });
+      }
+
+      const user = await qb.getOne();
       if (!user) {
         return errorCode.NOT_FOUND;
       }
@@ -848,7 +904,7 @@ export class UsersService {
       const t = new Date();
       t.setSeconds(t.getSeconds() + 5 * 60);
       const newUserToken = new UserToken();
-      newUserToken.os = body.platform;
+      newUserToken.os = body.platform || 'web';
       newUserToken.userKey = user.id.toString();
       newUserToken.createdAt = new Date();
       newUserToken.updatedAt = new Date();
@@ -861,8 +917,7 @@ export class UsersService {
         <p>Hello ${user.email},</p>
         <p>The system has just created an OTP code to update the new password.</p>
         <p>Your confirmation code is <b>${newUserToken.token}</b></p>
-        <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-        <p>ServiceLink Support Team</p>`
+        ${emailSupportFooterHtml()}`
       SendMail(user.email, "Forgot Password", html);
       return errorCode.SUCCESS;
 
@@ -876,8 +931,13 @@ export class UsersService {
 
   async forgotPasswordAdmin(body: ForgotPasswordDto) {
     try {
+      const email = (body.email || '').trim().toLowerCase();
+      if (!email) {
+        return errorCode.NOT_FOUND;
+      }
       const user = await this.userRepository.createQueryBuilder('users')
-        .where(" ( email = :email)", { email: body.email,status:userStatus.ACTIVE })
+        .where('users.status = :status', { status: userStatus.ACTIVE })
+        .andWhere('LOWER(TRIM(users.email)) = :email', { email })
         .getOne();
       if (!user) {
         return errorCode.NOT_FOUND;
@@ -907,8 +967,7 @@ export class UsersService {
         <p>Hello ${user.email},</p>
         <p>The system has just created an OTP code to update the new password.</p>
         <p>Your confirmation code is <b>${newUserToken.token}</b></p>
-        <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-        <p>ServuceLink Support Team</p>`
+        ${emailSupportFooterHtml()}`
       SendMail(user.email, "Forgot Password", html);
       return errorCode.SUCCESS;
 
@@ -939,7 +998,14 @@ export class UsersService {
 
   async resetPassword(body: ResetPasswordDto) {
     try {
-      const userToken = await this.userTokenRepository.findOne({ where: { token: body.token, status: userStatus.PENDING, type: userTokenType.FORGOT_PASSWORD } });
+      const token = String(body.token || '').trim().toUpperCase();
+      const userToken = await this.userTokenRepository.findOne({
+        where: {
+          token,
+          status: userStatus.PENDING,
+          type: userTokenType.FORGOT_PASSWORD,
+        },
+      });
       if (userToken) {
         userToken.status = userStatus.ACTIVE;
         await this.userTokenRepository.save(userToken);
@@ -1006,8 +1072,7 @@ export class UsersService {
     <p>Hello ${body.email},</p>
     <p>The system has just created an OTP code to verify your account.</p>
     <p>Your confirmation code is <b>${newUserToken.token}</b></p>
-    <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-    <p>ServiceLink Support Team</p>`
+    ${emailSupportFooterHtml()}`
     SendMail(body.email, "Account Verification", html);
     return { ...errorCode.SUCCESS };
   }
@@ -1177,8 +1242,7 @@ export class UsersService {
     <p>Hello quybv90@gmail.com,</p>
     <p>The system has just created an OTP code to update the new password.</p>
     <p>Your confirmation code is <b>111</b></p>
-    <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-    <p>ServuceLink Support Team</p>`
+    ${emailSupportFooterHtml()}`
     SendMail('quybv90@gmail.com', "Forgot Password", html);
     return errorCode.SUCCESS
   }

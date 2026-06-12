@@ -1,4 +1,4 @@
-import logo_mini from '@app/assets/images/signin/logo.jpg'
+import logo_mini from '@app/assets/images/signin/logo.png'
 import Button from '@app/components/uielements/button';
 import Input from '@app/components/uielements/input';
 import IntlMessages from '@app/components/utility/intlMessages';
@@ -67,11 +67,14 @@ export default function () {
                 <Form.Item
                   name="code"
                   wrapperCol={{ span: 24 }}
-                  rules={[{ required: true}]}
-                // noStyle
+                  rules={[{ required: true, message: intl.formatMessage({ id: 'page.resetPassOtpPlaceholder' }) }]}
                 >
-
-                  <Input size="large" autoComplete='off' placeholder={intl.formatMessage({id: 'sidebar.forgotPw_Code'})} />
+                  <Input
+                    size="large"
+                    autoComplete="off"
+                    inputMode="numeric"
+                    placeholder={intl.formatMessage({ id: 'page.resetPassOtpPlaceholder' })}
+                  />
                 </Form.Item>
               </div>
               <div className="isoInputWrapper">
@@ -87,6 +90,9 @@ export default function () {
                   },
                   () => ({
                     validator(_, value) {
+                      if (!value) {
+                        return Promise.resolve();
+                      }
                       let upper = /[A-Z]/;
                       let number = /[0-9]/;
                       let special = /[:;,?~[\]{}/!@#$%^*)(+=._-]/;
@@ -125,14 +131,15 @@ export default function () {
                           id: 'sidebar.users.password.digit',
                         })));
                       }
-                      if (value) {
-                        return Promise.resolve();
-                      }
+                      return Promise.resolve();
                     },
                   })
                 ]}>
-                  <Input size="large" type="password" placeholder={intl.formatMessage({ id: 'sidebar.users.password' })} maxLength ={25}/>
+                  <Input size="large" type="password" autoComplete="new-password" placeholder={intl.formatMessage({ id: 'sidebar.users.password' })} maxLength ={25}/>
                 </Form.Item>
+                <p style={{ marginTop: -8, marginBottom: 16, fontSize: 12, opacity: 0.75 }}>
+                  {intl.formatMessage({ id: 'page.resetPassRequirements' })}
+                </p>
               </div>
 
               <div className="isoInputWrapper">

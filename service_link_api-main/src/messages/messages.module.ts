@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
@@ -8,6 +8,7 @@ import { CustomerAdminMessageDeletion } from './entities/customer-admin-message-
 import { ReportFault } from '../report-faults/entities/report-fault.entity';
 import { UserTask } from '../user-tasks/entities/user-task.entity';
 import { User } from '../users/entities/user.entity';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { User } from '../users/entities/user.entity';
       UserTask,
       User,
     ]),
+    forwardRef(() => UsersModule),
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

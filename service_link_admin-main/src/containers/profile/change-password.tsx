@@ -262,7 +262,7 @@ export default function ChangePassword() {
                 htmlType="submit"
                 className="btn__parent"
               >
-                Lưu
+                {intl.formatMessage({ id: 'profile.update_profile' })}
               </Button>
             </div>
           </div>

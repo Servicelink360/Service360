@@ -1,12 +1,15 @@
-﻿import { ApiProperty } from "@nestjs/swagger"
+import { ApiProperty } from "@nestjs/swagger"
 
 export class CreateServiceDto {
 
     @ApiProperty({ default: '' })
     name: string
 
-    @ApiProperty({ default: '' })
+    @ApiProperty({ default: '', required: false })
     description: string
+
+    @ApiProperty({ enum: ['simple', 'detailed'], default: 'simple', required: false })
+    frequencyType?: 'simple' | 'detailed'
 
     @ApiProperty({ default: '' })
     order: number

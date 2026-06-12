@@ -49,6 +49,7 @@ const ticketStatus = {
     COMPLETED: 1,
     PENDING: 2,
     INPROGRESS: 3,
+    DELETED: 4,
 }
 
 const reportFaultStatus = {

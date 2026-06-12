@@ -7,9 +7,9 @@ import { BodyModalWrap } from '@app/components/common/modal.style'
 import { dateTimeFormat } from '@app/config/data.config'
 import { sprintf } from '@app/lib/helpers/utility'
 import actions from '@app/redux/sites/actions'
-import { Col, Form, Modal, Row, Popconfirm, Button, Tag, Select, Space } from 'antd'
+import { Col, Form, Modal, Row, Popconfirm, Button, Tag } from 'antd'
 import moment from 'moment'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useIntl } from 'react-intl'
 import { useDispatch } from 'react-redux'
 import { ButtonMR, InformationDiv } from '../common/container.style'
@@ -18,16 +18,10 @@ import TableComponent from "@app/components/common/Table/index";
 import ItemModal from '@app/components/sites/item'
 import { serializeSiteItemsForApi } from '@app/lib/helpers/siteItemPayload';
 import useDesktopViewport from '@app/lib/hooks/useDesktopViewport';
-import {
-    SITE_ITEM_FREQUENCY_NA,
-    SITE_ITEM_FREQUENCY_UNITS,
-    formatSiteItemFrequency,
-    frequencyCountOptions,
-    frequencyTimesSelectOptions,
-    isSiteItemFrequencyNa,
-    resolveFrequencyPerCount,
-    resolveFrequencyTimes,
-} from '@app/lib/helpers/siteItemFrequency';
+import SiteItemFrequencySection from '@app/components/sites/site-item-frequency-section';
+import SiteItemFrequencyPanel from '@app/components/sites/site-item-frequency-panel';
+import { isPersistedDbId, sanitizeSiteItemClientIds } from '@app/library/helpers/persistedRecordId';
+import '@app/containers/job-sites/job-sites-table.css';
 
 type IProps = {
     loadingAction: boolean
@@ -47,7 +41,9 @@ const Index = (props: IProps) => {
     const intl = useIntl()
     const isDesktop = useDesktopViewport()
     const [changed, setChanged] = useState(false)
-    const [items, setItems] = useState(data && data.items ? data.items : [])
+    const [items, setItems] = useState(() =>
+        sanitizeSiteItemClientIds(data?.items ?? []),
+    )
     const [showModal, setShowModal] = useState(false)
     const [form] = Form.useForm()
     const [infoModal, setInfoModal] = useState(null)
@@ -65,6 +61,7 @@ const Index = (props: IProps) => {
     useEffect(() => {
         if (data) {
             form.setFieldsValue({ ...data })
+            setItems(sanitizeSiteItemClientIds(data.items ?? []))
         }
     }, [data?.id, form])
 
@@ -87,23 +84,6 @@ const Index = (props: IProps) => {
             /* validation errors shown on form */
         }
     }
-
-    const updateItemFrequency = useCallback(
-        (
-            itemId: number,
-            patch: {
-                frequencyTimes?: number | null;
-                frequencyCount?: number | null;
-                frequencyPeriod?: string | null;
-            },
-        ) => {
-            setItems((prev) =>
-                prev.map((r) => (+r.id === +itemId ? { ...r, ...patch } : r)),
-            );
-            setChanged(true);
-        },
-        [],
-    );
 
     const columns: ColDef[] | any = useMemo(() => {
         const cols: ColDef[] | any = [
@@ -149,78 +129,13 @@ const Index = (props: IProps) => {
             cols.push({
                 title: 'Frequency',
                 key: 'frequency',
-                width: 380,
-                render: (_text: string, row: any) => {
-                    const frequencyNa = isSiteItemFrequencyNa(row);
-                    const times = resolveFrequencyTimes(row);
-                    const perCount = resolveFrequencyPerCount(row);
-                    const period = row.frequencyPeriod;
-                    return (
-                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                            <Space size={4} wrap align="center">
-                                <Select
-                                    value={frequencyNa ? SITE_ITEM_FREQUENCY_NA : times}
-                                    options={frequencyTimesSelectOptions(30)}
-                                    onChange={(v) => {
-                                        if (v === SITE_ITEM_FREQUENCY_NA) {
-                                            updateItemFrequency(row.id, {
-                                                frequencyTimes: null,
-                                                frequencyCount: null,
-                                                frequencyPeriod: null,
-                                            });
-                                        } else {
-                                            updateItemFrequency(row.id, {
-                                                frequencyTimes: +v,
-                                                frequencyCount: perCount,
-                                                frequencyPeriod:
-                                                    period && period !== SITE_ITEM_FREQUENCY_NA
-                                                        ? period
-                                                        : 'week',
-                                            });
-                                        }
-                                    }}
-                                    style={{ width: 72 }}
-                                    aria-label="Times"
-                                />
-                                {!frequencyNa ? (
-                                    <>
-                                        <span style={{ fontSize: 12 }}>times,</span>
-                                        <span style={{ fontSize: 12 }}>per</span>
-                                        <Select
-                                            value={perCount}
-                                            options={frequencyCountOptions(30)}
-                                            onChange={(v) =>
-                                                updateItemFrequency(row.id, {
-                                                    frequencyCount: +v,
-                                                })
-                                            }
-                                            style={{ width: 56 }}
-                                            aria-label="Per interval number"
-                                        />
-                                        <Select
-                                            value={period}
-                                            options={[...SITE_ITEM_FREQUENCY_UNITS]}
-                                            onChange={(v) =>
-                                                updateItemFrequency(row.id, {
-                                                    frequencyPeriod: v,
-                                                })
-                                            }
-                                            style={{ width: 88 }}
-                                            aria-label="Period"
-                                        />
-                                    </>
-                                ) : null}
-                            </Space>
-                            <span style={{ fontSize: 12, color: '#595959', lineHeight: 1.3 }}>
-                                {formatSiteItemFrequency(
-                                    row.frequencyTimes,
-                                    row.frequencyCount,
-                                    row.frequencyPeriod,
-                                )}
-                            </span>
-                        </Space>
-                    );
-                },
+                width: 220,
+                render: (_text: string, row: any) => (
+                    <SiteItemFrequencySection
+                        row={row}
+                        canExpandSchedule={!!data?.id && +row.id > 0}
+                    />
+                ),
             });
         }
 
@@ -259,7 +174,7 @@ const Index = (props: IProps) => {
         });
 
         return cols;
-    }, [items, intl, isDesktop, updateItemFrequency]);
+    }, [items, intl, isDesktop, data?.id]);
 
     const ActionBTN = () => {
         return (<>
@@ -302,7 +217,7 @@ const Index = (props: IProps) => {
             style={{ top: 10 }}
             footer={null}
         >
-            <BodyModalWrap>
+            <BodyModalWrap className="site-modal">
                 <Form
                     form={form}
                     onFieldsChange={() => {
@@ -403,12 +318,44 @@ const Index = (props: IProps) => {
                             }}
                             pagination={false}
                             columns={columns}
-                            keys="id"
+                            keys="tableRowKey"
                             page={1}
                             count={items.length}
                             limit={100}
-                            data={items}
+                            data={items.map((row: any, index: number) => ({
+                                ...row,
+                                tableRowKey: isPersistedDbId(row.id)
+                                    ? `saved-${row.id}`
+                                    : `draft-${index}`,
+                            }))}
                             loading={false}
+                            expandable={!!data?.id}
+                            expandRowByClick={false}
+                            rowExpandable={(row) => !!data?.id && isPersistedDbId(row.id)}
+                            expandedRowRender={(row) => {
+                                if (!isPersistedDbId(row.id)) {
+                                    return (
+                                        <p className="gm-frequency-panel__intro gm-frequency-panel__intro--muted">
+                                            Save the site to store this service, then set frequency here.
+                                        </p>
+                                    );
+                                }
+                                return (
+                                <SiteItemFrequencyPanel
+                                    siteId={+data.id}
+                                    siteItemId={+row.id}
+                                    row={row}
+                                    onUpdated={(patch) => {
+                                        if (!patch) return;
+                                        setItems((prev) =>
+                                            prev.map((r) =>
+                                                +r.id === +row.id ? { ...r, ...patch } : r,
+                                            ),
+                                        );
+                                    }}
+                                />
+                                );
+                            }}
                         />
                     </InformationDiv>
                 </Form>

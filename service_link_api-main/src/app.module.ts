@@ -35,6 +35,7 @@ import { DeployStatusController } from './deploy-status.controller';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
       load: [
         appConfig,
         databaseConfig,

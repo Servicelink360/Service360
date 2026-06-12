@@ -9,6 +9,7 @@ import { ListMessagesDto } from './dto/list-messages.dto';
 import { IUserInfo } from '../interfaces/IUserInfo';
 import { userStatus, userType } from '../constants/user';
 import { customerCanAccessCustomerId } from '../helpers/customer-scope';
+import { CustomerNotificationsService } from '../users/customer-notifications.service';
 import { Customer } from '../users/entities/customer.entity';
 import { errorCode } from '../constants/errorCode';
 import { ReportFault } from '../report-faults/entities/report-fault.entity';
@@ -33,6 +34,7 @@ export class MessagesService {
     private readonly userTaskRepo: Repository<UserTask>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly customerNotifications: CustomerNotificationsService,
   ) {}
 
   private async displayNameForUser(userId: number): Promise<string> {
@@ -407,6 +409,51 @@ export class MessagesService {
     });
   }
 
+  /** Latest message visible to viewer (respects per-user soft delete + conversation filter). */
+  private async getLastVisibleMessagePreview(
+    threadId: number,
+    viewerId: number,
+    opts?: {
+      filterSenderId?: number;
+      filterSenderType?: number;
+      peerSenderType?: number;
+    },
+  ): Promise<{ preview: string; updatedAt: Date | null }> {
+    const qb = this.messageRepo
+      .createQueryBuilder('m')
+      .where('m.thread_id = :threadId', { threadId })
+      .andWhere(this.notDeletedForUserSql(), { viewerId })
+      .orderBy('m.created_at', 'DESC')
+      .take(1);
+    if (opts?.peerSenderType != null) {
+      qb.andWhere('m.sender_type = :peerSt', { peerSt: opts.peerSenderType });
+    }
+    this.applyConversationFilter(
+      qb,
+      viewerId,
+      opts?.filterSenderId,
+      opts?.filterSenderType,
+    );
+    const last = await qb.getOne();
+    if (!last) return { preview: '', updatedAt: null };
+    return { preview: this.preview(last.body), updatedAt: last.createdAt };
+  }
+
+  private async conversationHasVisibleMessages(
+    threadId: number,
+    viewerId: number,
+    filterSenderId?: number,
+    filterSenderType?: number,
+  ): Promise<boolean> {
+    const qb = this.messageRepo
+      .createQueryBuilder('m')
+      .where('m.thread_id = :threadId', { threadId })
+      .andWhere(this.notDeletedForUserSql(), { viewerId });
+    this.applyConversationFilter(qb, viewerId, filterSenderId, filterSenderType);
+    const count = await qb.getCount();
+    return count > 0;
+  }
+
   /** Customers and staff only message Servicelink (admin), never each other. */
   private blockCustomerStaffCrossMessaging(
     userInfo: IUserInfo,
@@ -761,14 +808,11 @@ export class MessagesService {
       const admins = await this.listActiveAdminUsers();
 
       for (const admin of admins) {
-        const lastFromAdmin = await this.messageRepo
-          .createQueryBuilder('m')
-          .where('m.thread_id = :threadId', { threadId: supportThread.id })
-          .andWhere('m.sender_id = :adminId', { adminId: admin.id })
-          .andWhere('m.sender_type = :st', { st: userType.ADMIN })
-          .andWhere(this.notDeletedForUserSql(), { viewerId })
-          .orderBy('m.created_at', 'DESC')
-          .getOne();
+        const last = await this.getLastVisibleMessagePreview(
+          supportThread.id,
+          viewerId,
+          { filterSenderId: admin.id, filterSenderType: userType.ADMIN },
+        );
 
         const unreadQb = this.messageRepo
           .createQueryBuilder('m')
@@ -781,6 +825,14 @@ export class MessagesService {
         }
         const unreadCount = await unreadQb.getCount();
 
+        const hasMessages = await this.conversationHasVisibleMessages(
+          supportThread.id,
+          viewerId,
+          admin.id,
+          userType.ADMIN,
+        );
+        if (!hasMessages) continue;
+
         rows.push({
           threadId: supportThread.id,
           peerType: 'admin',
@@ -789,10 +841,8 @@ export class MessagesService {
           staffId: isStaff ? viewerId : null,
           customerName: admin.fullName,
           companyName: 'Servicelink',
-          lastMessagePreview: lastFromAdmin
-            ? this.preview(lastFromAdmin.body)
-            : 'No messages yet',
-          updatedAt: lastFromAdmin?.createdAt ?? supportThread.updatedAt,
+          lastMessagePreview: last.preview,
+          updatedAt: last.updatedAt,
           unreadCount,
           conversationKind: 'admin',
           filterSenderId: admin.id,
@@ -803,13 +853,11 @@ export class MessagesService {
       if (!isStaff) {
         const peers = await this.sameCompanyPeerRows(viewerId, viewerId);
         for (const peer of peers) {
-          const lastFromPeer = await this.messageRepo
-            .createQueryBuilder('m')
-            .where('m.thread_id = :threadId', { threadId: supportThread.id })
-            .andWhere('m.sender_id = :peerId', { peerId: peer.id })
-            .andWhere(this.notDeletedForUserSql(), { viewerId })
-            .orderBy('m.created_at', 'DESC')
-            .getOne();
+          const last = await this.getLastVisibleMessagePreview(
+            supportThread.id,
+            viewerId,
+            { filterSenderId: peer.id, filterSenderType: userType.CUSTOMER },
+          );
 
           const peerUnreadQb = this.messageRepo
             .createQueryBuilder('m')
@@ -821,6 +869,14 @@ export class MessagesService {
           }
           const peerUnread = await peerUnreadQb.getCount();
 
+          const hasMessages = await this.conversationHasVisibleMessages(
+            supportThread.id,
+            viewerId,
+            peer.id,
+            userType.CUSTOMER,
+          );
+          if (!hasMessages) continue;
+
           rows.push({
             threadId: supportThread.id,
             peerType: 'customer',
@@ -829,10 +885,8 @@ export class MessagesService {
             staffId: null,
             customerName: peer.fullName,
             companyName: peer.companyName,
-            lastMessagePreview: lastFromPeer
-              ? this.preview(lastFromPeer.body)
-              : 'No messages yet',
-            updatedAt: lastFromPeer?.createdAt ?? supportThread.updatedAt,
+            lastMessagePreview: last.preview,
+            updatedAt: last.updatedAt,
             unreadCount: peerUnread,
             conversationKind: 'colleague',
             filterSenderId: peer.id,
@@ -843,12 +897,7 @@ export class MessagesService {
         const staffPeers = await this.sameCompanyStaffPeerRows(viewerId, 0);
         for (const peer of staffPeers) {
           const peerThread = await this.getOrCreateStaffPeerThread(viewerId, peer.id);
-          const lastMsg = await this.messageRepo
-            .createQueryBuilder('m')
-            .where('m.thread_id = :threadId', { threadId: peerThread.id })
-            .andWhere(this.notDeletedForUserSql(), { viewerId })
-            .orderBy('m.created_at', 'DESC')
-            .getOne();
+          const last = await this.getLastVisibleMessagePreview(peerThread.id, viewerId);
 
           const peerUnreadQb = this.messageRepo
             .createQueryBuilder('m')
@@ -856,6 +905,12 @@ export class MessagesService {
             .andWhere('m.sender_id != :viewerId', { viewerId })
             .andWhere(this.notDeletedForUserSql(), { viewerId });
           const peerUnread = await peerUnreadQb.getCount();
+
+          const hasMessages = await this.conversationHasVisibleMessages(
+            peerThread.id,
+            viewerId,
+          );
+          if (!hasMessages) continue;
 
           rows.push({
             threadId: peerThread.id,
@@ -866,10 +921,8 @@ export class MessagesService {
             peerStaffId: peer.id,
             customerName: peer.fullName,
             companyName: peer.companyName,
-            lastMessagePreview: lastMsg
-              ? this.preview(lastMsg.body)
-              : 'No messages yet',
-            updatedAt: lastMsg?.createdAt ?? peerThread.updatedAt,
+            lastMessagePreview: last.preview,
+            updatedAt: last.updatedAt,
             unreadCount: peerUnread,
             conversationKind: 'colleague',
             filterSenderId: null,
@@ -965,15 +1018,22 @@ export class MessagesService {
         ORDER BY t.updated_at DESC NULLS LAST
       `);
 
-      const rows = await Promise.all(
+      const viewerId = +userInfo.userId;
+      const mapped = await Promise.all(
         rawThreads.map(async (row: any) => {
+          const threadId = +row.threadId;
+          const hasMessages = await this.conversationHasVisibleMessages(
+            threadId,
+            viewerId,
+          );
+          if (!hasMessages) return null;
+
           const peerSenderType =
             row.peerType === 'staff' ? userType.STAFF : userType.CUSTOMER;
-          const viewerId = +userInfo.userId;
           let actualUnread = 0;
           const unreadQb = this.messageRepo
             .createQueryBuilder('m')
-            .where('m.thread_id = :threadId', { threadId: +row.threadId })
+            .where('m.thread_id = :threadId', { threadId })
             .andWhere('m.sender_type = :st', { st: peerSenderType })
             .andWhere(this.notDeletedForUserSql(), { viewerId });
           if (row.adminLastReadAt) {
@@ -984,20 +1044,25 @@ export class MessagesService {
           const peerId =
             row.peerType === 'staff' ? +row.staffId : +row.customerId;
 
+          const last = await this.getLastVisibleMessagePreview(threadId, viewerId, {
+            peerSenderType: peerSenderType,
+          });
+
           return {
-            threadId: +row.threadId,
+            threadId,
             peerType: row.peerType,
             peerId,
             customerId: row.customerId ? +row.customerId : null,
             staffId: row.staffId ? +row.staffId : null,
             customerName: row.peerName || `User #${peerId}`,
             companyName: row.companyName?.trim() || null,
-            lastMessagePreview: row.lastMessagePreview,
-            updatedAt: row.updatedAt,
+            lastMessagePreview: last.preview,
+            updatedAt: last.updatedAt,
             unreadCount: actualUnread,
           };
         }),
       );
+      const rows = mapped.filter((row): row is NonNullable<(typeof mapped)[number]> => row != null);
 
       return { ...errorCode.SUCCESS, data: { rows } };
     } catch (error) {
@@ -1395,6 +1460,29 @@ export class MessagesService {
           messageFields,
           ccExclude,
         );
+      }
+
+      if (
+        (type === userType.ADMIN || type === userType.STAFF) &&
+        thread.customerId
+      ) {
+        let linkPath = '/messages';
+        if (reportFaultId) {
+          linkPath = `/messages?reportFaultId=${reportFaultId}`;
+        } else if (userTaskId) {
+          linkPath = `/messages?userTaskId=${userTaskId}`;
+        }
+        const recipientIds = new Set<number>();
+        recipientIds.add(+thread.customerId);
+        for (const cid of resolvedCcIds) {
+          if (+cid > 0) recipientIds.add(+cid);
+        }
+        void this.customerNotifications.notifyNewMessage({
+          recipientCustomerIds: [...recipientIds],
+          preview: messageBody.replace(/<[^>]+>/g, ' ').trim(),
+          linkPath,
+          createdByUserId: +userInfo.userId,
+        });
       }
 
       return {

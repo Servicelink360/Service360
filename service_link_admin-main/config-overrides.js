@@ -37,12 +37,27 @@ function addProcessBrowserPolyfill(config) {
     }
   }
 
+  const localProcessShim = path.resolve(__dirname, 'src/shims/process-browser.js');
+  let processBrowser = localProcessShim;
+  try {
+    processBrowser = require.resolve('process/browser.js');
+  } catch (e) {
+    // npm `process` not installed — use vendored shim above
+  }
+
+  config.resolve = config.resolve || {};
+  config.resolve.alias = {
+    ...(config.resolve.alias || {}),
+    process: processBrowser,
+  };
+
   config.plugins = config.plugins || [];
   config.plugins.push(
     new webpack.ProvidePlugin({
-      process: 'process/browser.js',
+      process: processBrowser,
     }),
   );
+
   return config;
 }
 

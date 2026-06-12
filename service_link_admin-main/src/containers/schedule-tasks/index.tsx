@@ -1,8 +1,8 @@
 import { FilePdfOutlined, SearchOutlined, FileAddOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { ActionBtn, Fieldset } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
-import { dateFormat, dateTimeFormat, limitData, pageData } from "@app/config/data.config";
-import { Col, Form, Tag, Row, Tabs, Popconfirm } from "antd";
+import { dateFormat, dateTimeFormat, pageData } from "@app/config/data.config";
+import { Col, Form, Tag, Row, Popconfirm } from "antd";
 import moment from "moment";
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -42,6 +42,7 @@ const TaskToday: React.FC = () => {
         if (success) {
             handleOnClick(actionType.SEARCH)
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [success]);
 
 
@@ -67,6 +68,7 @@ const TaskToday: React.FC = () => {
             behavior: "smooth",
         });
         handleOnClick(actionType.SEARCH)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     let userColumn = [];
@@ -246,7 +248,7 @@ const TaskToday: React.FC = () => {
                     return <Tag style={{ cursor: 'pointer' }} color="#4caf50">Completed</Tag>
             },
         }
-    ].concat(actionColumn)), []);
+    ].concat(actionColumn)), [actionColumn, userColumn]);
 
     const onChange = (date) => {
         setDate(date);

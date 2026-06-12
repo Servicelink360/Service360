@@ -28,6 +28,9 @@ import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 import { Link } from "react-router-dom";
 import "./job-sites-table.css";
+import SiteItemFrequencySection from "@app/components/sites/site-item-frequency-section";
+import SiteItemFrequencyPanel from "@app/components/sites/site-item-frequency-panel";
+import { isPersistedDbId } from "@app/library/helpers/persistedRecordId";
 
 type IProps = {
     staffId?: number
@@ -238,6 +241,8 @@ const JobSite = (props: IProps) => {
         },
         [fetchSites, limit, listSort.orderBy, listSort.orderValue, page],
     );
+
+    const canEditSite = checkRole('ADMIN') || checkRole('EDIT');
 
     const sortedFullList = useMemo(() => {
         if (!usesFullListSort(listSort.orderBy) || !rows?.length) {
@@ -555,6 +560,18 @@ const JobSite = (props: IProps) => {
             },
 
             {
+                title: 'Frequency',
+                key: 'frequency',
+                width: 220,
+                render: (_text: string, row: any) => (
+                    <SiteItemFrequencySection
+                        row={row}
+                        canExpandSchedule={!!row.id}
+                    />
+                ),
+            },
+
+            {
                 title: 'Shifts',
                 dataIndex: "shifts",
 
@@ -595,6 +612,7 @@ const JobSite = (props: IProps) => {
         const data = (item?.items ?? []).map((siteItem: any, i: number) => ({
             ...siteItem,
             key: siteItem.id ?? i,
+            parentSiteId: item.id,
         }));
         return (
             <div className="job-sites-expanded-services">
@@ -604,137 +622,139 @@ const JobSite = (props: IProps) => {
                     columns={columnItems}
                     dataSource={data}
                     pagination={false}
-                    expandable={{ expandedRowRender: expandedRowRenderTask }}
+                    expandable={{
+                        expandedRowRender: expandedRowRenderTask,
+                        rowExpandable: (siteItem: any) => isPersistedDbId(siteItem?.id),
+                    }}
                 />
             </div>
         );
     }
 
-    const expandedRowRenderTask = (item) => {
-        const columns = [
-            {
-                title: "Task name",
-                dataIndex: "name",
-                width: 250,
-                render: (text: string, row: any) => {
-                    return <span style={{ cursor: 'pointer' }}> {row && row.name}</span>
-                },
-            },
-            {
-                title: "Staff",
-                dataIndex: "staff",
-                render: (text: string, row: any) => {
-                    return row.staff && row.staff.fullName
-                },
-                width: 200,
-            },
+    const expandedRowRenderTask = (siteItem) => {
+        const frequencyPanel = (
+            <SiteItemFrequencyPanel
+                siteId={+siteItem.parentSiteId}
+                siteItemId={+siteItem.id}
+                row={siteItem}
+                disabled={!canEditSite}
+                onUpdated={() => loadSites()}
+            />
+        );
 
-            // {
-            //     title: "Shift",
-            //     dataIndex: "shift",
-            //     render: (text: string, row: any) => {
-            //         return row.shift && row.shift.name
-            //     },
-            //     width: 200,
-            // },
-            {
-                title: 'Start date - Finish date',
-                dataIndex: "type",
-                width: 200,
-                render: (_text: string, row: any) => {
-                    return (row?.shifts ?? []).map((h: any) => (
-                        <p
-                            key={h.id}
-                            onClick={async () => {
-                                handleOnClick(actionType.VIEW_LOG, row);
-                            }}
-                        >
-                            {moment(row.startDate).format(dateFormat) +
-                                ' ' +
-                                formatTime(h.from) +
-                                ' - ' +
-                                moment(row.endDate).format(dateFormat) +
-                                ' ' +
-                                formatTime(h.to)}
-                        </p>
-                    ));
-                },
-            },
-            {
-                title: "Repeat",
-                dataIndex: "shift",
-                render: (text: string, row: any) => {
-                    if (row?.type)
-                        return row.type === "E" ? <Tag>Everyday</Tag> : row.type === "W" ? <Tag>Working day</Tag> : row?.typeValue && row?.typeValue.split(',').map((r) => <Tag key={row.id + "-" + r}>{+r === 0 ? "Mon" : +r === 1 ? "Tue" : +r === 2 ? "Wed" : +r === 3 ? "Thu" : +r === 4 ? "Fri" : +r === 5 ? "Sat" : +r === 6 ? "Sun" : ""}</Tag>)
-                    return ""
-                },
-                width: 120,
-            },
-            // {
-            //     title: 'Status',
-            //     dataIndex: "status",
-            //     width: 120,
-            //     render: (text: string, row: any) => {
-            //         if (row.status === 1)
-            //             return <Popconfirm
-            //                 title={"Are you sure you want to change to inactive?"}
-            //                 okText={intl.formatMessage({ id: "button.Yes" })}
-            //                 cancelText={intl.formatMessage({ id: "button.No" })}
-            //                 placement="topRight"
-            //                 onConfirm={(e) => { dispatch(actions.saveInto({ id: row?.id, status: 2 }, actionType.CHANGE_STATUS, false)); }}
-            //             >
-            //                 <Tag style={{ cursor: 'pointer' }} color="#4caf50">{TaskStatus.find(c => c.id === row.status)?.name}</Tag>
-            //             </Popconfirm>
-            //         if (row.status === 2)
-            //             return <Popconfirm
-            //                 title={"Are you sure you want to change to active?"}
-            //                 okText={intl.formatMessage({ id: "button.Yes" })}
-            //                 cancelText={intl.formatMessage({ id: "button.No" })}
-            //                 placement="topRight"
-            //                 onConfirm={(e) => { dispatch(actions.saveInto({ id: row?.id, status: 1 }, actionType.CHANGE_STATUS, false)); }}
-            //             >
-            //                 <Tag style={{ cursor: 'pointer' }} color="#F44336">{TaskStatus.find(c => c.id === row.status)?.name}</Tag>
-            //             </Popconfirm>
-            //     },
-            // },
-            {
-                title: 'Action',
-                align: 'center',
-                dataIndex: "action",
-                width: 80,
-                render: (text: string, row: any) => {
-                    return <>
-                        {/* <button className="btnLink" style={{ marginLeft: 10 }} onClick={() => { handleOnClick(actionType.VIEW, row); }}> <EyeOutlined /> </button> */}
-                        <ButtonMR className="btnLink" style={{ marginLeft: 10 }} onClick={() => { handleOnClick(actionType.UPDATE_ITEM, { ...row, staffs: item.staffs }); }}> <EditOutlined /> </ButtonMR>
-                        <Popconfirm
-                            title={"Are you sure you want to change to active?"}
-                            okText={intl.formatMessage({ id: "button.Yes" })}
-                            cancelText={intl.formatMessage({ id: "button.No" })}
-                            placement="topRight"
-                            onConfirm={(e) => { dispatch(actions.saveInto({ taskId: row?.id }, actionType.DELETE_ITEM, false)); }}
-                        >
-                            <button className="btnDelete"  ><DeleteOutlined /> </button>
-                        </Popconfirm>
-                    </>
-                },
-            },
-        ];
-
-        const data = (item?.tasks ?? []).map((task: any, i: number) => ({
-            ...task,
-            key: task.id ?? `task-${i}`,
-        }));
-        return (
+        const tasksTable = (
             <TableWrapper
                 className="job-sites-tasks-table"
-                columns={columns}
-                dataSource={data}
+                columns={[
+                    {
+                        title: "Task name",
+                        dataIndex: "name",
+                        width: 250,
+                        render: (text: string, taskRow: any) => (
+                            <span style={{ cursor: 'pointer' }}> {taskRow && taskRow.name}</span>
+                        ),
+                    },
+                    {
+                        title: "Staff",
+                        dataIndex: "staff",
+                        render: (text: string, taskRow: any) =>
+                            taskRow.staff && taskRow.staff.fullName,
+                        width: 200,
+                    },
+                    {
+                        title: 'Start date - Finish date',
+                        dataIndex: "type",
+                        width: 200,
+                        render: (_text: string, taskRow: any) =>
+                            (taskRow?.shifts ?? []).map((h: any) => (
+                                <p
+                                    key={h.id}
+                                    onClick={async () => {
+                                        handleOnClick(actionType.VIEW_LOG, taskRow);
+                                    }}
+                                >
+                                    {moment(taskRow.startDate).format(dateFormat) +
+                                        ' ' +
+                                        formatTime(h.from) +
+                                        ' - ' +
+                                        moment(taskRow.endDate).format(dateFormat) +
+                                        ' ' +
+                                        formatTime(h.to)}
+                                </p>
+                            )),
+                    },
+                    {
+                        title: "Repeat",
+                        dataIndex: "shift",
+                        render: (text: string, taskRow: any) => {
+                            if (taskRow?.type) {
+                                return taskRow.type === "E" ? (
+                                    <Tag>Everyday</Tag>
+                                ) : taskRow.type === "W" ? (
+                                    <Tag>Working day</Tag>
+                                ) : (
+                                    taskRow?.typeValue &&
+                                    taskRow.typeValue.split(',').map((r: string) => (
+                                        <Tag key={taskRow.id + "-" + r}>
+                                            {+r === 0 ? "Mon" : +r === 1 ? "Tue" : +r === 2 ? "Wed" : +r === 3 ? "Thu" : +r === 4 ? "Fri" : +r === 5 ? "Sat" : +r === 6 ? "Sun" : ""}
+                                        </Tag>
+                                    ))
+                                );
+                            }
+                            return "";
+                        },
+                        width: 120,
+                    },
+                    {
+                        title: 'Action',
+                        align: 'center' as const,
+                        dataIndex: "action",
+                        width: 80,
+                        render: (text: string, taskRow: any) => (
+                            <>
+                                <ButtonMR
+                                    className="btnLink"
+                                    style={{ marginLeft: 10 }}
+                                    onClick={() => {
+                                        handleOnClick(actionType.UPDATE_ITEM, {
+                                            ...taskRow,
+                                            staffs: siteItem.staffs,
+                                        });
+                                    }}
+                                >
+                                    <EditOutlined />
+                                </ButtonMR>
+                                <Popconfirm
+                                    title={"Are you sure you want to change to active?"}
+                                    okText={intl.formatMessage({ id: "button.Yes" })}
+                                    cancelText={intl.formatMessage({ id: "button.No" })}
+                                    placement="topRight"
+                                    onConfirm={() => {
+                                        dispatch(
+                                            actions.saveInto(
+                                                { taskId: taskRow?.id },
+                                                actionType.DELETE_ITEM,
+                                                false,
+                                            ),
+                                        );
+                                    }}
+                                >
+                                    <button className="btnDelete"><DeleteOutlined /></button>
+                                </Popconfirm>
+                            </>
+                        ),
+                    },
+                ]}
+                dataSource={(siteItem?.tasks ?? []).map((task: any, i: number) => ({
+                    ...task,
+                    key: task.id ?? `task-${i}`,
+                }))}
                 pagination={false}
                 footer={() =>
                     checkRole('ADMIN') || checkRole('EDIT') ? (
                         <ButtonMR
                             onClick={() => {
-                                handleOnClick(actionType.ADD_ITEM, item);
+                                handleOnClick(actionType.ADD_ITEM, siteItem);
                             }}
                             className="btnLink"
                         >
@@ -745,6 +765,19 @@ const JobSite = (props: IProps) => {
                     )
                 }
             />
+        );
+
+        return (
+            <div className="job-sites-service-expand">
+                {frequencyPanel}
+                <div className="job-sites-service-expand__tasks">
+                    <p className="job-sites-recurring-tasks__title">Recurring tasks</p>
+                    <p className="job-sites-recurring-tasks__help">
+                        Separate from frequency above — scheduled work orders for this service.
+                    </p>
+                    {tasksTable}
+                </div>
+            </div>
         );
     }
 

@@ -12,6 +12,7 @@ import { UpdateReportFaultDto } from './dto/update-report-fault.dto';
 import { CreateReportFaultAnswerDto } from './dto/create-report-fault-answer.dto';
 import { UpdateReportFaultAnswerDto } from './dto/update-report-fault-answer.dto';
 import { GetReportFaultsDto } from './entities/get-report-faults.dto';
+import { ClearDeletedFaultsDto } from './dto/clear-deleted-faults.dto';
 import { userType } from '../constants/user';
 import { errorCode } from '../constants/errorCode';
 
@@ -101,6 +102,26 @@ export class ReportFaultsController {
   async markCustomerUnread(@Res() res, @Param('id') id: string, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.reportFaultsService.markCustomerUnread(user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('clear-deleted')
+  async clearDeletedVisible(
+    @Res() res,
+    @Request() req,
+    @Body() body: ClearDeletedFaultsDto,
+  ) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.purgeDeletedFaultsByIds(user, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/restore')
+  async restoreFault(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.restoreFault(user, id));
   }
 
   @UseGuards(JwtAuthGuard)

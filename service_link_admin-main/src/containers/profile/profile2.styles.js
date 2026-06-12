@@ -125,6 +125,11 @@ export const SectionForm = styled.section`
     &__autoHeight{
       height:auto;
       min-height: auto !important;
+      align-items: stretch;
+      .change__password {
+        margin-top: 1.5rem;
+        padding-top: 0.25rem;
+      }
     }
     @media only screen and (max-width: ${breakPoint.LDesktop}px) {
       padding: 1.25rem 3.5rem 1.25rem 2.25rem;

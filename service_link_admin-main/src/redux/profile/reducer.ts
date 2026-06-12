@@ -71,6 +71,23 @@ export default function profileReducer(state = INITIAL_DATA, action: any) {
         loading: false,
         error: action.payload
       }
+    case profileActions.UPDATE_NOTIFICATION_SETTINGS:
+      return {
+        ...state,
+        success: false,
+        error: null,
+      };
+    case profileActions.UPDATE_NOTIFICATION_SETTINGS_SUCCESS:
+      return {
+        ...state,
+        success: true,
+        error: null,
+      };
+    case profileActions.UPDATE_NOTIFICATION_SETTINGS_FAILURE:
+      return {
+        ...state,
+        error: action.payload,
+      };
     default:
       return state;
   }

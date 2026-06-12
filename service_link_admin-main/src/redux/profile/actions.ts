@@ -8,7 +8,10 @@ const profileActions = {
   CHANGE_PROFILE_FAILURE: 'CHANGE_PROFILE_FAILURE',
   CHANGE_PASSWORD: 'CHANGE_PASSWORD',
   CHANGE_PASSWORD_SUCCESS: 'CHANGE_PASSWORD_SUCCESS',
-  CHANGE_PASSWORD_FAILURE: 'CHANGE_PASSWORD_FAILURE',
+    CHANGE_PASSWORD_FAILURE: 'CHANGE_PASSWORD_FAILURE',
+  UPDATE_NOTIFICATION_SETTINGS: 'UPDATE_NOTIFICATION_SETTINGS',
+  UPDATE_NOTIFICATION_SETTINGS_SUCCESS: 'UPDATE_NOTIFICATION_SETTINGS_SUCCESS',
+  UPDATE_NOTIFICATION_SETTINGS_FAILURE: 'UPDATE_NOTIFICATION_SETTINGS_FAILURE',
   fetchProfileDataStart: () => ({
     type: profileActions.FETCH_PROFILE_DATA_START,
   }),
@@ -42,6 +45,17 @@ const profileActions = {
   }),
   changePasswordFailure: (error: any) => ({
     type: profileActions.CHANGE_PASSWORD_FAILURE,
+    payload: error,
+  }),
+  updateNotificationSettings: (prefs: Record<string, boolean>) => ({
+    type: profileActions.UPDATE_NOTIFICATION_SETTINGS,
+    payload: prefs,
+  }),
+  updateNotificationSettingsSuccess: () => ({
+    type: profileActions.UPDATE_NOTIFICATION_SETTINGS_SUCCESS,
+  }),
+  updateNotificationSettingsFailure: (error: any) => ({
+    type: profileActions.UPDATE_NOTIFICATION_SETTINGS_FAILURE,
     payload: error,
   }),
 };

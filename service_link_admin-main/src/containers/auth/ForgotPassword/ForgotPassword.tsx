@@ -1,4 +1,4 @@
-import logo_mini from '@app/assets/images/signin/logo.jpg'
+import logo_mini from '@app/assets/images/signin/logo.png'
 import Button from '@app/components/uielements/button';
 import Input from '@app/components/uielements/input';
 import IntlMessages from '@app/components/utility/intlMessages';

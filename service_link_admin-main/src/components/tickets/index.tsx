@@ -148,7 +148,12 @@ const Index = (props: IProps) => {
 
 
         if (profile && +profile.type === 1) {
-            tmp.customerName = profile.fullName
+            tmp.customerName = profile.fullName || profile.customerName || ''
+            tmp.companyName =
+                profile.companyName
+                || profile.customerInfo?.companyName
+                || profile.customerInfo?.company?.name
+                || ''
         }
 
         tmp.attachFiles = JSON.stringify(files)

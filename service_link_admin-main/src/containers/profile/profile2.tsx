@@ -5,7 +5,9 @@ import { useDispatch, useSelector } from 'react-redux'
 import Background from './../../assets/images/profile/background.png'
 import { BackgroundImage, BackgroundMain, SectionInformation } from './profile2.styles.js'
 import ChangePassword from './change-password'
+import EmailNotifications from './email-notifications'
 import Infomation from './infomation'
+import { userType } from '../../constants/statusUser'
 const MyProfile: React.FC = () => {
   const intl = useIntl()
   const [tab, setTab] = useState<number>(1)
@@ -38,6 +40,8 @@ const MyProfile: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getProfile, success])
 
+  const isCustomer = +data?.type === userType.CUSTOMER
+
   return (
     <main>
       <BackgroundMain>
@@ -66,10 +70,28 @@ const MyProfile: React.FC = () => {
                 id: 'sidebar.users.password_change',
               })}
             </span>
+            {isCustomer ? (
+              <span
+                onClick={() => setTab(3)}
+                className={
+                  tab === 3 ? 'choose__tab-active' : 'choose__tab-deactive'
+                }
+              >
+                {intl.formatMessage({
+                  id: 'profile.email_notifications',
+                })}
+              </span>
+            ) : null}
           </div>
         </div>
         <div>
-          {tab === 1 ? <Infomation image={image} data={data} /> : <ChangePassword />}
+          {tab === 1 ? (
+            <Infomation image={image} data={data} />
+          ) : tab === 2 ? (
+            <ChangePassword />
+          ) : (
+            <EmailNotifications data={data} />
+          )}
         </div>
       </SectionInformation>
 

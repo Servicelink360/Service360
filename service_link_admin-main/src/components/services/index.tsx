@@ -1,4 +1,4 @@
-﻿import { CloseCircleOutlined, SaveOutlined } from '@ant-design/icons'
+import { CloseCircleOutlined, SaveOutlined } from '@ant-design/icons'
 import { ActionBtn, ActionHeaderModalWrap, Fieldset, FooterModalWrap} from '@app/components/common/Common.styles'
 import InputForm from '@app/components/common/FormItem/Input'
 import TextArea from '@app/components/common/FormItem/TextArea'
@@ -6,11 +6,16 @@ import { BodyModalWrap } from '@app/components/common/modal.style'
 import { dateTimeFormat } from '@app/config/data.config'
 import { sprintf } from '@app/lib/helpers/utility'
 import actions from '@app/redux/services/actions'
-import { Col, Form, Modal, Row } from 'antd'
+import { Col, Form, Modal, Radio, Row } from 'antd'
 import moment from 'moment'
 import React, { useEffect, useState } from 'react'
 import { useIntl } from 'react-intl'
 import { useDispatch } from 'react-redux'
+import {
+  SERVICE_FREQUENCY_TYPE_OPTIONS,
+  normalizeServiceFrequencyType,
+  resolveServiceFrequencyType,
+} from '@app/library/helpers/serviceFrequencyType'
 
 type IProps = {
     loadingAction: boolean
@@ -42,7 +47,10 @@ const Index = (props: IProps) => {
 
     useEffect(() => {
         if (data) {
-            form.setFieldsValue({ ...data })
+            form.setFieldsValue({
+              ...data,
+              frequencyType: resolveServiceFrequencyType(data),
+            })
         }
     }, [data, form])
 
@@ -53,7 +61,10 @@ const Index = (props: IProps) => {
 
     const onFinishSave = async (closeable: boolean = true) => {
         const values = await form.validateFields();
-        let tmp = { ...values }
+        const tmp = {
+          ...values,
+          frequencyType: normalizeServiceFrequencyType(values.frequencyType),
+        }
         
         if (!data) {
             dispatch(actions.saveInto(tmp, modalType, closeable))
@@ -142,6 +153,28 @@ const Index = (props: IProps) => {
                                     isRequired={false}
                                     Max={300}
                                 />
+                            </Fieldset>
+                        </Col>
+                    </Row>
+                    <Row>
+                        <Col span={24}>
+                            <Fieldset>
+                                <Form.Item
+                                    name="frequencyType"
+                                    label="Frequency type"
+                                    initialValue="simple"
+                                >
+                                    <Radio.Group>
+                                        {SERVICE_FREQUENCY_TYPE_OPTIONS.map((opt) => (
+                                            <Radio key={opt.value} value={opt.value}>
+                                                <span>{opt.label}</span>
+                                                <span style={{ display: 'block', fontSize: 12, color: '#8c8c8c' }}>
+                                                    {opt.hint}
+                                                </span>
+                                            </Radio>
+                                        ))}
+                                    </Radio.Group>
+                                </Form.Item>
                             </Fieldset>
                         </Col>
                     </Row>

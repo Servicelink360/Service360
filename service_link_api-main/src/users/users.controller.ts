@@ -13,6 +13,7 @@ import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { UpdateCustomerNotificationDto } from './dto/update-customer-notification.dto';
 @Controller({
     path: 'users',
     version: ['1'],
@@ -44,6 +45,19 @@ export class UsersController {
     async changePassword(@Res() res, @Request() req, @Body() body: ChangePasswordDto): Promise<IErrorData> {
         const user: IUserInfo = req.user;
         return customHttpCode(res, await this.userService.changePassword(user, body));
+    }
+
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiTags("Users")
+    @Put("notificationSettings")
+    async updateNotificationSettings(
+        @Res() res,
+        @Request() req,
+        @Body() body: UpdateCustomerNotificationDto,
+    ): Promise<IErrorData> {
+        const user: IUserInfo = req.user;
+        return customHttpCode(res, await this.userService.updateCustomerNotificationSettings(user.userId, body));
     }
 
 

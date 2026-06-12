@@ -1,9 +1,8 @@
 import { SearchOutlined, FilePdfOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, EyeOutlined, FormOutlined, FileAddOutlined, SaveOutlined } from "@ant-design/icons";
 import { ActionListBtn } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
-import { dateFormat, dateTimeFormat, limitData, pageData } from "@app/config/data.config";
+import { limitData, pageData } from "@app/config/data.config";
 import { Col, Form, Input, Popconfirm, Tag } from "antd";
-import moment from "moment";
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { ColDef } from "ag-grid-community";
@@ -52,7 +51,7 @@ const Task = (props: IProps) => {
             // case search
             handleResetSearch(page, limit);
         }
-    }, [dispatch, page, handleResetSearch]);
+    }, [dispatch, page, limit, handleResetSearch]);
 
     const columns: ColDef[] | any = useMemo(() => {
         let userColumn: any[] = [];
@@ -196,7 +195,7 @@ const Task = (props: IProps) => {
             },
         },
     ].concat(actionColumn));
-    }, [profile, actionColumn, dispatch, handleOnClick, intl]);
+    }, [profile, actionColumn, dispatch, handleOnClick]);
 
     const getDataInit = async (payload) => {
         dispatch(actions.getDataInit(payload));

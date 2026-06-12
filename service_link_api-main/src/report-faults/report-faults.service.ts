@@ -24,6 +24,7 @@ import {
   customerScopeSql,
 } from '../helpers/customer-scope';
 import { Customer } from '../users/entities/customer.entity';
+import { CustomerNotificationsService } from '../users/customer-notifications.service';
 
 @Injectable()
 export class ReportFaultsService {
@@ -145,6 +146,7 @@ export class ReportFaultsService {
     @InjectRepository(ReportFault) private readonly reportFaultsRepository: Repository<ReportFault>,
     @InjectRepository(ReportFaultAnswer) private readonly reportFaultAnswersRepository: Repository<ReportFaultAnswer>,
     @Inject('winston') private readonly logger: Logger,
+    private readonly customerNotifications: CustomerNotificationsService,
   ) { }
 
   /** Tables may lack SERIAL/IDENTITY on id (legacy MySQL-style schema). */
@@ -261,7 +263,11 @@ export class ReportFaultsService {
       } catch {
         return { ...errorCode.VALIDATION_ERROR, message: 'Invalid attachFiles format' };
       }
-      if (!Array.isArray(parsedFiles) || parsedFiles.length === 0) {
+      if (!Array.isArray(parsedFiles)) {
+        return { ...errorCode.VALIDATION_ERROR, message: 'Invalid attachFiles format' };
+      }
+      const mediaRequired = +userInfo.type !== userType.STAFF;
+      if (mediaRequired && parsedFiles.length === 0) {
         return { ...errorCode.VALIDATION_ERROR, message: 'At least one media file is required' };
       }
 
@@ -305,6 +311,18 @@ export class ReportFaultsService {
         content.type = userInfo.type === 1 ? 1 : 2;
         await manager.save(ReportFaultAnswer, content);
       });
+
+      if (+userInfo.type !== userType.CUSTOMER && reportFault.customerId) {
+        void this.customerNotifications.notifyFaultReportCreated({
+          faultId: reportFault.id,
+          customerId: reportFault.customerId,
+          issue: reportFault.issue,
+          siteName: reportFault.siteName,
+          serviceName: reportFault.serviceName,
+          priority: reportFault.priority,
+          createdByUserId: +userInfo.userId,
+        });
+      }
 
       return errorCode.SUCCESS;
     } catch (error) {
@@ -473,10 +491,76 @@ export class ReportFaultsService {
     };
   }
 
+  /**
+   * Admin Deleted tab: one list row per soft-deleted fault (not per answer).
+   * Avoids mismatched counts and active faults appearing beside orphan rows.
+   */
+  private async findDeletedFaultsForAdmin(body: GetReportFaultsDto) {
+    const orderDir =
+      body.orderValue && body.orderValue === 'ASC' ? 'ASC' : 'DESC';
+    const q = this.reportFaultsRepository
+      .createQueryBuilder('f')
+      .leftJoinAndSelect('f.answers', 'a')
+      .leftJoin('f.customer', 'faultCustomer')
+      .leftJoin('faultCustomer.customerInfo', 'faultCustomerInfo')
+      .addSelect(['faultCustomerInfo.companyId'])
+      .where('f.status = :deletedStatus', {
+        deletedStatus: reportFaultStatus.DELETED,
+      });
+
+    if (body.keyword) {
+      q.andWhere(
+        '(f.subject LIKE :keyword OR f.issue LIKE :keyword OR f.message LIKE :keyword)',
+        { keyword: `%${body.keyword}%` },
+      );
+    }
+    if (body.startDate && body.endDate) {
+      q.andWhere('f.created_at > :startDate AND f.created_at < :endDate', {
+        startDate: moment(body.startDate).format('YYYY-MM-DD 00:00:00'),
+        endDate: moment(body.endDate).format('YYYY-MM-DD 23:59:59'),
+      });
+    }
+
+    q.orderBy('f.createdAt', orderDir);
+
+    const total = await q.getCount();
+
+    if (+body.limit) {
+      q.take(body.limit).skip((body.page - 1) * body.limit);
+    }
+
+    const faults = await q.getMany();
+    const rows = faults.map((fault) => {
+      const answers = (fault.answers || []).slice().sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      const answer =
+        answers.length > 0 ? answers[0] : this.syntheticAnswerFromFault(fault);
+      const row = this.mapAnswerToListRow(fault, answer);
+      const companyId =
+        (fault.customer as { customerInfo?: { companyId?: number } })
+          ?.customerInfo?.companyId;
+      if (companyId != null) {
+        (row as { companyId?: number }).companyId = +companyId;
+      }
+      return row;
+    });
+
+    return { ...errorCode.SUCCESS, data: { count: total, rows } };
+  }
+
   async findAllGroupByDate(userInfo: IUserInfo, body: GetReportFaultsDto) {
     try {
       if (+body.faultId) {
         return this.findFaultRowsById(userInfo, +body.faultId, body);
+      }
+
+      if (
+        +userInfo.type === userType.ADMIN &&
+        +body.status === reportFaultStatus.DELETED
+      ) {
+        return this.findDeletedFaultsForAdmin(body);
       }
 
       const query = this.reportFaultAnswersRepository
@@ -541,6 +625,13 @@ export class ReportFaultsService {
         });
 
       rows = await this.appendOrphanFaultsForAdmin(userInfo, body, rows);
+      if (+body.status) {
+        rows = rows.filter((r) => +r.status === +body.status);
+      } else {
+        rows = rows.filter(
+          (r) => !this.listExcludedStatuses.includes(+r.status),
+        );
+      }
 
       if (+userInfo.type === userType.CUSTOMER) {
         await this.applyCustomerOpenedStateToListRows(rows, +userInfo.userId);
@@ -548,7 +639,7 @@ export class ReportFaultsService {
 
       return {
         ...errorCode.SUCCESS,
-        data: { count: rows.length, rows },
+        data: { count: result[1], rows },
       };
     } catch (error) {
       this.logger.error(error.message);
@@ -719,13 +810,15 @@ export class ReportFaultsService {
     }
 
     if (type === userType.ADMIN) {
-      await this.reportFaultAnswersRepository.delete(answerId);
-      const remaining = await this.reportFaultAnswersRepository.count({
-        where: { reportFaultId },
-      });
-      if (remaining === 0) {
+      if (+data.status === reportFaultStatus.DELETED) {
+        await this.reportFaultAnswersRepository.delete({ reportFaultId });
         await this.reportFaultsRepository.delete(reportFaultId);
+        return errorCode.SUCCESS;
       }
+      data.status = reportFaultStatus.DELETED;
+      data.updatedBy = userId;
+      data.updatedAt = new Date();
+      await this.reportFaultsRepository.save(data);
       return errorCode.SUCCESS;
     }
 
@@ -763,17 +856,25 @@ export class ReportFaultsService {
       if (!data) {
         return errorCode.NOT_FOUND;
       }
-      if (+data.status === reportFaultStatus.DELETED) {
-        return errorCode.NOT_FOUND;
-      }
 
       const userId = +userInfo.userId;
       const type = +userInfo.type;
 
       if (type === userType.ADMIN) {
-        await this.reportFaultAnswersRepository.delete({ reportFaultId: +id });
-        await this.reportFaultsRepository.delete(+id);
+        if (+data.status === reportFaultStatus.DELETED) {
+          await this.reportFaultAnswersRepository.delete({ reportFaultId: +id });
+          await this.reportFaultsRepository.delete(+id);
+          return errorCode.SUCCESS;
+        }
+        data.status = reportFaultStatus.DELETED;
+        data.updatedBy = userId;
+        data.updatedAt = new Date();
+        await this.reportFaultsRepository.save(data);
         return errorCode.SUCCESS;
+      }
+
+      if (+data.status === reportFaultStatus.DELETED) {
+        return errorCode.NOT_FOUND;
       }
 
       if (type === userType.STAFF) {
@@ -809,6 +910,58 @@ export class ReportFaultsService {
       console.log("error", error);
       this.logger.error(error);
       return errorCode.EXCEPTION;
+    }
+  }
+
+  async restoreFault(userInfo: IUserInfo, id: string) {
+    try {
+      if (+userInfo.type !== userType.ADMIN) {
+        return errorCode.CAN_NOT_DELETE;
+      }
+      const data = await this.reportFaultsRepository.findOne({ where: { id: +id } });
+      if (!data || +data.status !== reportFaultStatus.DELETED) {
+        return errorCode.NOT_FOUND;
+      }
+      data.status = reportFaultStatus.NEW;
+      data.updatedBy = +userInfo.userId;
+      data.updatedAt = new Date();
+      await this.reportFaultsRepository.save(data);
+      return errorCode.SUCCESS;
+    } catch (error) {
+      this.logger.error(error);
+      return errorCode.EXCEPTION;
+    }
+  }
+
+  async purgeDeletedFaultsByIds(userInfo: IUserInfo, body: { ids?: number[] }) {
+    try {
+      if (+userInfo.type !== userType.ADMIN) {
+        return errorCode.CAN_NOT_DELETE;
+      }
+      const ids = Array.from(
+        new Set((body?.ids || []).map((n) => +n).filter((n) => Number.isFinite(n) && n > 0)),
+      );
+      if (!ids.length) {
+        return { ...errorCode.SUCCESS, data: { clearedCount: 0 } };
+      }
+      const faults = await this.reportFaultsRepository
+        .createQueryBuilder('f')
+        .where('f.id IN (:...ids)', { ids })
+        .andWhere('f.status = :deletedStatus', { deletedStatus: reportFaultStatus.DELETED })
+        .getMany();
+      let clearedCount = 0;
+      for (const fault of faults) {
+        await this.reportFaultAnswersRepository.delete({ reportFaultId: fault.id });
+        await this.reportFaultsRepository.delete(fault.id);
+        clearedCount += 1;
+      }
+      return { ...errorCode.SUCCESS, data: { clearedCount } };
+    } catch (error) {
+      this.logger.error((error as Error).message);
+      return {
+        ...errorCode.EXCEPTION,
+        message: (error as Error).message || errorCode.EXCEPTION.message,
+      };
     }
   }
 

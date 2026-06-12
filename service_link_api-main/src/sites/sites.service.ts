@@ -19,9 +19,16 @@ import { applyCustomerScopeToQuery } from '../helpers/customer-scope';
 import { userStatus } from '../constants/user';
 import * as moment from 'moment';
 import { SendMail } from '../helpers/sendEmail';
+import { emailLinkHtml, emailSupportFooterHtml, emailTaskTodayUrl } from '../helpers/emailContent';
 import { TasksService } from '../tasks/tasks.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { SiteItemStaffShift } from './entities/site-item-staff-shift.entity';
+import { ServiceActivity } from './entities/service-activity.entity';
+import { SiteItemActivitySchedule } from './entities/site-item-activity-schedule.entity';
+import { Service } from '../services/entities/service.entity';
+import { isDetailedService, normalizeServiceFrequencyType } from '../services/service-frequency.util';
+import { isDetailedSiteItem, resolveSiteItemFrequencyType } from './site-item-frequency.util';
+import { isValidPgIntegerId, INVALID_PG_INTEGER_ID_MESSAGE } from '../helpers/pg-integer-id';
 import { userType } from '../constants/user';
 import { UserDailyJobItem } from '../user-daily-job/entities/user-daily-job-items.entity';
 
@@ -100,11 +107,42 @@ function withSiteListCounts(site: Site, staffCount?: number) {
   };
 }
 
+function scheduleToMonths(row: SiteItemActivitySchedule) {
+  return [
+    row.month01 ?? null,
+    row.month02 ?? null,
+    row.month03 ?? null,
+    row.month04 ?? null,
+    row.month05 ?? null,
+    row.month06 ?? null,
+    row.month07 ?? null,
+    row.month08 ?? null,
+    row.month09 ?? null,
+    row.month10 ?? null,
+    row.month11 ?? null,
+    row.month12 ?? null,
+  ].map(normalizeScheduleMonthValue);
+}
+
+function normalizeScheduleMonthValue(value: string | null | undefined): string | null {
+  if (value == null || value === '') return null;
+  const v = String(value).trim().toLowerCase();
+  if (v === 'once') return 'weekly';
+  if (v === 'weekly' || v === 'monthly' || v === 'fortnight' || v === 'daily') return v;
+  return null;
+}
+
 @Injectable()
 export class SitesService {
   constructor(
     @InjectRepository(Site) private readonly sitesRepository: Repository<Site>,
     @InjectRepository(SiteItem) private readonly siteItemsRepository: Repository<SiteItem>,
+    @InjectRepository(SiteItemActivitySchedule)
+    private readonly activitySchedulesRepository: Repository<SiteItemActivitySchedule>,
+    @InjectRepository(ServiceActivity)
+    private readonly serviceActivitiesRepository: Repository<ServiceActivity>,
+    @InjectRepository(Service)
+    private readonly servicesRepository: Repository<Service>,
     @Inject('winston') private readonly logger: Logger,
     @Inject(forwardRef(() => TasksService)) private readonly tasksService: TasksService,
   ) { }
@@ -197,6 +235,64 @@ export class SitesService {
       row.siteItemId = siteItemId;
       await staffRepo.save(row);
     }
+  }
+
+  private applySiteItemFrequencyMode(
+    target: SiteItem,
+    mode: string | null | undefined,
+  ): void {
+    if (mode === undefined) return;
+    if (mode == null || mode === '') {
+      target.frequencyMode = null;
+      return;
+    }
+    const v = String(mode).trim().toLowerCase();
+    if (v === 'annual') {
+      target.frequencyMode = 'annual';
+    } else if (v === 'both') {
+      target.frequencyMode = 'both';
+    } else {
+      target.frequencyMode = 'interval';
+    }
+  }
+
+  private clearSiteItemIntervalFields(target: SiteItem): void {
+    target.frequencyTimes = null;
+    target.frequencyCount = null;
+    target.frequencyPeriod = null;
+  }
+
+  private siteItemHasIntervalFrequency(item: SiteItem): boolean {
+    const period = item.frequencyPeriod;
+    return (
+      period != null &&
+      period !== '' &&
+      String(period).trim().toLowerCase() !== 'na'
+    );
+  }
+
+  private async clearSiteItemActivitySchedules(siteItemId: number): Promise<void> {
+    await this.activitySchedulesRepository.delete({ siteItemId });
+  }
+
+  /** Unify mode: both layers can coexist — never deletes schedule or interval data. */
+  private async syncSiteItemFrequencyMode(siteItemId: number): Promise<void> {
+    const item = await this.siteItemsRepository.findOne({ where: { id: siteItemId } });
+    if (!item) return;
+    const scheduleCount = await this.activitySchedulesRepository.count({
+      where: { siteItemId },
+    });
+    const hasInterval = this.siteItemHasIntervalFrequency(item);
+    if (hasInterval && scheduleCount > 0) {
+      item.frequencyMode = 'both';
+    } else if (scheduleCount > 0) {
+      item.frequencyMode = 'annual';
+    } else if (hasInterval) {
+      item.frequencyMode = 'interval';
+    } else {
+      item.frequencyMode = null;
+    }
+    await this.siteItemsRepository.save(item);
   }
 
   private applySiteItemFrequency(
@@ -596,7 +692,7 @@ export class SitesService {
         .innerJoinAndSelect('items.tasks', 'tasks', 'tasks.start_date<=now() and tasks.end_date>now()')
         .innerJoinAndSelect('tasks.shifts', 'shifts')
         .leftJoin('items.service', 'service')
-        .addSelect(['service.id', 'service.name'])
+        .addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .leftJoin('items.customer', 'customer', 'customer.status!=4')
         .addSelect(['customer.id', 'customer.fullName'])
         .leftJoin('customer.customerInfo', 'customerInfo')
@@ -607,7 +703,7 @@ export class SitesService {
         .leftJoinAndSelect('tasks.siteItem', 'siteItem')
         .leftJoinAndSelect('tasks.shifts', 'shifts')
         .leftJoin('items.service', 'service')
-        .addSelect(['service.id', 'service.name'])
+        .addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .leftJoin('items.customer', 'customer', 'customer.status!=4')
         .addSelect(['customer.id', 'customer.fullName'])
         .leftJoin('customer.customerInfo', 'customerInfo')
@@ -755,7 +851,7 @@ export class SitesService {
           .innerJoinAndSelect('tasks.shifts', 'shifts')
           // .leftJoinAndSelect('shifts.logs', 'logs')
 
-          .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name'])
+          .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
           .leftJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
           .leftJoin('customer.customerInfo', 'customerInfo').addSelect(['customerInfo.companyName'])
       }
@@ -766,7 +862,7 @@ export class SitesService {
           // .leftJoin('tasks.staff', 'taskstaff', 'taskstaff.status!=4').addSelect(['taskstaff.fullName', 'taskstaff.username'])
 
           // .leftJoinAndSelect('shifts.logs', 'logs')
-          .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name'])
+          .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
           .leftJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
           .leftJoin('customer.customerInfo', 'customerInfo').addSelect(['customerInfo.companyName'])
       }
@@ -848,7 +944,7 @@ export class SitesService {
         .leftJoin('tasks.staff', 'taskstaff').addSelect(['taskstaff.fullName', 'taskstaff.username'])
         .leftJoinAndSelect('tasks.shifts', 'shifts')
         .leftJoinAndSelect('shifts.logs', 'logs')
-        .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name'])
+        .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .addSelect(['items.companyId'])
         .leftJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
         .leftJoin('customer.customerInfo', 'customerInfo').addSelect([
@@ -937,6 +1033,7 @@ export class SitesService {
         frequencyTimes?: number | null;
         frequencyCount?: number | null;
         frequencyPeriod?: string | null;
+        frequencyMode?: string | null;
       }> = [];
       for (const de of incomingItems) {
         const ref = await this.resolveSiteItemCustomerRef(
@@ -951,6 +1048,7 @@ export class SitesService {
           frequencyTimes: de.frequencyTimes,
           frequencyCount: de.frequencyCount,
           frequencyPeriod: de.frequencyPeriod,
+          frequencyMode: de.frequencyMode,
         });
       }
 
@@ -982,6 +1080,7 @@ export class SitesService {
           checkService.customerId = de.customerId;
           checkService.companyId = de.companyId;
           this.applySiteItemFrequency(checkService, de);
+          this.applySiteItemFrequencyMode(checkService, de.frequencyMode);
           await this.siteItemsRepository.save(checkService);
           await this.replaceSiteItemStaffs(checkService.id, de.staffs);
           await this.tasksService.updateTaskStaffs(checkService.id, de.staffs ?? []);
@@ -993,6 +1092,7 @@ export class SitesService {
           nDe.siteId = data.id;
           nDe.createdAt = new Date();
           this.applySiteItemFrequency(nDe, de);
+          this.applySiteItemFrequencyMode(nDe, de.frequencyMode);
           const saved = await this.siteItemsRepository.save(nDe);
           await this.replaceSiteItemStaffs(saved.id, de.staffs);
         }
@@ -1039,7 +1139,7 @@ export class SitesService {
         .innerJoinAndSelect('sites.items', 'items')
         .innerJoinAndSelect('items.tasks', 'tasks')
         .leftJoinAndSelect('tasks.shifts', 'shifts')
-        .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name'])
+        .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .leftJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
         .innerJoin('tasks.staff', 'staff').addSelect(['staff.id', 'staff.fullName', 'staff.email'])
         .getMany();
@@ -1087,9 +1187,10 @@ export class SitesService {
                       continue;
                     }
                     console.log('g?i email', staff.fullName);
+                    const taskLink = emailTaskTodayUrl('p');
                     const html = `
                       <p>Hello ${staff.fullName},</p>
-                      <p>New task has been assigned to you</p>
+                      <p>Reminder: prepare for work at ${site.name}</p>
                       <p>Task: ${task.name}</p>
                       <p>Task description: ${task.description}</p>
                       <p>Site: ${site.name}</p>
@@ -1097,9 +1198,8 @@ export class SitesService {
                       <p>Customer: ${item.customer.fullName}</p>
                       <p>Start at: ${moment().format('YYYY-MM-DD HH:mm:ss')}</p>
                       <p>End at: ${moment(totime).format('YYYY-MM-DD HH:mm:ss')}</p>
-                      <p>Access the link: <a target="_blank" href="http://3.104.215.45:8002/task-today?status=p">http://3.104.215.45:8002/task-today?status=p</a></p>
-                      <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-                      <p>ServiceLink Support Team</p>`
+                      <p>Access the link: ${emailLinkHtml(taskLink)}</p>
+                      ${emailSupportFooterHtml()}`
                     SendMail(staff.email, "Reminder to prepare for work at " + site.name, html)
 
                   } else {
@@ -1131,7 +1231,7 @@ export class SitesService {
         .innerJoinAndSelect('sites.items', 'items')
         .innerJoinAndSelect('items.tasks', 'tasks')
         .innerJoinAndSelect('tasks.shifts', 'shifts')
-        .innerJoin('items.service', 'Service').addSelect(['service.id', 'service.name'])
+        .innerJoin('items.service', 'Service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .innerJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
         .leftJoin('customer.customerInfo', 'customerInfo').addSelect(['customerInfo.companyName'])
       if (+siteId) {
@@ -1350,12 +1450,14 @@ export class SitesService {
     }
   }
 
-  async getServicesBySite(userInfo: IUserInfo, siteId: number) {
+  async getServicesBySite(userInfo: IUserInfo, siteId?: number) {
     try {
       const query = this.siteItemsRepository.createQueryBuilder('site_items')
-        .leftJoinAndSelect('site_items.service', 'service').addSelect(['service.id', 'service.name'])
-        .leftJoinAndSelect('site_items.staffs', 'staffs')
-        .where('site_items.siteId=:siteId ', { siteId })
+        .leftJoinAndSelect('site_items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
+        .leftJoinAndSelect('site_items.staffs', 'staffs');
+      if (siteId != null && +siteId > 0) {
+        query.where('site_items.siteId = :siteId', { siteId: +siteId });
+      }
       if (userInfo.type === userType.CUSTOMER) {
         applyCustomerScopeToQuery(query, userInfo, 'site_items.customerId');
       }
@@ -1565,7 +1667,7 @@ export class SitesService {
         // .leftJoinAndSelect('tasks.siteItem', 'siteItem')
         // .leftJoinAndSelect('tasks.shifts', 'shifts')
         // .leftJoin('tasks.staff', 'taskstaff', 'taskstaff.status!=4').addSelect(['taskstaff.fullName', 'taskstaff.username'])
-        .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name'])
+        .leftJoin('items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .leftJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
         .leftJoin('customer.customerInfo', 'customerInfo').addSelect(['customerInfo.companyName'])
       if (+body.staffId) {
@@ -1621,8 +1723,18 @@ export class SitesService {
 
   async updateItem(userInfo: IUserInfo, id: number, body: SiteItemDto) {
     try {
+      if (!isValidPgIntegerId(id)) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: INVALID_PG_INTEGER_ID_MESSAGE,
+        };
+      }
       const checkService = await this.siteItemsRepository.findOne({ where: { id } });
-      if (checkService) {
+      if (!checkService) {
+        return errorCode.NOT_FOUND;
+      }
+
+      if (body.serviceId != null) {
         const ref = await this.resolveSiteItemCustomerRef(
           body.customerId,
           (body as SiteItemDto & { companyId?: number }).companyId,
@@ -1630,12 +1742,71 @@ export class SitesService {
         checkService.serviceId = body.serviceId;
         checkService.customerId = ref.customerId;
         checkService.companyId = ref.companyId;
-        await this.siteItemsRepository.save(checkService);
+      }
+
+      if (body.frequencyType !== undefined) {
+        const withService = await this.siteItemsRepository.findOne({
+          where: { id: checkService.id },
+          relations: ['service'],
+        });
+        const nextType = normalizeServiceFrequencyType(body.frequencyType);
+        const prevType = resolveSiteItemFrequencyType(
+          checkService,
+          withService?.service,
+        );
+        if (nextType !== prevType) {
+          if (nextType === 'simple') {
+            await this.clearSiteItemActivitySchedules(checkService.id!);
+            checkService.frequencyMode = null;
+          } else {
+            this.clearSiteItemIntervalFields(checkService);
+            checkService.frequencyMode = 'annual';
+          }
+        }
+        checkService.frequencyType = nextType;
+      }
+
+      if (
+        body.frequencyPeriod !== undefined ||
+        body.frequencyTimes !== undefined ||
+        body.frequencyCount !== undefined ||
+        body.frequencyMode !== undefined
+      ) {
+        const withService = await this.siteItemsRepository.findOne({
+          where: { id: checkService.id },
+          relations: ['service'],
+        });
+        if (
+          withService &&
+          isDetailedSiteItem(withService, withService.service)
+        ) {
+          return {
+            ...errorCode.EXCEPTION,
+            message: 'Simple frequency does not apply when this site uses Detailed schedule.',
+          };
+        }
+      }
+
+      if (body.frequencyMode !== undefined) {
+        this.applySiteItemFrequencyMode(checkService, body.frequencyMode);
+      }
+
+      if (
+        body.frequencyPeriod !== undefined ||
+        body.frequencyTimes !== undefined ||
+        body.frequencyCount !== undefined
+      ) {
+        this.applySiteItemFrequency(checkService, body);
+      }
+
+      await this.siteItemsRepository.save(checkService);
+
+      if (body.staffs !== undefined) {
         await this.replaceSiteItemStaffs(checkService.id, body.staffs);
         await this.tasksService.updateTaskStaffs(checkService.id, body.staffs ?? []);
-        return errorCode.SUCCESS;
       }
-      return errorCode.NOT_FOUND;
+
+      return errorCode.SUCCESS;
     } catch (error) {
       const message = error instanceof Error ? error.message : errorCode.EXCEPTION.message;
       return { ...errorCode.EXCEPTION, message };
@@ -1646,6 +1817,12 @@ export class SitesService {
 
   async removeSiteItem(id: number) {
     try {
+      if (!isValidPgIntegerId(id)) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: INVALID_PG_INTEGER_ID_MESSAGE,
+        };
+      }
       const data = await this.siteItemsRepository.findOne({ where: { id } });
       if (!data) {
         return errorCode.NOT_FOUND;
@@ -1654,6 +1831,246 @@ export class SitesService {
       return errorCode.SUCCESS;
     } catch (error) {
       console.log("error", error);
+      this.logger.error(error);
+      return errorCode.EXCEPTION;
+    }
+  }
+
+  /** Activity × month schedule for Detailed frequency services. */
+  async getGroundMaintenanceSchedules(siteId: number, siteItemId?: number) {
+    try {
+      if (siteItemId != null && !isValidPgIntegerId(siteItemId)) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: INVALID_PG_INTEGER_ID_MESSAGE,
+        };
+      }
+      let siteItem: SiteItem | null = null;
+      if (siteItemId) {
+        siteItem = await this.siteItemsRepository.findOne({
+          where: { id: siteItemId, siteId },
+          relations: ['service'],
+        });
+      } else {
+        siteItem = await this.siteItemsRepository
+          .createQueryBuilder('si')
+          .innerJoinAndSelect('si.service', 'service')
+          .where('si.site_id = :siteId', { siteId })
+          .andWhere(
+            `(si.frequency_type = 'detailed' OR (si.frequency_type IS NULL AND service.frequency_type = 'detailed'))`,
+          )
+          .orderBy('si.id', 'ASC')
+          .getOne();
+      }
+      if (!siteItem) {
+        return errorCode.NOT_FOUND;
+      }
+      if (!siteItem.service || !isDetailedSiteItem(siteItem, siteItem.service)) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'Activity schedules apply only when this site uses Detailed frequency.',
+        };
+      }
+
+      const schedules = await this.activitySchedulesRepository.find({
+        where: { siteItemId: siteItem.id },
+        relations: ['activity'],
+        order: { activityId: 'ASC' },
+      });
+
+      return {
+        ...errorCode.SUCCESS,
+        data: {
+          siteId,
+          siteItemId: siteItem.id,
+          serviceId: siteItem.serviceId,
+          serviceName: siteItem.service?.name ?? '',
+          rows: schedules.map((row) => ({
+            id: row.id,
+            activityId: row.activityId ?? null,
+            activityName:
+              row.activityName?.trim() ||
+              row.activity?.name?.trim() ||
+              '',
+            accessWindow: row.accessWindow ?? null,
+            months: scheduleToMonths(row),
+          })),
+        },
+      };
+    } catch (error) {
+      this.logger.error(error);
+      return errorCode.EXCEPTION;
+    }
+  }
+
+  /** Activity catalog for a service (e.g. Ground Maintenance). */
+  async getServiceActivities(serviceId: number) {
+    try {
+      const service = await this.servicesRepository.findOne({ where: { id: serviceId } });
+      if (!service) return errorCode.NOT_FOUND;
+      if (!isDetailedService(service)) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'Activities are only available for Detailed frequency services.',
+        };
+      }
+      const rows = await this.serviceActivitiesRepository.find({
+        where: { serviceId },
+        order: { sortOrder: 'ASC', name: 'ASC' },
+      });
+      return { ...errorCode.SUCCESS, data: rows };
+    } catch (error) {
+      this.logger.error(error);
+      return errorCode.EXCEPTION;
+    }
+  }
+
+  private async resolveSiteItemForActivitySchedule(siteId: number, siteItemId: number) {
+    const siteItem = await this.siteItemsRepository.findOne({
+      where: { id: siteItemId, siteId },
+      relations: ['service'],
+    });
+    if (!siteItem?.service || !isDetailedSiteItem(siteItem, siteItem.service)) {
+      return null;
+    }
+    return siteItem;
+  }
+
+  private applyMonthsToSchedule(
+    row: SiteItemActivitySchedule,
+    months: (string | null)[],
+  ) {
+    const vals = months.slice(0, 12).map((m) => m ?? null);
+    while (vals.length < 12) vals.push(null);
+    row.month01 = vals[0] as SiteItemActivitySchedule['month01'];
+    row.month02 = vals[1] as SiteItemActivitySchedule['month02'];
+    row.month03 = vals[2] as SiteItemActivitySchedule['month03'];
+    row.month04 = vals[3] as SiteItemActivitySchedule['month04'];
+    row.month05 = vals[4] as SiteItemActivitySchedule['month05'];
+    row.month06 = vals[5] as SiteItemActivitySchedule['month06'];
+    row.month07 = vals[6] as SiteItemActivitySchedule['month07'];
+    row.month08 = vals[7] as SiteItemActivitySchedule['month08'];
+    row.month09 = vals[8] as SiteItemActivitySchedule['month09'];
+    row.month10 = vals[9] as SiteItemActivitySchedule['month10'];
+    row.month11 = vals[10] as SiteItemActivitySchedule['month11'];
+    row.month12 = vals[11] as SiteItemActivitySchedule['month12'];
+  }
+
+  async updateGroundMaintenanceSchedules(
+    siteId: number,
+    siteItemId: number,
+    rows: Array<{ id: number; months: (string | null)[] }>,
+  ) {
+    try {
+      const siteItem = await this.resolveSiteItemForActivitySchedule(siteId, siteItemId);
+      if (!siteItem) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'Activity schedules apply only to Detailed frequency services.',
+        };
+      }
+
+      const allowed = new Set(['weekly', 'monthly', 'fortnight', 'once', 'daily']);
+      for (const row of rows) {
+        const schedule = await this.activitySchedulesRepository.findOne({
+          where: { id: row.id, siteItemId: siteItem.id },
+        });
+        if (!schedule) {
+          return { ...errorCode.NOT_FOUND, message: `Schedule row ${row.id} not found` };
+        }
+        const months = (row.months ?? []).slice(0, 12).map((m) => {
+          if (m == null || m === '') return null;
+          const v = String(m).trim().toLowerCase();
+          return normalizeScheduleMonthValue(allowed.has(v) ? v : null);
+        });
+        this.applyMonthsToSchedule(schedule, months);
+        schedule.updatedAt = new Date();
+        await this.activitySchedulesRepository.save(schedule);
+      }
+
+      return this.getGroundMaintenanceSchedules(siteId, siteItemId);
+    } catch (error) {
+      this.logger.error(error);
+      const raw = error instanceof Error ? error.message : String(error);
+      const message = /check constraint/i.test(raw)
+        ? 'Invalid schedule value for one or more months (allowed: weekly, monthly, fortnightly, daily).'
+        : raw || errorCode.EXCEPTION.message;
+      return { ...errorCode.EXCEPTION, message };
+    }
+  }
+
+  async addGroundMaintenanceScheduleRow(
+    siteId: number,
+    siteItemId: number,
+    body: { activityId?: number; activityName?: string },
+  ) {
+    try {
+      const siteItem = await this.resolveSiteItemForActivitySchedule(siteId, siteItemId);
+      if (!siteItem) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'Activity schedules apply only to Detailed frequency services.',
+        };
+      }
+
+      const rawName = String(body.activityName ?? '').trim();
+      if (!rawName) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'activityName is required',
+        };
+      }
+
+      const dup = await this.activitySchedulesRepository
+        .createQueryBuilder('s')
+        .where('s.site_item_id = :siteItemId', { siteItemId: siteItem.id })
+        .andWhere('LOWER(TRIM(s.activity_name)) = LOWER(TRIM(:name))', { name: rawName })
+        .getOne();
+      if (dup) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'This activity is already on this site schedule',
+        };
+      }
+
+      await this.activitySchedulesRepository.save({
+        siteItemId: siteItem.id,
+        activityId: null,
+        activityName: rawName,
+        accessWindow: null,
+      });
+
+      return this.getGroundMaintenanceSchedules(siteId, siteItemId);
+    } catch (error) {
+      this.logger.error(error);
+      return errorCode.EXCEPTION;
+    }
+  }
+
+  async removeGroundMaintenanceScheduleRow(
+    siteId: number,
+    siteItemId: number,
+    scheduleId: number,
+  ) {
+    try {
+      const siteItem = await this.resolveSiteItemForActivitySchedule(siteId, siteItemId);
+      if (!siteItem) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'Activity schedules apply only to Detailed frequency services.',
+        };
+      }
+
+      const schedule = await this.activitySchedulesRepository.findOne({
+        where: { id: scheduleId, siteItemId: siteItem.id },
+      });
+      if (!schedule) {
+        return errorCode.NOT_FOUND;
+      }
+
+      await this.activitySchedulesRepository.delete(schedule.id);
+      return this.getGroundMaintenanceSchedules(siteId, siteItemId);
+    } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;
     }

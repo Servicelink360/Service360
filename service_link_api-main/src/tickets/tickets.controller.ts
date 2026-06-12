@@ -10,6 +10,7 @@ import { GetTicketsDto } from './dto/get-tickets.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { CreateTicketAnswerDto } from './dto/create-ticket-answer.dto';
 import { UpdateTicketAnswerDto } from './dto/update-ticket-answer.dto';
+import { ClearDeletedTicketsDto } from './dto/clear-deleted-tickets.dto';
 
 
 @ApiTags("Tickets")
@@ -38,12 +39,11 @@ export class TicketsController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Patch(':id')
-  async update(@Res() res, @Param('id') id: string, @Body() body: UpdateTicketDto, @Request() req) {
+  @Patch('markAllTicketsOpened')
+  async markAllTicketsOpened(@Res() res, @Request() req) {
     const user: IUserInfo = req.user;
-    return customHttpCode(res, await this.ticketsService.update(user, id, body));
+    return customHttpCode(res, await this.ticketsService.markAllTicketsOpened(user));
   }
-
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -53,12 +53,36 @@ export class TicketsController {
     return customHttpCode(res, await this.ticketsService.changeStatus(user, body));
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('clear-deleted')
+  async clearDeleted(@Res() res, @Request() req, @Body() body: ClearDeletedTicketsDto) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.ticketsService.purgeDeletedTicketsByIds(user, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/restore')
+  async restore(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.ticketsService.restoreTicket(user, id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id')
+  async update(@Res() res, @Param('id') id: string, @Body() body: UpdateTicketDto, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.ticketsService.update(user, id, body));
+  }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Delete(':id')
-  async remove(@Res() res, @Param('id') id: string) {
-    return customHttpCode(res, await this.ticketsService.remove(id));
+  async remove(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.ticketsService.remove(user, id));
   }
 
 

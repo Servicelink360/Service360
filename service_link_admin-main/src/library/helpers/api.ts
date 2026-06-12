@@ -4,6 +4,7 @@ import axios from "axios";
 import serviceType from "./../../constants/serviceType";
 import { notification } from "@app/components";
 import refreshToken from "./refreshToken";
+import { rejectInvalidSiteItemApiUrl } from "./persistedRecordId";
 
 const buildQueryString = (payload: Record<string, any>) => {
     const searchParams = new URLSearchParams();
@@ -32,7 +33,12 @@ export function* callAPI(
             default:
                 break;
         }
-        if (method.toUpperCase() === "GET" && payload) {
+        const siteItemUrlError = rejectInvalidSiteItemApiUrl(endPoint);
+        if (siteItemUrlError) {
+            return { code: 0, message: siteItemUrlError };
+        }
+        const methodUpper = method.toUpperCase();
+        if (payload && (methodUpper === "GET" || methodUpper === "DELETE")) {
             const queryString = buildQueryString(payload);
             if (queryString) {
                 url = `${url}?${queryString}`;
@@ -164,7 +170,12 @@ export async function callAPIAsync(
             default:
                 break;
         }
-        if (method.toUpperCase() === "GET" && payload) {
+        const siteItemUrlError = rejectInvalidSiteItemApiUrl(endPoint);
+        if (siteItemUrlError) {
+            return { code: 0, message: siteItemUrlError };
+        }
+        const methodUpper = method.toUpperCase();
+        if (payload && (methodUpper === "GET" || methodUpper === "DELETE")) {
             const queryString = buildQueryString(payload);
             if (queryString) {
                 url = `${url}?${queryString}`;
@@ -191,10 +202,12 @@ export async function callAPIAsync(
             config && typeof config === "object"
                 ? Object.fromEntries(Object.entries(config).filter(([key]) => key !== "onUploadProgress"))
                 : {};
+        const bodyPayload =
+            methodUpper === "GET" || methodUpper === "DELETE" ? undefined : payload ?? undefined;
         result = await axios({
             method: method as any,
             url: url,
-            data: payload ? JSON.stringify(payload) : undefined,
+            data: bodyPayload,
             headers: formDataHeaders,
             ...(restAxiosConfig as any),
         })

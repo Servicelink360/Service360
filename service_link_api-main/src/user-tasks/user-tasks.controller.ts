@@ -87,15 +87,6 @@ export class UserTasksController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get('getAllUserTaskToday')
-  async getAllUserTaskToday(@Res() res, @Request() req, @Query('status') status: string) {
-    const user: IUserInfo = req.user;
-    return customHttpCode(res, await this.userTasksService.getUserTaskByStatus(user, status));
-  }
-
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @Get('getUserTasksByUserId/:userId')
   async getUserTasksByUserId(@Res() res, @Request() req, @Param('userId') userId: number, @Query() body: GetUserTasksByUserDto) {
     const userInfo: IUserInfo = req.user;
@@ -104,11 +95,6 @@ export class UserTasksController {
 
 
 
-
-  @Post('convertHtmlToPdfTest')
-  async convertHtmlToPdfTest(@Res() res, @Request() req) {
-    return customHttpCode(res, await this.userTasksService.convertHtmlToPdfTest());
-  }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -138,14 +124,6 @@ export class UserTasksController {
     const userInfo: IUserInfo = req.user;
     return customHttpCode(res, await this.userTasksService.getCountUserTasksByUserId(userInfo, body));
   }
-
-  // @UseGuards(JwtAuthGuard)
-  // @ApiBearerAuth()
-  // @Get('getAllItemsUserTasksByUserId')
-  // async getAllItemsUserTasksByUserId(@Res() res, @Request() req, @Param('userId') userId: number, @Query() body: GetUserTasksByUserDto) {
-  //   const userInfo: IUserInfo = req.user;
-  //   return customHttpCode(res, await this.userTasksService.getAllItemsUserTasksByUserId(userInfo, body));
-  // }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -215,16 +193,6 @@ export class UserTasksController {
   async update(@Res() res, @Param('id') id: string, @Body() body: UpdateUserTaskDto, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.userTasksService.update(user, id, body));
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Delete('clear-deleted')
-  async clearDeleted(@Res() res, @Request() req, @Query() body: GetUserTasksByUserDto) {
-    const user: IUserInfo = req.user;
-    return customHttpCode(res, await this.userTasksService.clearDeletedReports(user, body));
   }
 
   @UseGuards(JwtAuthGuard)

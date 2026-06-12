@@ -356,7 +356,7 @@ const ReportFaultModal = (props: IProps) => {
 
     const onFinishSave = async (closeable: boolean = true) => {
         const values = await form.validateFields();
-        if (!files.length) {
+        if (!isStaffUser && !files.length) {
             notificationComponent('error', 3, 'At least one media file is required', '');
             return;
         }
@@ -615,7 +615,9 @@ const ReportFaultModal = (props: IProps) => {
                                 <Fieldset>
                                     <Label style={uiDark ? { color: "#d9d9d9" } : undefined}>
                                         Media files
-                                        <span style={{ color: uiDark ? "#ff7875" : "red" }}> *</span>
+                                        {!isStaffUser ? (
+                                            <span style={{ color: uiDark ? "#ff7875" : "red" }}> *</span>
+                                        ) : null}
                                     </Label>
                                     <Upload
                                         className={uiDark ? "report-fault-media-upload--dark" : undefined}

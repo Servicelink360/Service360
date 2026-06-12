@@ -41,6 +41,6 @@ export class CreateReportFaultDto {
     @ApiProperty({ required: false })
     message: string
 
-    @ApiProperty()
+    @ApiProperty({ required: false })
     attachFiles: string
 }

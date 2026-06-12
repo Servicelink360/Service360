@@ -52,7 +52,7 @@ const Unit: React.FC = () => {
                 return <>Address: {text}</>
             }
         },
-    ], []);
+    ], [intl]);
 
     const handleResetSearch = async (page: any = 1, limit: any = 100) => {
         const formData = await form.validateFields();
@@ -91,6 +91,7 @@ const Unit: React.FC = () => {
         if (success) {
             handleResetSearch(page, limit);
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [success]);
 
 
@@ -105,6 +106,7 @@ const Unit: React.FC = () => {
         return () => {
             dispatch(actions.clearData());
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const expandedRowRender = (item) => {

@@ -18,7 +18,9 @@ import config from '../config';
 import { userType } from '../constants/user';
 import { CreateUserTaskDto } from './dto/create-user-task.dto';
 import { SendMail } from '../helpers/sendEmail';
+import { emailTaskAssignedHtml } from '../helpers/emailContent';
 import { UsersService } from '../users/users.service';
+import { CustomerNotificationsService } from '../users/customer-notifications.service';
 import { UpdateUserTaskDto } from './dto/update-user-task.dto';
 import { UserTaskReport } from './entities/user-task-report.entity';
 import { CreateCustomReportsDto } from './dto/create-custom-reports.dto';
@@ -35,8 +37,7 @@ import {
   customerScopeSql,
 } from '../helpers/customer-scope';
 import { Customer } from '../users/entities/customer.entity';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const puppeteer = require('puppeteer');
+
 @Injectable()
 export class UserTasksService {
 
@@ -46,7 +47,29 @@ export class UserTasksService {
     @Inject(forwardRef(() => SitesService)) private readonly sitesService: SitesService,
     @Inject('winston') private readonly logger: Logger,
     @Inject(forwardRef(() => UsersService)) private readonly uersService: UsersService,
+    private readonly customerNotifications: CustomerNotificationsService,
   ) { }
+
+  private maybeNotifyNewReportEmail(
+    userInfo: IUserInfo,
+    task: {
+      id: number;
+      customerId?: number | null;
+      taskName?: string;
+      siteName?: string;
+      serviceName?: string;
+    },
+  ): void {
+    if (+userInfo.type === userType.CUSTOMER || !task.customerId) return;
+    void this.customerNotifications.notifyNewReportAvailable({
+      userTaskId: task.id,
+      customerId: +task.customerId,
+      taskName: task.taskName || '',
+      siteName: task.siteName || '',
+      serviceName: task.serviceName || '',
+      createdByUserId: +userInfo.userId,
+    });
+  }
 
   private mergeChunkedReportsOnTask(task: UserTask | null | undefined): void {
     if (!task?.reports?.length) return;
@@ -315,19 +338,16 @@ export class UserTasksService {
       if (data.notifiesStaff) {
         const staffInfoRes = await this.uersService.profile(body.staffId);
         if (staffInfoRes.data) {
-          const html = `
-                      <p>Hello ${staffInfoRes.data.fullName},</p>
-                       <p>New task has been assigned to you</p>
-                      <p>Task: ${data.taskName}</p>
-                      <p>Task description: ${data.description}</p>
-                      <p>Site: ${data.siteName}</p>
-                      <p>Task: ${data.taskName}</p>
-                      <p>Service: ${data.serviceName}</p>
-                      <p>Start at: ${moment(data.startTime).format('YYYY-MM-DD HH:mm:ss')}</p>
-                      <p>End at: ${moment(data.endTime).format('YYYY-MM-DD HH:mm:ss')}</p>
-                      <p>Access the link: <a target="_blank" href="http://3.104.215.45:8002/user-task-today"></a></p>
-                      <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-                      <p>ServiceLink Support Team</p>`
+          const html = emailTaskAssignedHtml({
+            fullName: staffInfoRes.data.fullName,
+            taskName: data.taskName,
+            description: data.description,
+            siteName: data.siteName,
+            serviceName: data.serviceName,
+            startAt: moment(data.startTime).format('YYYY-MM-DD HH:mm:ss'),
+            endAt: moment(data.endTime).format('YYYY-MM-DD HH:mm:ss'),
+            linkPath: 'user-task-today',
+          });
           SendMail(staffInfoRes.data.email, `New task assigned`, html)
         }
       }
@@ -414,7 +434,9 @@ export class UserTasksService {
         query.andWhere('usertasks.status =:status', { status: body.status == 'p' ? 0 : body.status == 'i' ? 3 : body.status === 's' ? 1 : 0 })
       }
       if (body.keyword) {
-        query.andWhere("( usertasks.name LIKE :keyword )", { keyword: `%${body.keyword}%` })
+        query.andWhere('(usertasks.taskName ILIKE :keyword)', {
+          keyword: `%${String(body.keyword).trim()}%`,
+        });
       }
 
       // Staff sees only their own tasks by default; admins should not be restricted here.
@@ -473,36 +495,6 @@ export class UserTasksService {
     }
   }
 
-  async convertHtmlToPdfTest() {
-    // eslint-disable-next-line no-var, @typescript-eslint/no-var-requires
-    const fs = require('fs');
-    const html = fs.readFileSync('test.html', 'utf8');
-    // const file = __dirname.replace('dist', '') + "http://3.104.215.45:8001/public/upload/files/logo-a8a4.png".replace(config.BASE_UPLOAD_URL, '');
-    // let nImage = "data:application/pdf;base64," + fs.readFileSync("http://3.104.215.45:8001/public/upload/files/logo-a8a4.png".replace(config.BASE_UPLOAD_URL, '')).toString('base64')
-    const browser = await puppeteer.launch(
-      {
-        executablePath: '/usr/bin/chromium-browser',
-        args: ['--no-sandbox'],
-        ignoreDefaultArgs: ['--disable-extensions']
-      }
-    )
-
-    const page = await browser.newPage();
-    // html = html.replaceAll('http://3.104.215.45:8001/public/upload/files/logo-a8a4.png', "http://3.104.215.45:8001/public/upload/files/logo-a8a4.png");
-    await page.setContent(html);
-
-
-    const pathName = `public/pdf/test.pdf`;
-    if (!fs.existsSync(pathName))
-      await fs.mkdirSync(`public/pdf`, { recursive: true })
-
-    await page.pdf({ path: pathName, format: 'A4' });
-
-    await browser.close();
-
-    return { ...errorCode.SUCCESS, data: config.BASE_UPLOAD_URL + pathName };
-  }
-
   async updateReport(id: number, userInfo: IUserInfo, body: ReportUserTaskDto) {
     const query = this.userTasksRepository.createQueryBuilder('userTasks')
       .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
@@ -557,6 +549,7 @@ export class UserTasksService {
       this.logger.error(`[updateReport] PDF generation failed for task ${id}`, error);
     }
     await this.userTasksRepository.save(ut);
+    this.maybeNotifyNewReportEmail(userInfo, ut);
     return errorCode.SUCCESS
   }
 
@@ -573,13 +566,18 @@ export class UserTasksService {
     const result = await this.userTasksRepository.save(ut);
     if (!result)
       return errorCode.EXCEPTION;
+    this.maybeNotifyNewReportEmail(userInfo, ut);
     return errorCode.SUCCESS
   }
 
 
 
   async taskSuccess(userInfo: IUserInfo, id: number) {
+    const ut = await this.userTasksRepository.findOne({ where: { id } });
     await this.userTasksRepository.update(id, { status: dJobStatus.COMPLETED, updatedAt: new Date() })
+    if (ut) {
+      this.maybeNotifyNewReportEmail(userInfo, ut);
+    }
     return errorCode.SUCCESS
   }
 
@@ -772,7 +770,6 @@ export class UserTasksService {
     const params = new GetUserTasksByUserDto();
     params.status = 'i';
     const inprogressTask = await this.getAllUserTasksByUserId(userInfo, params, true);
-    console.log('object',inprogressTask)
     params.status = 's';
     const successTask = await this.getAllUserTasksByUserId(userInfo, params, true);
     return { pendingTaskCount: pendingTask.data.rows.length, inprogressTaskCount: inprogressTask.data, successTaskCount: successTask.data }
@@ -793,63 +790,6 @@ export class UserTasksService {
     }
     return query.getCount()
   }
-
-  // async getAllItemsUserTasksByUserId(userInfo: IUserInfo, body: GetUserTasksByUserDto) {
-  //   try {
-  //     const query = this.userTaskItemsRepository.createQueryBuilder('userTask')
-  //     if (+body.year) {
-  //       query.andWhere('YEAR(userTask.createdAt)=:year', { year: body.year })
-  //     }
-  //     if (+body.month) {
-  //       query.andWhere('MONTH(userTask.createdAt)=:month', { month: body.month })
-  //     }
-  //     if (userInfo.type === userType.STAFF) {
-  //       query.andWhere(' userTask.staffId =:staffId ', { staffId: userInfo.userId })
-  //     }
-  //     if (userInfo.type === userType.CUSTOMER) {
-  //       query.andWhere(' userTask.customerId =:customerId ', { customerId: userInfo.userId })
-  //     }
-  //     if (+body.siteId) {
-  //       query.andWhere(' userTask.siteId =:siteId ', { siteId: body.siteId })
-  //     }
-  //     if (body.serviceId) {
-  //       query.andWhere(' userTask.serviceId =:serviceId ', { serviceId: body.serviceId })
-  //     }
-  //     if (body.status) {
-  //       if (body.status === 'p') {
-  //         query.andWhere('(userTask.status =:status1 or userTask.status =:status2)', { status1: 0, status2: 2 })
-  //       }
-  //       else
-  //         query.andWhere(' userTask.status =:status ', { status: body.status === 's' ? 1 : body.status === 'p' ? 0 : body.status === 'i' ? 3 : body.status })
-  //     }
-  //     if (+body.staffId) {
-  //       query.andWhere(' userTask.staffId =:staffId ', { staffId: body.staffId })
-  //     }
-  //     if (body.startDate && body.endDate) {
-  //       query.andWhere(`userTask.updatedAt > :startDate AND userTask.updatedAt <= :endDate`, { startDate: moment(body.startDate).format("YYYY-MM-DD 00:00:00"), endDate: moment(body.endDate).format("YYYY-MM-DD 23:59:59") })
-  //     }
-  //     query.leftJoin('userTask.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
-  //       .leftJoin('userTask.staff', 'userTaskStaff').addSelect(['userTaskStaff.fullName', 'userTaskStaff.username'])
-
-  //       .leftJoin('usertasks.customer', 'customer').addSelect(['customer.fullName', 'customer.username'])
-  //       .leftJoin('customer.customerInfo', 'customerInfo').addSelect([
-  //         'customerInfo.companyName',
-  //         'customerInfo.companyId',
-  //       ])
-  //       .leftJoinAndSelect('items.reports', 'reports')
-  //       .orderBy('userTask.id', 'DESC')
-
-  //     if (+body.limit) {
-  //       query.take(body.limit).skip((body.page - 1) * body.limit)
-
-  //     }
-  //     const result = await query.getManyAndCount();
-  //     return { ...errorCode.SUCCESS, data: { rows: result[0], count: result[1] } }
-  //   } catch (error) {
-  //     this.logger.debug(error.message);
-  //     return { ...errorCode.EXCEPTION, message: error.message };
-  //   }
-  // }
 
   async getCountUserTasksByUserId(serInfo: IUserInfo, body: GetUserTasksByUserDto) {
     return await this.getAllUserTasksByUserId(serInfo, body, true)
@@ -911,7 +851,18 @@ export class UserTasksService {
 
       const isAdmin = userInfo.type === userType.ADMIN;
       const listDeleted = body.status === 'deleted';
-      if (!isAdmin) {
+      if (isAdmin) {
+        if (listDeleted) {
+          query.andWhere('usertasks.status = :deletedStatus', {
+            deletedStatus: dJobStatus.DELETED,
+          });
+          query.andWhere('usertasks.cleared_at IS NULL');
+        } else if (body.status === 's' || body.status === '1' || +body.status === 1) {
+          query.andWhere('usertasks.status != :deletedStatus', {
+            deletedStatus: dJobStatus.DELETED,
+          });
+        }
+      } else if (!isAdmin) {
         if (listDeleted) {
           if (+userInfo.type === userType.STAFF) {
             query.andWhere('usertasks.status = :deletedStatus', {
@@ -926,7 +877,11 @@ export class UserTasksService {
         }
       }
       if (body.keyword) {
-        query.andWhere('(usertasks.taskName like :keyword or usertasks.companyName like :keyword)', { keyword: `%${body.keyword}%` })
+        const kw = `%${String(body.keyword).trim()}%`;
+        query.andWhere(
+          '(usertasks.siteName ILIKE :keyword OR usertasks.serviceName ILIKE :keyword)',
+          { keyword: kw },
+        );
       }
       if (+body.year) {
         query.andWhere('EXTRACT(YEAR FROM usertasks.createdAt)=:year', { year: body.year })
@@ -964,13 +919,11 @@ export class UserTasksService {
             });
           }
         } else if (body.status === 's' && isAdmin) {
-          query.andWhere(
-            '(usertasks.status = :completedStatus OR usertasks.status = :deletedStatus)',
-            {
-              completedStatus: dJobStatus.COMPLETED,
-              deletedStatus: dJobStatus.DELETED,
-            },
-          );
+          query.andWhere('usertasks.status = :completedStatus', {
+            completedStatus: dJobStatus.COMPLETED,
+          });
+        } else if (body.status === 'deleted' && isAdmin) {
+          // Admin deleted filters already applied in listDeleted block above.
         } else {
           query.andWhere(' usertasks.status =:status ', {
             status:
@@ -987,7 +940,7 @@ export class UserTasksService {
 
       if (body.startDate && body.endDate) {
         query.andWhere(
-          `COALESCE(usertasks.checkIn, usertasks.createdAt) > :startDate AND COALESCE(usertasks.checkIn, usertasks.createdAt) <= :endDate`,
+          `COALESCE(usertasks.checkIn, usertasks.createdAt) >= :startDate AND COALESCE(usertasks.checkIn, usertasks.createdAt) <= :endDate`,
           {
             startDate: moment(body.startDate).format('YYYY-MM-DD 00:00:00'),
             endDate: moment(body.endDate).format('YYYY-MM-DD 23:59:59'),
@@ -1104,9 +1057,6 @@ export class UserTasksService {
 
       if (body.siteId !== undefined)
         data.siteId = body.siteId;
-
-      if (body.siteId !== undefined)
-        data.siteId = body.siteId;
       if (body.siteName !== undefined)
         data.siteName = body.siteName;
       if (body.siteAddress !== undefined)
@@ -1116,25 +1066,21 @@ export class UserTasksService {
         data.siteLocation = body.siteLocation;
       if (body.serviceName !== undefined)
         data.serviceName = body.serviceName;
-      if (body.customerName !== undefined)
-        data.customerName = body.customerName;
       data.staffId = body.staffId;
 
       if (body.notifiesStaff && !data.notifiesStaff) {
         const staffInfoRes = await this.uersService.profile(body.staffId);
         if (staffInfoRes.data) {
-          const html = `
-                      <p>Hello ${staffInfoRes.data.fullName},</p>
-                       <p>New task has been assigned to you</p>
-                      <p>Task: ${data.taskName}</p>
-                      <p>Task description: ${data.description}</p>
-                      <p>Site: ${data.siteName}</p>
-                      <p>Service: ${data.serviceName}</p>
-                      <p>Start at: ${moment(data.startTime).format('YYYY-MM-DD HH:mm:ss')}</p>
-                      <p>End at: ${moment(data.endTime).format('YYYY-MM-DD HH:mm:ss')}</p>
-                      <p>Access the link: <a target="_blank" href="http://3.104.215.45:8002/user-task-today">http://3.104.215.45:8002/user-task-today</a></p>
-                      <p>If there is any question, please feel free to contact us at: support@servicelink.com</p>
-                      <p>ServiceLink Support Team</p>`
+          const html = emailTaskAssignedHtml({
+            fullName: staffInfoRes.data.fullName,
+            taskName: data.taskName,
+            description: data.description,
+            siteName: data.siteName,
+            serviceName: data.serviceName,
+            startAt: moment(data.startTime).format('YYYY-MM-DD HH:mm:ss'),
+            endAt: moment(data.endTime).format('YYYY-MM-DD HH:mm:ss'),
+            linkPath: 'user-task-today',
+          });
           SendMail(staffInfoRes.data.email, `New task assigned`, html)
         }
       }
@@ -1425,116 +1371,6 @@ export class UserTasksService {
   }
 
   /**
-   * Customer/staff "Deleted" tab bulk clear.
-   * - Customer: deleted = hidden via visibility row (hidden_at not null)
-   * - Staff: deleted = status = DELETED
-   */
-  async clearDeletedReports(userInfo: IUserInfo, body?: GetUserTasksByUserDto) {
-    try {
-      const type = +userInfo.type;
-      const viewerId = +userInfo.userId;
-      if (!viewerId || !Number.isFinite(viewerId)) {
-        return errorCode.CAN_NOT_DELETE;
-      }
-      if (type === userType.ADMIN) {
-        return errorCode.CAN_NOT_DELETE;
-      }
-
-      if (type === userType.CUSTOMER) {
-        // Soft clear: mark hidden visibility rows as cleared (keeps report data).
-        // Only affects CUSTOM reports the customer can access AND that belong to them (customer_id or created_by).
-        const query = this.userTasksRepository
-          .createQueryBuilder('usertasks')
-          .select('usertasks.id', 'id')
-          .innerJoin(
-            'user_task_customer_visibility',
-            'v',
-            'v.user_task_id = usertasks.id AND v.user_id = :viewerId AND v.hidden_at IS NOT NULL AND v.cleared_at IS NULL',
-            { viewerId },
-          )
-          .where('usertasks.type = :type', { type: 'CUSTOM' })
-          .andWhere('(usertasks.customerId = :viewerId OR usertasks.createdBy = :viewerId)', {
-            viewerId,
-          });
-        applyCustomerScopeToQuery(query, userInfo, 'usertasks.customerId');
-        if (body?.startDate && body?.endDate) {
-          query.andWhere(`usertasks.updatedAt > :startDate AND usertasks.updatedAt <= :endDate`, {
-            startDate: moment(body.startDate).format('YYYY-MM-DD 00:00:00'),
-            endDate: moment(body.endDate).format('YYYY-MM-DD 23:59:59'),
-          });
-        }
-        if (+body?.siteId) query.andWhere('usertasks.siteId = :siteId', { siteId: +body.siteId });
-        if (body?.serviceId) query.andWhere('usertasks.serviceId = :serviceId', { serviceId: body.serviceId });
-        const idsRaw = await query.getRawMany();
-        const clearIds = idsRaw
-          .map((r) => Number(r?.id ?? r?.usertasks_id))
-          .filter((n) => Number.isFinite(n) && n > 0);
-        if (!clearIds.length) {
-          return { ...errorCode.SUCCESS, data: { clearedCount: 0 } };
-        }
-
-        // Use expanded integer parameters to avoid pg array casting issues.
-        const params: any[] = [viewerId, ...clearIds];
-        const placeholders = clearIds.map((_, idx) => `$${idx + 2}`).join(', ');
-        const result = await this.userTasksRepository.query(
-          `
-          UPDATE public.user_task_customer_visibility v
-          SET cleared_at = NOW()
-          WHERE v.user_id = $1
-            AND v.user_task_id IN (${placeholders})
-            AND v.hidden_at IS NOT NULL
-            AND v.cleared_at IS NULL
-          `,
-          params,
-        );
-        const clearedCount =
-          (result && typeof (result as any).rowCount === 'number' && (result as any).rowCount) ||
-          (Array.isArray(result) ? result.length : 0);
-        return { ...errorCode.SUCCESS, data: { clearedCount } };
-      } else if (type === userType.STAFF) {
-        // Soft clear: mark deleted tasks as cleared (keeps report data).
-        const query = this.userTasksRepository
-          .createQueryBuilder('usertasks')
-          .select(['usertasks.id', 'usertasks.staffId', 'usertasks.createdBy', 'usertasks.type'])
-          .where('usertasks.type = :type', { type: 'CUSTOM' })
-          .andWhere('usertasks.staffId = :staffId', { staffId: viewerId })
-          .andWhere('usertasks.status = :deletedStatus', { deletedStatus: dJobStatus.DELETED })
-          .andWhere('usertasks.cleared_at IS NULL');
-        if (body?.startDate && body?.endDate) {
-          query.andWhere(`usertasks.updatedAt > :startDate AND usertasks.updatedAt <= :endDate`, {
-            startDate: moment(body.startDate).format('YYYY-MM-DD 00:00:00'),
-            endDate: moment(body.endDate).format('YYYY-MM-DD 23:59:59'),
-          });
-        }
-        if (+body?.siteId) query.andWhere('usertasks.siteId = :siteId', { siteId: +body.siteId });
-        if (body?.serviceId) query.andWhere('usertasks.serviceId = :serviceId', { serviceId: body.serviceId });
-        const rows = await query.getMany();
-        const clearIds = rows
-          .filter((r) => this.isStaffOwnCustomReport(r, viewerId))
-          .map((r) => +r.id);
-        if (!clearIds.length) {
-          return { ...errorCode.SUCCESS, data: { clearedCount: 0 } };
-        }
-        await this.userTasksRepository
-          .createQueryBuilder()
-          .update(UserTask)
-          .set({ clearedAt: () => 'NOW()' })
-          .where('id IN (:...ids)', { ids: clearIds })
-          .execute();
-        return { ...errorCode.SUCCESS, data: { clearedCount: clearIds.length } };
-      } else {
-        return errorCode.CAN_NOT_DELETE;
-      }
-    } catch (error) {
-      this.logger.error((error as Error).message);
-      return {
-        ...errorCode.EXCEPTION,
-        message: (error as Error).message || errorCode.EXCEPTION.message,
-      };
-    }
-  }
-
-  /**
    * Clear exactly the visible deleted rows (by id list).
    * This is the only way to guarantee the toast matches what the user sees.
    */
@@ -1543,7 +1379,29 @@ export class UserTasksService {
       const type = +userInfo.type;
       const viewerId = +userInfo.userId;
       if (!viewerId || !Number.isFinite(viewerId)) return errorCode.CAN_NOT_DELETE;
-      if (type === userType.ADMIN) return errorCode.CAN_NOT_DELETE;
+      if (type === userType.ADMIN) {
+        const ids = Array.from(
+          new Set((body?.ids || []).map((n) => +n).filter((n) => Number.isFinite(n) && n > 0)),
+        );
+        if (!ids.length) {
+          return { ...errorCode.SUCCESS, data: { clearedCount: 0 } };
+        }
+        const rows = await this.userTasksRepository
+          .createQueryBuilder('usertasks')
+          .select(['usertasks.id'])
+          .where('usertasks.id IN (:...ids)', { ids })
+          .andWhere('usertasks.status = :deletedStatus', {
+            deletedStatus: dJobStatus.DELETED,
+          })
+          .andWhere('usertasks.cleared_at IS NULL')
+          .getMany();
+        let clearedCount = 0;
+        for (const row of rows) {
+          await this.hardDeleteUserTask(+row.id);
+          clearedCount += 1;
+        }
+        return { ...errorCode.SUCCESS, data: { clearedCount } };
+      }
 
       const ids = Array.from(new Set((body?.ids || []).map((n) => +n).filter((n) => Number.isFinite(n) && n > 0)));
       if (!ids.length) {
@@ -1633,7 +1491,14 @@ export class UserTasksService {
       const type = +userInfo.type;
 
       if (type === userType.ADMIN) {
-        await this.hardDeleteUserTask(taskId);
+        if (+data.status === dJobStatus.DELETED) {
+          await this.hardDeleteUserTask(taskId);
+          return errorCode.SUCCESS;
+        }
+        data.status = dJobStatus.DELETED;
+        data.updatedBy = userId;
+        data.updatedAt = new Date();
+        await this.userTasksRepository.save(data);
         return errorCode.SUCCESS;
       }
 
@@ -1719,6 +1584,18 @@ export class UserTasksService {
             message: 'You can only restore your own reports',
           };
         }
+        if (+data.status !== dJobStatus.DELETED) {
+          return errorCode.NOT_FOUND;
+        }
+        data.status = dJobStatus.COMPLETED;
+        data.clearedAt = null;
+        data.updatedBy = userId;
+        data.updatedAt = new Date();
+        await this.userTasksRepository.save(data);
+        return errorCode.SUCCESS;
+      }
+
+      if (type === userType.ADMIN) {
         if (+data.status !== dJobStatus.DELETED) {
           return errorCode.NOT_FOUND;
         }
@@ -2009,6 +1886,13 @@ export class UserTasksService {
       if (data.pdfFile) {
         await this.userTasksRepository.update(taskSaved.id, { pdfFile: data.pdfFile });
       }
+      this.maybeNotifyNewReportEmail(userInfo, {
+        id: taskSaved.id,
+        customerId: data.customerId,
+        taskName: data.taskName,
+        siteName: data.siteName,
+        serviceName: data.serviceName,
+      });
       return errorCode.SUCCESS;
     } catch (error) {
       const { message: errMsg, details } = buildExceptionResult(error, 'createCustomerReports');

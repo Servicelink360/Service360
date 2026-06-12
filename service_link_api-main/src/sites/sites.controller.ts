@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Res, UseGuards, Request } from '@nestjs/common';
+﻿import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Res, UseGuards, Request, Put } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { customHttpCode } from '../helpers/util';
@@ -7,6 +7,8 @@ import { SitesService } from './sites.service';
 import { CreateSiteDto, SiteItemDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
 import { GetShiftsDto, GetSitesDto, GetStaffsBySiteDto } from './dto/get-sites.dto';
+import { UpdateGroundMaintenanceSchedulesDto } from './dto/update-ground-maintenance-schedules.dto';
+import { AddGroundMaintenanceScheduleRowDto } from './dto/add-ground-maintenance-schedule-row.dto';
 @ApiTags("Sites")
 @Controller({
   path: 'sites',
@@ -32,34 +34,10 @@ export class SitesController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @Get(':id')
-  async findOne(@Res() res, @Param('id') id: number) {
-    return customHttpCode(res, await this.sitesService.findOne(id));
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @Get('getAll')
   async getAll(@Res() res) {
     return customHttpCode(res, await this.sitesService.getAll());
   }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Patch(':id')
-  async update(@Res() res, @Param('id') id: number, @Body() body: UpdateSiteDto, @Request() req) {
-    const user: IUserInfo = req.user;
-    return customHttpCode(res, await this.sitesService.update(user, +id, body));
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @Delete(':id')
-  async remove(@Res() res, @Param('id') id: string) {
-    return customHttpCode(res, await this.sitesService.remove(id));
-  }
-
-
 
   @Post("scheduleSendReminderEmail")
   async scheduleSendReminderEmail(@Res() res, @Request() req) {
@@ -165,12 +143,98 @@ export class SitesController {
 
 
 
+  @Get('getGroundMaintenanceSchedules')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getGroundMaintenanceSchedules(
+    @Res() res,
+    @Query('siteId') siteId: number,
+    @Query('siteItemId') siteItemId?: number,
+  ) {
+    return customHttpCode(
+      res,
+      await this.sitesService.getGroundMaintenanceSchedules(+siteId, siteItemId ? +siteItemId : undefined),
+    );
+  }
+
+  @Get('getServiceActivities')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async getServiceActivities(@Res() res, @Query('serviceId') serviceId: number) {
+    return customHttpCode(res, await this.sitesService.getServiceActivities(+serviceId));
+  }
+
+  @Put('updateGroundMaintenanceSchedules')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async updateGroundMaintenanceSchedules(@Res() res, @Body() body: UpdateGroundMaintenanceSchedulesDto) {
+    return customHttpCode(
+      res,
+      await this.sitesService.updateGroundMaintenanceSchedules(
+        +body.siteId,
+        +body.siteItemId,
+        body.rows ?? [],
+      ),
+    );
+  }
+
+  @Post('addGroundMaintenanceScheduleRow')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async addGroundMaintenanceScheduleRow(@Res() res, @Body() body: AddGroundMaintenanceScheduleRowDto) {
+    return customHttpCode(
+      res,
+      await this.sitesService.addGroundMaintenanceScheduleRow(
+        +body.siteId,
+        +body.siteItemId,
+        { activityId: body.activityId, activityName: body.activityName },
+      ),
+    );
+  }
+
+  @Delete('removeGroundMaintenanceScheduleRow')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async removeGroundMaintenanceScheduleRow(
+    @Res() res,
+    @Query('siteId') siteId: number,
+    @Query('siteItemId') siteItemId: number,
+    @Query('scheduleId') scheduleId: number,
+  ) {
+    return customHttpCode(
+      res,
+      await this.sitesService.removeGroundMaintenanceScheduleRow(+siteId, +siteItemId, +scheduleId),
+    );
+  }
+
   @Get("getSitesByStaff")
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   async getSitesByStaff(@Res() res, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.sitesService.getSitesByStaff(user));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get(':id')
+  async findOne(@Res() res, @Param('id') id: number) {
+    return customHttpCode(res, await this.sitesService.findOne(id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id')
+  async update(@Res() res, @Param('id') id: number, @Body() body: UpdateSiteDto, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.sitesService.update(user, +id, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete(':id')
+  async remove(@Res() res, @Param('id') id: string) {
+    return customHttpCode(res, await this.sitesService.remove(id));
   }
 }
 

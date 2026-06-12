@@ -11,7 +11,7 @@ import { FaCheck, FaTimes } from 'react-icons/fa'
 import { useIntl } from 'react-intl'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link } from 'react-router-dom'
-import LogoV2 from '@app/assets/images/signin/logo.jpg'
+import LogoV2 from '@app/assets/images/signin/logo.png'
 
 import {
   EmailIcon,
@@ -105,7 +105,13 @@ export default function SignIn() {
             typeof process !== 'undefined' && process.env && process.env.PUBLIC_URL
               ? process.env.PUBLIC_URL
               : ''
-          window.location.href = `${publicUrl}/dashboard`
+          const params = new URLSearchParams(window.location.search)
+          const redirect = params.get('redirect')
+          const safeRedirect =
+            redirect && redirect.startsWith('/') && !redirect.startsWith('//')
+              ? redirect
+              : '/dashboard'
+          window.location.href = `${publicUrl}${safeRedirect}`
             // history.push('/')
           }),
         )

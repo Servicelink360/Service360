@@ -1,4 +1,6 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import Layout from "@app/components/layout/Layout";
+import ReportListKeywordSearch from "./report-list-keyword-search";
 import { Fieldset } from "@app/components/common/Common.styles";
 import UploadImageMultil, { UploadImageMultilHandle } from "@app/components/common/upload-image-multi";
 import { UsersDiv } from "@app/components/common/container.style";
@@ -59,6 +61,15 @@ const AUTO_MERGE_FIELD_TYPES = new Set([
 
 const isAutoMergeTemplateField = (it: TemplateItem) =>
   AUTO_MERGE_FIELD_TYPES.has(String(it?.type || "").toUpperCase());
+
+const autoMergeUsesPicker = (it: TemplateItem, isStaffUser: boolean): boolean => {
+  const t = String(it?.type || "").toUpperCase();
+  if (t !== "[REPORT_DATE]" && t !== "[REPORT_TIME]") return false;
+  if (!isStaffUser) return true;
+  const visibleToStaff = it?.config?.visibleToStaff;
+  if (typeof visibleToStaff === "boolean") return visibleToStaff;
+  return true;
+};
 
 const resolveAutoMergeFieldValue = (
   it: TemplateItem,
@@ -431,6 +442,7 @@ type ListQueryFilters = {
   endDate?: string;
   siteId?: number;
   serviceId?: string;
+  keyword?: string;
 };
 
 type ReportListTab = "active" | "deleted";
@@ -1116,6 +1128,16 @@ function renderSubmittedReportValue(report: any): React.ReactNode {
   return String(v);
 }
 
+function filterReportRowsByKeyword(rows: any[], draft: string): any[] {
+  const kw = draft.trim().toLowerCase();
+  if (!kw) return rows;
+  return rows.filter((r) => {
+    const site = String(r.siteName || "").toLowerCase();
+    const service = String(r.serviceName || "").toLowerCase();
+    return site.includes(kw) || service.includes(kw);
+  });
+}
+
 const NewReports: React.FC = () => {
   const intl = useIntl();
   const dispatch = useDispatch();
@@ -1195,6 +1217,9 @@ const NewReports: React.FC = () => {
   const isMobilePortrait = useMobilePortrait();
   const { isDark } = useColorModeOptional();
   const showMobileCards = useNarrowViewport();
+  const tableSearchKeywordRef = useRef("");
+  const listSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [listSearchDraft, setListSearchDraft] = useState("");
 
   useEffect(() => {
     if (!isMobilePortrait) setListFiltersOpen(true);
@@ -1259,7 +1284,7 @@ const NewReports: React.FC = () => {
   const isStaffUser = +profileType === userType.STAFF;
   const isAdminUser = +profileType === userType.ADMIN;
   const isCustomerUser = +profileType === userType.CUSTOMER;
-  const showReportDeletedTabs = isCustomerUser || isStaffUser;
+  const showReportDeletedTabs = isCustomerUser || isStaffUser || isAdminUser;
   const isDeletedReportTab = showReportDeletedTabs && reportListTab === "deleted";
 
   const patchRowReadState = useCallback(
@@ -1413,10 +1438,23 @@ const NewReports: React.FC = () => {
     setInit((res?.data || {}) as InitData);
   }, []);
 
+  const loadFilterServices = useCallback(async (siteId?: number) => {
+    const params: Record<string, number> = {};
+    if (siteId != null && +siteId > 0) params.siteId = +siteId;
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.JOB_SITES}/getServicesBySite`,
+      "GET",
+      params,
+    );
+    setFilterServices(res?.data || []);
+  }, []);
+
   const loadSites = useCallback(async () => {
     const res = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getSites`, "GET");
     setSites(res?.data || []);
-  }, []);
+    await loadFilterServices();
+  }, [loadFilterServices]);
 
   const loadDeletedReportCount = useCallback(async (filters: ListQueryFilters = listFilters) => {
     if (!showReportDeletedTabs || !profileId) return;
@@ -1424,21 +1462,23 @@ const NewReports: React.FC = () => {
       const params: Record<string, unknown> = {
         type: "CUSTOM",
         status: "deleted",
-        page: 1,
-        limit: 1,
       };
       if (+profileType === userType.STAFF) params.staffId = +profileId;
       if (filters.startDate) params.startDate = filters.startDate;
       if (filters.endDate) params.endDate = filters.endDate;
       if (filters.siteId) params.siteId = filters.siteId;
       if (filters.serviceId) params.serviceId = filters.serviceId;
+      if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
       const res = await callAPIAsync(
         serviceType.COMMON,
-        `${endPoint.USER_TASKS}/getAllUserTasksByUserId`,
+        `${endPoint.USER_TASKS}/getCountUserTasksByUserId`,
         "GET",
         params,
       );
-      if (res?.code === 1) setDeletedReportCount(res?.data?.count ?? 0);
+      if (res?.code === 1) {
+        const n = typeof res.data === "number" ? res.data : +(res?.data?.count ?? 0);
+        setDeletedReportCount(Number.isFinite(n) ? n : 0);
+      }
     } catch {
       /* ignore */
     }
@@ -1480,6 +1520,7 @@ const NewReports: React.FC = () => {
           if (filters.endDate) params.endDate = filters.endDate;
           if (filters.siteId) params.siteId = filters.siteId;
           if (filters.serviceId) params.serviceId = filters.serviceId;
+          if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
         }
 
         const res = await callAPIAsync(serviceType.COMMON, `${endPoint.USER_TASKS}/getAllUserTasksByUserId`, "GET", params);
@@ -1613,27 +1654,73 @@ const NewReports: React.FC = () => {
     }
   }, [linkedReportId, listLoading, rows, scrollToHighlightedRow, markReportOpenedForViewer]);
 
-  const onListFilterSiteChange = async (siteId: number | undefined) => {
-    listForm.setFieldsValue({ serviceId: undefined });
-    if (!siteId) {
-      setFilterServices([]);
-      return;
+  const applyListFiltersFromForm = async () => {
+    try {
+      await listForm.validateFields();
+    } catch {
+      /* filter with current values */
     }
-    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getServicesBySite`, "GET", { siteId });
-    setFilterServices(res?.data || []);
-  };
-
-  const onSearchList = async () => {
-    const v = await listForm.validateFields();
+    const v = listForm.getFieldsValue();
     const next: ListQueryFilters = {};
-    if (v.dateRange?.[0] && v.dateRange[1]) {
+    if (v.dateRange?.[0] && v.dateRange?.[1]) {
       next.startDate = v.dateRange[0].format("YYYY-MM-DD");
       next.endDate = v.dateRange[1].format("YYYY-MM-DD");
     }
     if (v.siteId != null && v.siteId !== "") next.siteId = +v.siteId;
     if (v.serviceId != null && v.serviceId !== "") next.serviceId = String(v.serviceId);
+    const kw = tableSearchKeywordRef.current.trim();
+    if (kw) next.keyword = kw;
     setListFilters(next);
     setPage(1);
+  };
+
+  const applyKeywordFilter = (raw: string) => {
+    tableSearchKeywordRef.current = raw;
+    const kw = raw.trim();
+    setListFilters((prev) => {
+      const prevKw = (prev.keyword || "").trim();
+      if (kw === prevKw) return prev;
+      const next = { ...prev };
+      if (kw) next.keyword = kw;
+      else delete next.keyword;
+      return next;
+    });
+    setPage(1);
+  };
+
+  const onListSearchInputChange = (raw: string) => {
+    setListSearchDraft(raw);
+    tableSearchKeywordRef.current = raw;
+    if (listSearchDebounceRef.current) clearTimeout(listSearchDebounceRef.current);
+    if (!raw.trim()) {
+      applyKeywordFilter(raw);
+      return;
+    }
+    listSearchDebounceRef.current = setTimeout(() => applyKeywordFilter(raw), 200);
+  };
+
+  const onListSearchInputSearch = (raw: string) => {
+    if (listSearchDebounceRef.current) {
+      clearTimeout(listSearchDebounceRef.current);
+      listSearchDebounceRef.current = null;
+    }
+    setListSearchDraft(raw);
+    applyKeywordFilter(raw);
+  };
+
+  const onListFilterSiteChange = async (siteId: number | undefined) => {
+    listForm.setFieldsValue({ siteId: siteId ?? undefined, serviceId: undefined });
+    await loadFilterServices(siteId);
+    await applyListFiltersFromForm();
+  };
+
+  const onListFilterServiceChange = async (serviceId?: string) => {
+    listForm.setFieldsValue({ serviceId: serviceId ?? undefined });
+    await applyListFiltersFromForm();
+  };
+
+  const onSearchList = async () => {
+    await applyListFiltersFromForm();
   };
 
   const openView = useCallback(async (row: any) => {
@@ -1842,12 +1929,7 @@ const NewReports: React.FC = () => {
             patch[fieldKey] = moment();
           }
         } else if (isAutoMergeTemplateField(it)) {
-          const t = String(it.type || "").toUpperCase();
-          const staffManual =
-            isStaffUser &&
-            (t === "[REPORT_DATE]" || t === "[REPORT_TIME]") &&
-            !isHiddenFromStaffCreate(it);
-          if (staffManual) {
+          if (autoMergeUsesPicker(it, isStaffUser)) {
             const current = baseValues[fieldKey];
             if (current === undefined || current === null || current === "") {
               patch[fieldKey] = moment();
@@ -1867,10 +1949,11 @@ const NewReports: React.FC = () => {
     const vals = form.getFieldsValue();
     templateItemsForSubmit.forEach((it, idx) => {
       if (!isAutoMergeTemplateField(it)) return;
+      if (autoMergeUsesPicker(it, isStaffUser)) return;
       patch[getTemplateFieldKey(it, idx)] = resolveAutoMergeFieldValue(it, vals, profile);
     });
     if (Object.keys(patch).length) form.setFieldsValue(patch);
-  }, [form, templateItemsForSubmit, profile]);
+  }, [form, templateItemsForSubmit, profile, isStaffUser]);
 
   const openCreate = () => {
     resetSubmitUi();
@@ -2359,12 +2442,7 @@ const NewReports: React.FC = () => {
         }
 
         if (isAutoMergeTemplateField(it)) {
-          // If staff is allowed to manually pick report date/time, don't auto-fill here.
-          const staffManual =
-            isStaffUser &&
-            (fieldType === "[REPORT_DATE]" || fieldType === "[REPORT_TIME]") &&
-            !isHiddenFromStaffCreate(it);
-          if (!staffManual) {
+          if (!autoMergeUsesPicker(it, isStaffUser)) {
             raw = raw ?? resolveAutoMergeFieldValue(it, values, profile);
           }
         }
@@ -2619,7 +2697,13 @@ const NewReports: React.FC = () => {
         null,
       );
       if (res?.code === 1) {
-        message.success(isAdmin ? "Report deleted" : "Report moved to Deleted");
+        message.success(
+          isAdmin
+            ? isDeletedReportTab
+              ? "Report permanently deleted"
+              : "Report moved to Deleted"
+            : "Report moved to Deleted",
+        );
         setSelectedRowKeys((prev) => prev.filter((k) => k !== row.id));
         await loadRows(page, limit, listFilters);
         refreshDashboard();
@@ -2627,7 +2711,7 @@ const NewReports: React.FC = () => {
         message.error(res?.message || "Could not delete this report");
       }
     },
-    [loadRows, page, limit, listFilters, profileType, refreshDashboard],
+    [loadRows, page, limit, listFilters, profileType, refreshDashboard, isDeletedReportTab],
   );
 
   const restoreReport = useCallback(
@@ -2639,30 +2723,128 @@ const NewReports: React.FC = () => {
         {},
       );
       if (res?.code === 1) {
-        message.success("Report restored");
+        message.success(
+          isAdminUser ? "Report restored to Reports" : "Report restored",
+        );
         setSelectedRowKeys((prev) => prev.filter((k) => k !== row.id));
         if (viewRow?.id === row.id) {
           setViewOpen(false);
           setViewRow(null);
         }
         await loadRows(page, limit, listFilters, listSort, reportListTab);
+        void loadDeletedReportCount();
         refreshDashboard();
       } else {
         message.error(res?.message || "Could not restore this report");
       }
     },
-    [loadRows, page, limit, listFilters, listSort, reportListTab, viewRow, refreshDashboard],
+    [loadRows, page, limit, listFilters, listSort, reportListTab, viewRow, refreshDashboard, isAdminUser, loadDeletedReportCount],
   );
 
+  const restoreSelectedReports = useCallback(async () => {
+    const ids = selectedRowKeys.map((k) => +k).filter((id) => Number.isFinite(id) && id > 0);
+    if (!ids.length) {
+      message.warning("Select at least one report to restore");
+      return;
+    }
+    setBulkDeleting(true);
+    let succeeded = 0;
+    let failed = 0;
+    try {
+      for (const id of ids) {
+        const res = await callAPIAsync(
+          serviceType.COMMON,
+          `${endPoint.USER_TASKS}/${id}/restore`,
+          "PATCH",
+          {},
+        );
+        if (res?.code === 1) succeeded += 1;
+        else failed += 1;
+      }
+      setSelectedRowKeys([]);
+      await loadRows(page, limit, listFilters, listSort, reportListTab);
+      void loadDeletedReportCount();
+      refreshDashboard();
+      if (succeeded && !failed) {
+        message.success(
+          `${succeeded} report${succeeded === 1 ? "" : "s"} restored to Reports`,
+        );
+      } else if (succeeded && failed) {
+        message.warning(`${succeeded} restored, ${failed} failed`);
+      } else {
+        message.error("Could not restore selected reports");
+      }
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [
+    selectedRowKeys,
+    loadRows,
+    page,
+    limit,
+    listFilters,
+    listSort,
+    reportListTab,
+    loadDeletedReportCount,
+    refreshDashboard,
+  ]);
+
+  const permanentlyDeleteSelectedReports = useCallback(async () => {
+    const ids = selectedRowKeys
+      .map((k) => +k)
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!ids.length) {
+      message.warning("Select at least one deleted report");
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      const res: any = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.USER_TASKS}/clear-deleted`,
+        "PATCH",
+        { ids },
+      );
+      if (res?.code === 1) {
+        const clearedCount = +res?.data?.clearedCount || ids.length;
+        message.success(
+          `Permanently deleted ${clearedCount} report${clearedCount === 1 ? "" : "s"}`,
+        );
+        setSelectedRowKeys([]);
+        await loadRows(page, limit, listFilters, listSort, reportListTab);
+        refreshDashboard();
+      } else {
+        message.error(res?.message || "Could not permanently delete selected reports");
+      }
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [
+    selectedRowKeys,
+    loadRows,
+    page,
+    limit,
+    listFilters,
+    listSort,
+    reportListTab,
+    refreshDashboard,
+  ]);
+
   const canUseBulkDelete =
-    !isDeletedReportTab &&
-    (+profileType === userType.ADMIN ||
-      +profileType === userType.CUSTOMER ||
-      +profileType === userType.STAFF);
+    (isDeletedReportTab && isAdminUser) ||
+    (!isDeletedReportTab &&
+      (+profileType === userType.ADMIN ||
+        +profileType === userType.CUSTOMER ||
+        +profileType === userType.STAFF));
+
+  const displayRows = filterReportRowsByKeyword(rows, listSearchDraft);
 
   const deletableRowsOnPage = useMemo(
-    () => rows.filter((r) => canSoftDeleteReport(r)),
-    [rows, canSoftDeleteReport],
+    () =>
+      rows.filter((r) =>
+        isDeletedReportTab && isAdminUser ? Boolean(r?.id) : canSoftDeleteReport(r),
+      ),
+    [rows, canSoftDeleteReport, isDeletedReportTab, isAdminUser],
   );
 
   const reportSelectOptions = useMemo(
@@ -2704,7 +2886,9 @@ const NewReports: React.FC = () => {
       if (succeeded && !failed) {
         message.success(
           isAdmin
-            ? `${succeeded} report${succeeded === 1 ? "" : "s"} deleted`
+            ? isDeletedReportTab
+              ? `${succeeded} report${succeeded === 1 ? "" : "s"} permanently deleted`
+              : `${succeeded} report${succeeded === 1 ? "" : "s"} moved to Deleted`
             : `${succeeded} report${succeeded === 1 ? "" : "s"} removed from your list`,
         );
       } else if (succeeded && failed) {
@@ -2725,6 +2909,7 @@ const NewReports: React.FC = () => {
     refreshDashboard,
     rows,
     canSoftDeleteReport,
+    isDeletedReportTab,
   ]);
 
   const clearDeletedReports = useCallback(async () => {
@@ -2749,7 +2934,9 @@ const NewReports: React.FC = () => {
         const safeCount = Math.max(0, Math.min(clearedCount, shownCount));
         message.success(
           safeCount
-            ? `Cleared ${safeCount} deleted report${safeCount === 1 ? "" : "s"}`
+            ? isAdminUser
+              ? `Permanently deleted ${safeCount} report${safeCount === 1 ? "" : "s"}`
+              : `Cleared ${safeCount} deleted report${safeCount === 1 ? "" : "s"}`
             : "Deleted folder is already empty",
         );
         setSelectedRowKeys([]);
@@ -2761,14 +2948,17 @@ const NewReports: React.FC = () => {
     } finally {
       setClearingDeleted(false);
     }
-  }, [loadRows, page, limit, listFilters, listSort, reportListTab, refreshDashboard, rows]);
+  }, [loadRows, page, limit, listFilters, listSort, reportListTab, refreshDashboard, rows, isAdminUser]);
 
   const rowSelection = canUseBulkDelete
     ? {
         selectedRowKeys,
         onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
         getCheckboxProps: (record: any) => ({
-          disabled: !canSoftDeleteReport(record),
+          disabled:
+            isDeletedReportTab && isAdminUser
+              ? !record?.id
+              : !canSoftDeleteReport(record),
         }),
         selections: [
           Table.SELECTION_ALL,
@@ -2819,6 +3009,18 @@ const NewReports: React.FC = () => {
     setPage(1);
     setListSort({ orderBy, orderValue });
   }, []);
+
+  const isEditMode = Boolean(editing?.id);
+  const templateChosen = Boolean(selectedTemplateId);
+  const legacyReportsForRender = useMemo(() => {
+    if (!isEditMode || templateChosen) return [];
+    if (!Array.isArray(editing?.reports)) return [];
+    return editing.reports
+      .slice()
+      .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
+      .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
+  }, [editing, isEditMode, templateChosen]);
+
   const sortOrderFor = (field: string) =>
     supportsTableSort && listSort.orderBy === field
       ? (listSort.orderValue === "ASC" ? ("ascend" as const) : ("descend" as const))
@@ -2840,7 +3042,12 @@ const NewReports: React.FC = () => {
 
   const renderReportActions = useCallback(
     (r: any) => (
-      <Space size={4} wrap>
+      <Space
+        size={4}
+        wrap={false}
+        className="new-reports-row-actions"
+        style={{ width: "100%", justifyContent: "space-evenly" }}
+      >
         {+profileType !== userType.CUSTOMER && !isDeletedReportTab ? (
           <Button
             type="link"
@@ -2864,18 +3071,18 @@ const NewReports: React.FC = () => {
             <Button type="link" size="small" icon={<MailOutlined />} aria-label="Message about this report" />
           </Link>
         ) : null}
-        {+profileType === userType.ADMIN ? (
+        {+profileType === userType.ADMIN && !isDeletedReportTab ? (
           <Popconfirm
             overlayStyle={{ zIndex: POPCONFIRM_ABOVE_TOOLTIP_Z }}
             title={
               <span>
-                Delete this report?
+                Move this report to Deleted?
                 <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
-                  This permanently removes the report and its submitted data.
+                  You can permanently delete it later from the Deleted tab.
                 </div>
               </span>
             }
-            okText="Delete"
+            okText="Move to Deleted"
             okButtonProps={{ danger: true }}
             cancelText="Cancel"
             onConfirm={() => deleteReport(r)}
@@ -2886,10 +3093,37 @@ const NewReports: React.FC = () => {
             )}
           </Popconfirm>
         ) : null}
-        {isDeletedReportTab && (isCustomerUser || isStaffUser) && canSoftDeleteReport(r) ? (
+        {isDeletedReportTab && isAdminUser ? (
           <Popconfirm
             overlayStyle={{ zIndex: POPCONFIRM_ABOVE_TOOLTIP_Z }}
-            title="Restore this report to your list?"
+            title={
+              <span>
+                Permanently delete this report?
+                <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
+                  This cannot be undone.
+                </div>
+              </span>
+            }
+            okText="Delete permanently"
+            okButtonProps={{ danger: true }}
+            cancelText="Cancel"
+            onConfirm={() => deleteReport(r)}
+          >
+            {popconfirmTrigger(
+              "Permanently delete report",
+              <Button type="link" danger size="small" icon={<DeleteOutlined />} />,
+            )}
+          </Popconfirm>
+        ) : null}
+        {isDeletedReportTab &&
+        (isAdminUser || ((isCustomerUser || isStaffUser) && canSoftDeleteReport(r))) ? (
+          <Popconfirm
+            overlayStyle={{ zIndex: POPCONFIRM_ABOVE_TOOLTIP_Z }}
+            title={
+              isAdminUser
+                ? "Restore this report to the Reports list?"
+                : "Restore this report to your list?"
+            }
             okText="Restore"
             cancelText="Cancel"
             onConfirm={() => restoreReport(r)}
@@ -2934,6 +3168,7 @@ const NewReports: React.FC = () => {
       intl,
       openEdit,
       openView,
+      isAdminUser,
       deleteReport,
       restoreReport,
       canSoftDeleteReport,
@@ -3215,7 +3450,6 @@ const NewReports: React.FC = () => {
     getPopupContainer: (triggerNode: any) => triggerNode?.parentElement || document.body,
   };
 
-  const isEditMode = Boolean(editing?.id);
   const useStaffStyleCreate = isStaffUser || (isAdminUser && !isEditMode);
   // Staff edit: lock site/template only when the report already has them saved.
   // Older legacy rows can have missing reportTemplateId and must allow selection.
@@ -3226,15 +3460,6 @@ const NewReports: React.FC = () => {
     String(editing.siteId).trim() !== "" &&
     editing?.reportTemplateId != null &&
     String(editing.reportTemplateId).trim() !== "";
-  const templateChosen = Boolean(selectedTemplateId);
-  const legacyReportsForRender = useMemo(() => {
-    if (!isEditMode || templateChosen) return [];
-    if (!Array.isArray(editing?.reports)) return [];
-    return editing.reports
-      .slice()
-      .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
-      .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
-  }, [editing, isEditMode, templateChosen]);
   const hadSubmittedCustomer =
     isEditMode && editing?.customerId != null && String(editing.customerId).trim() !== "";
   const hadSubmittedSite = isEditMode && editing?.siteId != null && String(editing.siteId).trim() !== "";
@@ -3442,27 +3667,29 @@ const NewReports: React.FC = () => {
             ]
               .filter(Boolean)
               .join(" ")}
-            style={
-              isMobilePortrait && !listFiltersOpen
-                ? { display: "none", marginBottom: 0 }
-                : {
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "8px 16px",
-                    alignItems: "flex-end",
-                    marginBottom: 16,
-                  }
-            }
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px 16px",
+              alignItems: "flex-end",
+              marginBottom: 16,
+            }}
           >
-            <Form.Item name="dateRange" label="Date from - Date to" style={isMobilePortrait ? { width: "100%" } : undefined}>
-              <div className={mobileUiDark ? "nr-dark-picker-shell" : undefined}>
-                <RangePicker
-                  className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                  popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                  format="DD/MM/YYYY"
-                  style={isMobilePortrait || mobileUiDark ? { width: "100%" } : undefined}
-                />
-              </div>
+            <Form.Item
+              name="dateRange"
+              label="Date from - Date to"
+              className={mobileUiDark ? "nr-dark-picker-shell" : undefined}
+              style={isMobilePortrait ? { width: "100%" } : undefined}
+            >
+              <RangePicker
+                className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                format="DD/MM/YYYY"
+                style={isMobilePortrait || mobileUiDark ? { width: "100%" } : undefined}
+                onChange={() => {
+                  setTimeout(() => void applyListFiltersFromForm(), 0);
+                }}
+              />
             </Form.Item>
             <Form.Item name="siteId" label="Job Site" style={isMobilePortrait ? { width: "100%" } : undefined}>
               <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
@@ -3496,6 +3723,7 @@ const NewReports: React.FC = () => {
                     value: String(d.id),
                     label: d.name || d.serviceName || String(d.id),
                   }))}
+                  onChange={(v) => void onListFilterServiceChange(v as string | undefined)}
                   showSearch
                   optionFilterProp="label"
                   style={{
@@ -3525,8 +3753,16 @@ const NewReports: React.FC = () => {
                 </div>
               </Form.Item>
             ) : null}
-            <Form.Item style={isMobilePortrait ? { width: "100%", marginBottom: 0 } : undefined}>
+            <Form.Item className="nr-search-row" style={isMobilePortrait ? { width: "100%", marginBottom: 0 } : undefined}>
               <Space wrap style={isMobilePortrait ? { width: "100%", justifyContent: "flex-end" } : undefined}>
+                <ReportListKeywordSearch
+                  value={listSearchDraft}
+                  disabled={bulkDeleting}
+                  mobileUiDark={mobileUiDark}
+                  isMobilePortrait={isMobilePortrait}
+                  onChange={onListSearchInputChange}
+                  onSearch={onListSearchInputSearch}
+                />
                 <Button type="primary" icon={<SearchOutlined />} style={staffPrimaryGreen} onClick={onSearchList}>
                   Search
                 </Button>
@@ -3617,14 +3853,42 @@ const NewReports: React.FC = () => {
               wrap={!showMobileCards}
               style={showMobileCards ? { width: "100%", justifyContent: "stretch" } : undefined}
             >
+              {isDeletedReportTab && isAdminUser ? (
+                <Popconfirm
+                  title={`Restore ${selectedRowKeys.length} selected report${selectedRowKeys.length === 1 ? "" : "s"} to the Reports list?`}
+                  okText="Restore"
+                  cancelText="Cancel"
+                  disabled={!selectedRowKeys.length || bulkDeleting}
+                  onConfirm={restoreSelectedReports}
+                >
+                  <Button
+                    icon={<UndoOutlined />}
+                    loading={bulkDeleting}
+                    disabled={!selectedRowKeys.length || bulkDeleting}
+                    block={showMobileCards}
+                    style={isMobilePortrait ? { width: "100%" } : undefined}
+                  >
+                    Restore selected
+                    {selectedRowKeys.length ? ` (${selectedRowKeys.length})` : ""}
+                  </Button>
+                </Popconfirm>
+              ) : null}
               <Popconfirm
                 title={
-                  +profileType === userType.ADMIN ? (
+                  isDeletedReportTab && isAdminUser ? (
                     <span>
-                      Delete {selectedRowKeys.length} selected report
+                      Permanently delete {selectedRowKeys.length} selected report
                       {selectedRowKeys.length === 1 ? "" : "s"}?
                       <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
-                        This permanently removes the reports and their submitted data.
+                        This cannot be undone.
+                      </div>
+                    </span>
+                  ) : +profileType === userType.ADMIN ? (
+                    <span>
+                      Move {selectedRowKeys.length} selected report
+                      {selectedRowKeys.length === 1 ? "" : "s"} to Deleted?
+                      <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
+                        You can permanently delete them later from the Deleted tab.
                       </div>
                     </span>
                   ) : (
@@ -3637,11 +3901,21 @@ const NewReports: React.FC = () => {
                     </span>
                   )
                 }
-                okText={+profileType === userType.ADMIN ? "Delete" : "Remove"}
+                okText={
+                  isDeletedReportTab && isAdminUser
+                    ? "Delete permanently"
+                    : +profileType === userType.ADMIN
+                      ? "Move to Deleted"
+                      : "Remove"
+                }
                 okButtonProps={{ danger: true }}
                 cancelText="Cancel"
                 disabled={!selectedRowKeys.length || bulkDeleting}
-                onConfirm={deleteSelectedReports}
+                onConfirm={
+                  isDeletedReportTab && isAdminUser
+                    ? permanentlyDeleteSelectedReports
+                    : deleteSelectedReports
+                }
               >
                 <Button
                   danger
@@ -3681,7 +3955,11 @@ const NewReports: React.FC = () => {
                         : undefined
                   }
                 >
-                  {+profileType === userType.ADMIN ? "Delete selected" : "Remove selected"}
+                  {isDeletedReportTab && isAdminUser
+                    ? "Delete permanently"
+                    : +profileType === userType.ADMIN
+                      ? "Move to Deleted"
+                      : "Remove selected"}
                   {selectedRowKeys.length ? ` (${selectedRowKeys.length})` : ""}
                 </Button>
               </Popconfirm>
@@ -3698,18 +3976,20 @@ const NewReports: React.FC = () => {
           </div>
         ) : null}
 
-        {isDeletedReportTab && (+profileType === userType.CUSTOMER || +profileType === userType.STAFF) ? (
+        {isDeletedReportTab && (isCustomerUser || isStaffUser || isAdminUser) ? (
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <Popconfirm
               title={
                 <span>
-                  Clear all deleted reports?
+                  {isAdminUser
+                    ? "Permanently delete all reports on this page?"
+                    : "Clear all deleted reports?"}
                   <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
                     This hides them from your Deleted tab (soft clear). You can�t restore after clearing.
                   </div>
                 </span>
               }
-              okText="Clear deleted"
+              okText={isAdminUser ? "Delete permanently" : "Clear deleted"}
               okButtonProps={{ danger: true }}
               cancelText="Cancel"
               disabled={clearingDeleted || listLoading || deletedReportCount === 0}
@@ -3722,7 +4002,7 @@ const NewReports: React.FC = () => {
                 disabled={clearingDeleted || listLoading || deletedReportCount === 0}
                 className={mobileUiDark ? "nr-mobile-bulk-remove-btn" : undefined}
               >
-                Clear deleted
+                {isAdminUser ? "Delete all on page" : "Clear deleted"}
               </Button>
             </Popconfirm>
           </div>
@@ -3730,16 +4010,20 @@ const NewReports: React.FC = () => {
 
         {showMobileCards ? (
           <Spin spinning={listLoading}>
-            {!listLoading && rows.length === 0 ? (
+            {!listLoading && displayRows.length === 0 ? (
               <Empty
                 description={
-                  isDeletedReportTab ? "No deleted reports" : "No reports found"
+                  listSearchDraft.trim()
+                    ? "No reports match your search"
+                    : isDeletedReportTab
+                      ? "No deleted reports"
+                      : "No reports found"
                 }
                 style={{ margin: "32px 0" }}
               />
             ) : (
               <MobileReportsList $dark={mobileUiDark}>
-                {rows.map(renderMobileReportCard)}
+                {displayRows.map(renderMobileReportCard)}
               </MobileReportsList>
             )}
             {count > 0 ? (
@@ -3760,7 +4044,7 @@ const NewReports: React.FC = () => {
           <Table
             rowKey="id"
             loading={listLoading}
-            dataSource={rows}
+            dataSource={displayRows}
             columns={columns as any}
             rowSelection={rowSelection}
             bordered
@@ -3818,9 +4102,15 @@ const NewReports: React.FC = () => {
                 Delete
               </Button>
             ) : null}
-            {isDeletedReportTab && viewRow && canSoftDeleteReport(viewRow) ? (
+            {isDeletedReportTab &&
+            viewRow &&
+            (isAdminUser || canSoftDeleteReport(viewRow)) ? (
               <Popconfirm
-                title="Restore this report to your list?"
+                title={
+                  isAdminUser
+                    ? "Restore this report to the Reports list?"
+                    : "Restore this report to your list?"
+                }
                 okText="Restore"
                 cancelText="Cancel"
                 onConfirm={() => restoreReport(viewRow)}

@@ -299,6 +299,10 @@ const DashboardWarp = styled.div`
   background: #ff9800;
 }
 
+.dashboard-report-badge__circle--tickets {
+  background: #7b1fa2;
+}
+
 .dashboard-faults-badge {
   display: flex;
   flex-direction: column;

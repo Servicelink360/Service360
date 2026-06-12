@@ -131,9 +131,15 @@ function Build-Admin {
     throw "Admin build output missing: $indexHtml"
   }
 
+  $adminOut = Join-Path $artifactDir 'admin'
+  Remove-Item $adminOut -Recurse -Force -ErrorAction SilentlyContinue
+  New-Item -ItemType Directory -Path $adminOut -Force | Out-Null
+  Copy-Item -Recurse (Join-Path $adminDir 'build') (Join-Path $adminOut 'build')
+  Copy-Item (Join-Path $adminDir 'deploy\nginx.conf') (Join-Path $adminOut 'nginx.conf')
+
   $tar = Join-Path $env:TEMP 'admin-artifact.tar.gz'
   if (Get-Command tar -ErrorAction SilentlyContinue) {
-    tar czf $tar -C $adminDir build
+    tar czf $tar -C $artifactDir admin
     if ($LASTEXITCODE -ne 0) { throw "tar failed creating $tar (exit $LASTEXITCODE)" }
   } else {
     throw 'tar not found'
@@ -150,7 +156,9 @@ function Deploy-Artifact {
   Write-Host "=== Upload & apply $Service (~30 sec on server) ===" -ForegroundColor Green
   Invoke-Scp -LocalPath $TarPath -RemoteDest "ubuntu@${Ec2Host}:/tmp/$tarName"
   if ($Service -eq 'admin') {
-    $remote = "set -e; sudo mkdir -p /tmp/deploy-artifacts/admin; sudo rm -rf /tmp/deploy-artifacts/admin/build; sudo tar xzf /tmp/$tarName -C /tmp/deploy-artifacts/admin; sudo bash /opt/app/deploy/ec2-apply-artifacts.sh admin"
+    $applySh = Join-Path $repoRoot 'deploy\ec2-apply-artifacts.sh'
+    Invoke-Scp -LocalPath $applySh -RemoteDest "ubuntu@${Ec2Host}:/tmp/ec2-apply-artifacts.sh"
+    $remote = "set -e; sudo mkdir -p /tmp/deploy-artifacts/admin; sudo rm -rf /tmp/deploy-artifacts/admin/build; sudo tar xzf /tmp/$tarName -C /tmp/deploy-artifacts; sudo bash /tmp/ec2-apply-artifacts.sh admin"
   } else {
     $remote = "set -e; sudo mkdir -p /tmp/deploy-artifacts; sudo rm -rf /tmp/deploy-artifacts/$Service; sudo tar xzf /tmp/$tarName -C /tmp/deploy-artifacts; sudo bash /opt/app/deploy/ec2-apply-artifacts.sh $Service"
   }

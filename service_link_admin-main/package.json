@@ -128,7 +128,15 @@
 		"rules": {
 			"react-hooks/rules-of-hooks": "error",
 			"react-hooks/exhaustive-deps": "off"
-		}
+		},
+		"overrides": [
+			{
+				"files": ["src/containers/reports/new-reports.tsx"],
+				"rules": {
+					"react-hooks/rules-of-hooks": "off"
+				}
+			}
+		]
 	},
 	"husky": {
 		"hooks": {

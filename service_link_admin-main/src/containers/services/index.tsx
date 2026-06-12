@@ -19,6 +19,7 @@ import { ColDef } from "ag-grid-community";
 import actions from "@app/redux/services/actions";
 import TableComponent from "@app/components/common/Table/index";
 import { checkRole } from "../../library/helpers/utility";
+import { serviceFrequencyTypeLabel, resolveServiceFrequencyType } from '@app/library/helpers/serviceFrequencyType';
 import { ButtonDiv, ButtonMR, InformationDiv, StatusRow, UsernameRow, UsersDiv, Fieldset, ActionsWrapper } from "@app/components/common/container.style";
 import ServiceModal from "@app/components/services";
 import { GlobalHotKeys } from "react-hotkeys";
@@ -58,6 +59,13 @@ const Unit: React.FC = () => {
         {
             title: intl.formatMessage({ id: "table.column.description" }),
             dataIndex: "description",
+        },
+        {
+            title: 'Frequency',
+            dataIndex: 'frequencyType',
+            width: 110,
+            render: (_: unknown, row: any) =>
+              serviceFrequencyTypeLabel(resolveServiceFrequencyType(row)),
         },
         {
             title: 'Job sites',

@@ -12,6 +12,7 @@
     DownOutlined,
     UpOutlined,
     ThunderboltFilled,
+    UndoOutlined,
 } from "@ant-design/icons";
 import {
     ActionBtn,
@@ -19,7 +20,7 @@ import {
 } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
 import { dateTimeFormat, limitData, pageData } from "@app/config/data.config";
-import { Col, Popconfirm, Row, Form, Image, DatePicker, Input, Tooltip, Spin, message, Button, Select, Typography, Table, Empty, Pagination, Checkbox } from "antd";
+import { Col, Popconfirm, Row, Form, Image, DatePicker, Input, Tooltip, Spin, message, Button, Select, Typography, Table, Empty, Pagination, Checkbox, Tabs } from "antd";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled, { css } from "styled-components";
 import useMobilePortrait from "@app/lib/hooks/useMobilePortrait";
@@ -42,7 +43,7 @@ import { checkRole } from "../../library/helpers/utility";
 import endPoint from "../../constants/endPoint";
 import serviceType from "../../constants/serviceType";
 import { callAPIAsync } from "../../library/helpers/api";
-import { reportFaultSender, userType } from "../../constants/statusUser";
+import { reportFaultSender, reportFaultStatus, userType } from "../../constants/statusUser";
 import moment from "moment";
 import { Link } from "react-router-dom";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
@@ -319,6 +320,8 @@ const FaultReadStatusCell: React.FC<{
 
 const reportFaultIdOf = (record: any) => record?.reportFaultId ?? record?.id;
 
+type FaultListTab = "active" | "deleted";
+
 const MESSAGE_PREVIEW_LINES = 3;
 
 const renderWrappedMessage = (text: unknown) => {
@@ -376,6 +379,9 @@ const ReportFaults: React.FC = () => {
     const [markingUnreadFaultId, setMarkingUnreadFaultId] = useState<number | null>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [bulkDeleting, setBulkDeleting] = useState(false);
+    const [faultListTab, setFaultListTab] = useState<FaultListTab>("active");
+    const [deletedFaultCount, setDeletedFaultCount] = useState(0);
+    const [clearingDeleted, setClearingDeleted] = useState(false);
     const isMobilePortrait = useMobilePortrait();
     const { isDark } = useColorModeOptional();
     const faultsPageDark = isDark && isMobilePortrait;
@@ -422,10 +428,6 @@ const ReportFaults: React.FC = () => {
             });
         };
     }, [faultsPageDark]);
-
-    useEffect(() => {
-        setListRows(reduxRows || []);
-    }, [reduxRows]);
 
     const profileRaw = localStorage.getItem('profile');
     let profile: any = null;
@@ -592,17 +594,37 @@ const ReportFaults: React.FC = () => {
     }
 
     const profileType = profile ? +profile.type : 0;
+    const isAdminUser = profileType === userType.ADMIN;
+    const isDeletedFaultTab = isAdminUser && faultListTab === "deleted";
+    const showFaultDeletedTabs = isAdminUser;
+
+    useEffect(() => {
+        const raw = reduxRows || [];
+        setListRows(
+            isDeletedFaultTab
+                ? raw.filter((r) => +r.status === reportFaultStatus.DELETED)
+                : raw.filter((r) => +r.status !== reportFaultStatus.DELETED),
+        );
+    }, [reduxRows, isDeletedFaultTab]);
+
     const showReadUnread =
         profileType === userType.ADMIN || profileType === userType.CUSTOMER;
 
     const canUseBulkDelete =
-        profileType === userType.ADMIN ||
-        profileType === userType.CUSTOMER ||
-        profileType === userType.STAFF;
+        (isDeletedFaultTab && isAdminUser) ||
+        (!isDeletedFaultTab &&
+            (profileType === userType.ADMIN ||
+                profileType === userType.CUSTOMER ||
+                profileType === userType.STAFF));
 
     const canBulkDeleteRow = useCallback(
-        (record: any) => canDeleteReportFault(profile, record),
-        [profile],
+        (record: any) => {
+            if (isDeletedFaultTab && isAdminUser) {
+                return Boolean(reportFaultIdOf(record));
+            }
+            return canDeleteReportFault(profile, record);
+        },
+        [profile, isDeletedFaultTab, isAdminUser],
     );
 
     const deletableRowsOnPage = useMemo(
@@ -751,14 +773,35 @@ const ReportFaults: React.FC = () => {
                     </ButtonMR>
                 </Link>
             ) : null}
+            {isDeletedFaultTab && isAdminUser ? (
+                <Popconfirm
+                    title="Restore this fault to the Report faults list?"
+                    okText="Restore"
+                    cancelText={intl.formatMessage({ id: "button.No" })}
+                    placement="topRight"
+                    onConfirm={() => void restoreFault(record)}
+                >
+                    <button type="button" className="btnLink" title="Restore fault">
+                        <UndoOutlined />
+                    </button>
+                </Popconfirm>
+            ) : null}
             {canDeleteReportFault(profile, record) ? (
                 <Popconfirm
                     title={
-                        +profile?.type === userType.ADMIN
-                            ? "Permanently delete this message?"
-                            : intl.formatMessage({ id: "notification.confirm_delete" })
+                        isDeletedFaultTab && isAdminUser
+                            ? "Permanently delete this fault?"
+                            : profileType === userType.ADMIN
+                              ? "Move this fault to Deleted?"
+                              : intl.formatMessage({ id: "notification.confirm_delete" })
                     }
-                    okText={intl.formatMessage({ id: "button.Yes" })}
+                    okText={
+                        isDeletedFaultTab && isAdminUser
+                            ? "Delete permanently"
+                            : profileType === userType.ADMIN
+                              ? "Move to Deleted"
+                              : intl.formatMessage({ id: "button.Yes" })
+                    }
                     cancelText={intl.formatMessage({ id: "button.No" })}
                     placement="topRight"
                     onConfirm={() => {
@@ -766,7 +809,10 @@ const ReportFaults: React.FC = () => {
                             actions.saveInto(
                                 {
                                     id: reportFaultIdOf(record),
-                                    answerId: record?.answerId,
+                                    // Admin always deletes the whole fault (→ Deleted tab), not one message row.
+                                    ...(profileType === userType.ADMIN
+                                        ? {}
+                                        : { answerId: record?.answerId }),
                                 },
                                 actionType.DELETE,
                                 false,
@@ -992,6 +1038,7 @@ const ReportFaults: React.FC = () => {
         orderBy: string = 'createdAt',
         orderValue: string = 'DESC',
         options?: { clearDateFilter?: boolean; faultId?: number },
+        tab: FaultListTab = faultListTab,
     ) => {
         const formData = form.getFieldsValue();
         const useDateRange = !options?.clearDateFilter && !options?.faultId && formData.rangeDate?.length > 1;
@@ -1003,12 +1050,36 @@ const ReportFaults: React.FC = () => {
             limit: limitNum,
             orderBy,
             orderValue,
-            status: 0,
+            status: tab === "deleted" ? reportFaultStatus.DELETED : 0,
             startDate,
             endDate,
             ...(options?.faultId ? { faultId: options.faultId } : {}),
         };
     };
+
+    const loadDeletedFaultCount = useCallback(async () => {
+        if (+profileType !== userType.ADMIN) return;
+        try {
+            const res = await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.REPORT_FAULTS}/findAllGroupByDate`,
+                "GET",
+                {
+                    keyword: "",
+                    page: 1,
+                    limit: 1,
+                    orderBy: "createdAt",
+                    orderValue: "DESC",
+                    status: reportFaultStatus.DELETED,
+                    startDate: "",
+                    endDate: "",
+                },
+            );
+            if (res?.code === 1) setDeletedFaultCount(res?.data?.count ?? 0);
+        } catch {
+            /* ignore */
+        }
+    }, [profileType]);
 
     const fetchList = (
         pageNum: any = 1,
@@ -1034,8 +1105,26 @@ const ReportFaults: React.FC = () => {
                 ? { clearDateFilter: true, faultId: +faultIdParam }
                 : { clearDateFilter: true },
         );
+        if (showFaultDeletedTabs) void loadDeletedFaultCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [success]);
+
+    useEffect(() => {
+        if (!showFaultDeletedTabs) return;
+        void loadDeletedFaultCount();
+    }, [showFaultDeletedTabs, loadDeletedFaultCount]);
+
+    useEffect(() => {
+        if (new URLSearchParams(location.search).get("faultId")) return;
+        setPage(1);
+        setSelectedRowKeys([]);
+        handleResetSearch(1, limit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [faultListTab]);
+
+    useEffect(() => {
+        if (!loading && showFaultDeletedTabs) void loadDeletedFaultCount();
+    }, [loading, showFaultDeletedTabs, loadDeletedFaultCount]);
 
     const linkedFetchOptions = useCallback(() => {
         const faultIdParam = new URLSearchParams(location.search).get("faultId");
@@ -1083,23 +1172,40 @@ const ReportFaults: React.FC = () => {
         let succeeded = 0;
         let failed = 0;
         try {
-            for (const faultId of faultIds) {
+            if (isDeletedFaultTab && isAdmin) {
                 const res = await callAPIAsync(
                     serviceType.COMMON,
-                    `${endPoint.REPORT_FAULTS}/${faultId}`,
-                    "DELETE",
-                    null,
+                    `${endPoint.REPORT_FAULTS}/clear-deleted`,
+                    "PATCH",
+                    { ids: faultIds },
                 );
-                if (res?.code === 1) succeeded += 1;
-                else failed += 1;
+                if (res?.code === 1) {
+                    succeeded = +res?.data?.clearedCount || faultIds.length;
+                } else {
+                    failed = faultIds.length;
+                }
+            } else {
+                for (const faultId of faultIds) {
+                    const res = await callAPIAsync(
+                        serviceType.COMMON,
+                        `${endPoint.REPORT_FAULTS}/${faultId}`,
+                        "DELETE",
+                        null,
+                    );
+                    if (res?.code === 1) succeeded += 1;
+                    else failed += 1;
+                }
             }
             setSelectedRowKeys([]);
             await handleResetSearch(page, limit);
+            void loadDeletedFaultCount();
             refreshDashboard();
             if (succeeded && !failed) {
                 message.success(
                     isAdmin
-                        ? `${succeeded} fault${succeeded === 1 ? "" : "s"} deleted`
+                        ? isDeletedFaultTab
+                            ? `${succeeded} fault${succeeded === 1 ? "" : "s"} permanently deleted`
+                            : `${succeeded} fault${succeeded === 1 ? "" : "s"} moved to Deleted`
                         : `${succeeded} fault${succeeded === 1 ? "" : "s"} removed from your list`,
                 );
             } else if (succeeded && failed) {
@@ -1115,10 +1221,127 @@ const ReportFaults: React.FC = () => {
         listRows,
         canBulkDeleteRow,
         profileType,
+        isDeletedFaultTab,
         page,
         limit,
         refreshDashboard,
         handleResetSearch,
+        loadDeletedFaultCount,
+    ]);
+
+    const clearDeletedFaults = useCallback(async () => {
+        const faultIds = [
+            ...new Set(
+                listRows
+                    .map((r) => reportFaultIdOf(r))
+                    .filter((id) => Number.isFinite(+id) && +id > 0),
+            ),
+        ];
+        if (!faultIds.length) {
+            message.success("Deleted folder is already empty");
+            return;
+        }
+        setClearingDeleted(true);
+        try {
+            const res = await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.REPORT_FAULTS}/clear-deleted`,
+                "PATCH",
+                { ids: faultIds },
+            );
+            if (res?.code === 1) {
+                const clearedCount = +res?.data?.clearedCount || faultIds.length;
+                message.success(
+                    `Permanently deleted ${clearedCount} fault${clearedCount === 1 ? "" : "s"}`,
+                );
+                setSelectedRowKeys([]);
+                await handleResetSearch(page, limit);
+                void loadDeletedFaultCount();
+                refreshDashboard();
+            } else {
+                message.error(res?.message || "Could not permanently delete faults");
+            }
+        } finally {
+            setClearingDeleted(false);
+        }
+    }, [listRows, page, limit, handleResetSearch, loadDeletedFaultCount, refreshDashboard]);
+
+    const restoreFault = useCallback(
+        async (record: any) => {
+            const faultId = reportFaultIdOf(record);
+            if (!faultId) return;
+            const res = await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.REPORT_FAULTS}/${faultId}/restore`,
+                "PATCH",
+                {},
+            );
+            if (res?.code === 1) {
+                message.success("Fault restored to Report faults");
+                setSelectedRowKeys((prev) =>
+                    prev.filter((k) => {
+                        const row = listRows.find((r) => r.listRowId === k);
+                        return reportFaultIdOf(row) !== faultId;
+                    }),
+                );
+                await handleResetSearch(page, limit);
+                void loadDeletedFaultCount();
+                refreshDashboard();
+            } else {
+                message.error(res?.message || "Could not restore this fault");
+            }
+        },
+        [listRows, page, limit, handleResetSearch, loadDeletedFaultCount, refreshDashboard],
+    );
+
+    const restoreSelectedFaults = useCallback(async () => {
+        const selectedRecords = selectedRowKeys
+            .map((key) => listRows.find((r) => r.listRowId === key))
+            .filter((r): r is NonNullable<typeof r> => Boolean(r && canBulkDeleteRow(r)));
+        const faultIds = [...new Set(selectedRecords.map((r) => reportFaultIdOf(r)))];
+        if (!faultIds.length) {
+            message.warning("Select at least one fault to restore");
+            return;
+        }
+        setBulkDeleting(true);
+        let succeeded = 0;
+        let failed = 0;
+        try {
+            for (const faultId of faultIds) {
+                const res = await callAPIAsync(
+                    serviceType.COMMON,
+                    `${endPoint.REPORT_FAULTS}/${faultId}/restore`,
+                    "PATCH",
+                    {},
+                );
+                if (res?.code === 1) succeeded += 1;
+                else failed += 1;
+            }
+            setSelectedRowKeys([]);
+            await handleResetSearch(page, limit);
+            void loadDeletedFaultCount();
+            refreshDashboard();
+            if (succeeded && !failed) {
+                message.success(
+                    `${succeeded} fault${succeeded === 1 ? "" : "s"} restored to Report faults`,
+                );
+            } else if (succeeded && failed) {
+                message.warning(`${succeeded} restored, ${failed} failed`);
+            } else {
+                message.error("Could not restore selected faults");
+            }
+        } finally {
+            setBulkDeleting(false);
+        }
+    }, [
+        selectedRowKeys,
+        listRows,
+        canBulkDeleteRow,
+        page,
+        limit,
+        handleResetSearch,
+        loadDeletedFaultCount,
+        refreshDashboard,
     ]);
 
     const rowSelection = canUseBulkDelete
@@ -1231,7 +1454,7 @@ const ReportFaults: React.FC = () => {
         : undefined;
 
     const newFaultButton =
-        +profile?.type === userType.STAFF ? (
+        +profile?.type === userType.STAFF && !isDeletedFaultTab ? (
             <ActionListBtn
                 onClick={() => handleOnClick(actionType.ADD)}
                 type="primary"
@@ -1283,6 +1506,26 @@ const ReportFaults: React.FC = () => {
                     isMobilePortrait ? " report-faults-list-wrap--mobile-portrait" : ""
                 }${faultsPageDark ? " new-reports-page-dark new-reports-theme-dark" : ""}`}
             >
+                {showFaultDeletedTabs ? (
+                    <Tabs
+                        className={
+                            isMobilePortrait
+                                ? `new-reports-mobile-tabs${mobileUiDark ? " new-reports-mobile-tabs--dark" : ""}`
+                                : undefined
+                        }
+                        activeKey={faultListTab}
+                        onChange={(k) => {
+                            setFaultListTab(k as FaultListTab);
+                            setPage(1);
+                            setSelectedRowKeys([]);
+                        }}
+                        style={{ marginBottom: 12 }}
+                        items={[
+                            { key: "active", label: "Report faults" },
+                            { key: "deleted", label: `Deleted (${deletedFaultCount})` },
+                        ]}
+                    />
+                ) : null}
                 <div
                     className={`new-reports-list-filters${
                         mobileUiDark ? " new-reports-list-filters--dark" : ""
@@ -1554,14 +1797,45 @@ const ReportFaults: React.FC = () => {
                                     optionFilterProp="label"
                                 />
                             </div>
+                            {isDeletedFaultTab && isAdminUser ? (
+                                <Popconfirm
+                                    title={`Restore ${selectedRowKeys.length} selected fault${selectedRowKeys.length === 1 ? "" : "s"} to the Report faults list?`}
+                                    okText="Restore"
+                                    cancelText={intl.formatMessage({ id: "button.No" })}
+                                    disabled={!selectedRowKeys.length || bulkDeleting}
+                                    onConfirm={restoreSelectedFaults}
+                                >
+                                    <Button
+                                        icon={<UndoOutlined />}
+                                        loading={bulkDeleting}
+                                        disabled={!selectedRowKeys.length || bulkDeleting}
+                                        block={isMobilePortrait}
+                                        style={isMobilePortrait ? { width: "100%" } : undefined}
+                                    >
+                                        Restore selected
+                                        {selectedRowKeys.length ? ` (${selectedRowKeys.length})` : ""}
+                                    </Button>
+                                </Popconfirm>
+                            ) : null}
                             <Popconfirm
                                 title={
-                                    profileType === userType.ADMIN
-                                        ? `Delete ${selectedRowKeys.length} selected fault${selectedRowKeys.length === 1 ? "" : "s"}?`
-                                        : `Remove ${selectedRowKeys.length} selected fault${selectedRowKeys.length === 1 ? "" : "s"} from your list?`
+                                    isDeletedFaultTab && isAdminUser
+                                        ? `Permanently delete ${selectedRowKeys.length} selected fault${selectedRowKeys.length === 1 ? "" : "s"}?`
+                                        : profileType === userType.ADMIN
+                                          ? `Move ${selectedRowKeys.length} selected fault${selectedRowKeys.length === 1 ? "" : "s"} to Deleted?`
+                                          : `Remove ${selectedRowKeys.length} selected fault${selectedRowKeys.length === 1 ? "" : "s"} from your list?`
                                 }
-                                okText={intl.formatMessage({ id: "button.Yes" })}
+                                okText={
+                                    isDeletedFaultTab && isAdminUser
+                                        ? "Delete permanently"
+                                        : profileType === userType.ADMIN
+                                          ? "Move to Deleted"
+                                          : intl.formatMessage({ id: "button.Yes" })
+                                }
                                 cancelText={intl.formatMessage({ id: "button.No" })}
+                                okButtonProps={
+                                    isDeletedFaultTab && isAdminUser ? { danger: true } : undefined
+                                }
                                 disabled={!selectedRowKeys.length || bulkDeleting}
                                 onConfirm={deleteSelectedFaults}
                             >
@@ -1574,8 +1848,34 @@ const ReportFaults: React.FC = () => {
                                     disabled={!selectedRowKeys.length || bulkDeleting}
                                     style={isMobilePortrait ? { width: "100%" } : undefined}
                                 >
-                                    {profileType === userType.ADMIN ? "Delete selected" : "Remove selected"}
+                                    {isDeletedFaultTab && isAdminUser
+                                        ? "Delete permanently"
+                                        : profileType === userType.ADMIN
+                                          ? "Move to Deleted"
+                                          : "Remove selected"}
                                     {selectedRowKeys.length ? ` (${selectedRowKeys.length})` : ""}
+                                </Button>
+                            </Popconfirm>
+                        </div>
+                    ) : null}
+                    {isDeletedFaultTab && isAdminUser ? (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+                            <Popconfirm
+                                title="Permanently delete all faults on this page?"
+                                okText="Delete permanently"
+                                okButtonProps={{ danger: true }}
+                                cancelText="Cancel"
+                                disabled={clearingDeleted || loading || deletedFaultCount === 0}
+                                onConfirm={clearDeletedFaults}
+                            >
+                                <Button
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    loading={clearingDeleted}
+                                    disabled={clearingDeleted || loading || deletedFaultCount === 0}
+                                    className={mobileUiDark ? "nr-mobile-bulk-remove-btn" : undefined}
+                                >
+                                    Delete all on page
                                 </Button>
                             </Popconfirm>
                         </div>
@@ -1584,7 +1884,11 @@ const ReportFaults: React.FC = () => {
                         <Spin spinning={loading}>
                             {!loading && listRows.length === 0 ? (
                                 <Empty
-                                    description={intl.formatMessage({ id: "sidebar.users.no_data" })}
+                                    description={
+                                        isDeletedFaultTab
+                                            ? "No deleted faults"
+                                            : intl.formatMessage({ id: "sidebar.users.no_data" })
+                                    }
                                     style={{ margin: "32px 0" }}
                                 />
                             ) : (

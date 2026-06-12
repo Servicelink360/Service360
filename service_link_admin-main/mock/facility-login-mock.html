@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Service360 — Facility Management Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --green: #397d36;
+      --green-dark: #2f6b2c;
+      --green-soft: #e8f3e7;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --bg: #ffffff;
+      --bg-soft: #f8fafc;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      height: 68px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+    }
+
+    .nav-logo {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-mark {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+    }
+
+    .logo-mark svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .logo-type {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+
+    .nav-logo strong {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--text);
+    }
+
+    .nav-logo span {
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 6px;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .nav-links a {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .nav-links a:hover { color: var(--text); background: var(--bg-soft); }
+
+    .nav-right {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .login-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 999px;
+      background: var(--green);
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      font-family: inherit;
+      box-shadow: 0 2px 10px rgba(57, 125, 54, 0.25);
+    }
+
+    .login-badge:hover { background: var(--green-dark); }
+
+    .login-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #86efac;
+    }
+
+    .login-popover {
+      display: none;
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 300px;
+      padding: 20px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 16px 48px rgba(15, 23, 42, 0.12);
+    }
+
+    .login-popover.open { display: block; }
+
+    .login-popover::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      right: 22px;
+      width: 11px;
+      height: 11px;
+      background: #fff;
+      border-left: 1px solid var(--border);
+      border-top: 1px solid var(--border);
+      transform: rotate(45deg);
+    }
+
+    .login-popover h3 { margin: 0 0 4px; font-size: 1rem; }
+    .login-popover .hint { margin: 0 0 16px; font-size: 0.78rem; color: var(--muted); }
+    .login-popover label { display: block; font-size: 0.72rem; font-weight: 600; color: #475569; margin-bottom: 5px; }
+    .login-popover input {
+      width: 100%;
+      padding: 9px 11px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+
+    .login-popover input:focus {
+      outline: none;
+      border-color: var(--green);
+      box-shadow: 0 0 0 2px rgba(57, 125, 54, 0.15);
+    }
+
+    .login-popover .btn-submit {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .login-popover .forgot {
+      display: block;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--green);
+      text-decoration: none;
+    }
+
+    .hero {
+      padding: 80px 32px 72px;
+      background:
+        radial-gradient(circle at 15% 20%, rgba(57, 125, 54, 0.12), transparent 45%),
+        radial-gradient(circle at 85% 60%, rgba(56, 189, 248, 0.08), transparent 40%),
+        linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+    }
+
+    .hero-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--green-dark);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      margin: 0 0 18px;
+      font-size: clamp(2.2rem, 4.5vw, 3.2rem);
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    .hero .lead {
+      margin: 0 0 28px;
+      font-size: 1.08rem;
+      line-height: 1.65;
+      color: var(--muted);
+      max-width: 520px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      padding: 13px 22px;
+      border: none;
+      border-radius: 10px;
+      background: var(--green);
+      color: #fff;
+      font-size: 0.92rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .btn-secondary {
+      padding: 13px 22px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font-size: 0.92rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .hero-visual {
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: #fff;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+
+    .visual-bar {
+      display: flex;
+      gap: 6px;
+      padding: 14px 18px;
+      background: #f1f5f9;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .visual-bar span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #cbd5e1;
+    }
+
+    .visual-body { padding: 24px; }
+
+    .visual-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .visual-block {
+      height: 56px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+    }
+
+    .visual-block.accent {
+      background: linear-gradient(135deg, var(--green-soft), #d1e7d0);
+    }
+
+    .visual-panel {
+      height: 140px;
+      border-radius: 12px;
+      background:
+        repeating-linear-gradient(0deg, transparent, transparent 18px, rgba(148,163,184,0.12) 19px),
+        repeating-linear-gradient(90deg, transparent, transparent 18px, rgba(148,163,184,0.12) 19px),
+        #f8fafc;
+      border: 1px solid var(--border);
+    }
+
+    .visual-caption {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    section { padding: 72px 32px; }
+    section.soft { background: var(--bg-soft); }
+
+    .section-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    .section-head {
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto 48px;
+    }
+
+    .section-head h2 {
+      margin: 0 0 12px;
+      font-size: 1.85rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .feature-card {
+      padding: 28px 24px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--border);
+    }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+      background: var(--green-soft);
+      margin-bottom: 16px;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+    }
+
+    .feature-card p {
+      margin: 0;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .step { text-align: center; padding: 0 12px; }
+
+    .step-num {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--green);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .step h3 { margin: 0 0 8px; font-size: 1rem; }
+    .step p { margin: 0; font-size: 0.88rem; color: var(--muted); line-height: 1.55; }
+
+    .audience {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .audience-card {
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      text-align: center;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .cta {
+      text-align: center;
+      padding: 64px 32px;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #f8fafc;
+    }
+
+    .cta h2 { margin: 0 0 12px; font-size: 1.75rem; }
+    .cta p { margin: 0 0 24px; color: rgba(226, 232, 240, 0.85); }
+
+    footer {
+      padding: 40px 32px 28px;
+      background: #0f172a;
+      color: #94a3b8;
+    }
+
+    .footer-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.2fr repeat(3, 1fr);
+      gap: 32px;
+    }
+
+    .footer-brand .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .footer-brand .logo-mark {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+    }
+
+    .footer-brand .logo-mark svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .footer-brand .logo-text strong {
+      display: block;
+      font-size: 1.1rem;
+      letter-spacing: 0.08em;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .footer-brand .logo-text span {
+      display: block;
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+
+    .footer-brand p {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+      max-width: 260px;
+    }
+
+    .footer-col h4 {
+      margin: 0 0 14px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #e2e8f0;
+    }
+
+    .footer-col ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .footer-col li { margin-bottom: 10px; }
+
+    .footer-col a {
+      font-size: 0.88rem;
+      color: #94a3b8;
+      text-decoration: none;
+    }
+
+    .footer-col a:hover { color: #fff; }
+
+    .footer-bottom {
+      max-width: 1080px;
+      margin: 32px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+
+    .footer-legal {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 20px;
+    }
+
+    .footer-legal a {
+      color: #94a3b8;
+      text-decoration: none;
+    }
+
+    .footer-legal a:hover { color: #e2e8f0; }
+
+    @media (max-width: 960px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .features, .steps { grid-template-columns: 1fr; }
+      .audience { grid-template-columns: repeat(2, 1fr); }
+      .nav-links { display: none; }
+      .footer-inner { grid-template-columns: 1fr 1fr; }
+      .footer-brand { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 600px) {
+      .footer-inner { grid-template-columns: 1fr; }
+      .footer-bottom { flex-direction: column; text-align: center; }
+      .footer-legal { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="logo-ring" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#397d36" />
+        <stop offset="100%" stop-color="#2f6b2c" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <header class="navbar">
+    <div class="nav-left">
+      <a class="nav-logo" href="#">
+        <div class="logo-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Service360">
+            <circle cx="24" cy="24" r="19" fill="none" stroke="#e8f3e7" stroke-width="3.5" />
+            <circle cx="24" cy="24" r="19" fill="none" stroke="url(#logo-ring)" stroke-width="3.5"
+              stroke-linecap="round" stroke-dasharray="119.38" stroke-dashoffset="0"
+              transform="rotate(-90 24 24)" />
+            <path d="M24 5 L27 11 L21 11 Z" fill="#397d36" transform="rotate(0 24 24)" />
+            <text x="24" y="28" text-anchor="middle" font-size="12" font-weight="700"
+              fill="#397d36" font-family="DM Sans, system-ui, sans-serif">360°</text>
+          </svg>
+        </div>
+        <div class="logo-type">
+          <strong>Service360</strong>
+          <span>Facility management</span>
+        </div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#platform">Platform</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </div>
+
+    <div class="nav-right">
+      <button type="button" class="login-badge" id="login-toggle" aria-expanded="false">
+        <span class="dot"></span>
+        Login
+      </button>
+
+      <div class="login-popover" id="login-popover">
+        <h3>Sign in</h3>
+        <p class="hint">Access your organisation's workspace</p>
+        <form id="login-form">
+          <label for="email">Email</label>
+          <input id="email" type="text" placeholder="Username or email" autocomplete="username" />
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+          <button type="submit" class="btn-submit">Login</button>
+          <a class="forgot" href="#">Forgot password?</a>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero" id="platform">
+    <div class="hero-inner">
+      <div>
+        <span class="eyebrow">Facility management platform</span>
+        <h1>Your partner in facilities</h1>
+        <p class="lead">
+          Service360 is a cloud platform for facility and property teams. Manage sites,
+          schedules, inspections, faults, and communications — securely, for every organisation you serve.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn-primary" id="login-cta">Sign in</button>
+          <a class="btn-secondary" href="#contact">Request a demo</a>
+        </div>
+      </div>
+
+      <div class="hero-visual" aria-hidden="true">
+        <div class="visual-bar">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="visual-body">
+          <div class="visual-row">
+            <div class="visual-block accent"></div>
+            <div class="visual-block"></div>
+            <div class="visual-block"></div>
+          </div>
+          <div class="visual-panel"></div>
+          <p class="visual-caption">Platform preview — illustrative only</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="soft" id="features">
+    <div class="section-inner">
+      <div class="section-head">
+        <h2>Built for multi-organisation facility management</h2>
+        <p>
+          Each customer gets their own secure workspace. No shared data between organisations —
+          just one platform to run operations at scale.
+        </p>
+      </div>
+
+      <div class="features">
+        <article class="feature-card">
+          <div class="feature-icon">&#127970;</div>
+          <h3>Job sites &amp; portfolios</h3>
+          <p>Register properties, assign services, and keep every location documented in one place.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">&#128197;</div>
+          <h3>Schedules &amp; work orders</h3>
+          <p>Plan recurring maintenance, track visits, and coordinate field teams with clear calendars.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">&#9888;</div>
+          <h3>Faults &amp; reporting</h3>
+          <p>Log issues, attach evidence, assign responsibility, and close the loop with audit history.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">&#128203;</div>
+          <h3>Inspections &amp; compliance</h3>
+          <p>Capture structured reports, export PDFs, and maintain records your clients can trust.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">&#128172;</div>
+          <h3>Messages &amp; helpdesk</h3>
+          <p>Keep admins, clients, and field staff aligned with built-in conversations and tickets.</p>
+        </article>
+        <article class="feature-card">
+          <div class="feature-icon">&#128274;</div>
+          <h3>Roles &amp; permissions</h3>
+          <p>Separate access for administrators, customers, and staff — tailored to how you operate.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="section-inner">
+      <div class="section-head">
+        <h2>How it works</h2>
+        <p>Onboard your organisation, configure your services, and invite your team. Service360 scales with you.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Create your workspace</h3>
+          <p>Your organisation gets a dedicated environment on the Service360 platform.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Configure sites &amp; services</h3>
+          <p>Set up properties, maintenance types, schedules, and user roles to match your operations.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Run day-to-day operations</h3>
+          <p>Teams log in to manage work, report faults, and communicate — from anywhere.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="soft">
+    <div class="section-inner">
+      <div class="section-head">
+        <h2>Who uses Service360</h2>
+        <p>Trusted by facility managers, contractors, and property teams across sectors.</p>
+      </div>
+      <div class="audience">
+        <div class="audience-card">Local government</div>
+        <div class="audience-card">Commercial property</div>
+        <div class="audience-card">Facilities contractors</div>
+        <div class="audience-card">Corporate estates</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta" id="contact">
+    <h2>Ready to streamline your facility operations?</h2>
+    <p>Sign in to your workspace or talk to us about bringing Service360 to your organisation.</p>
+    <button type="button" class="btn-primary" id="login-cta-bottom">Sign in</button>
+  </section>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="logo-row">
+          <div class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="19" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3.5" />
+              <circle cx="24" cy="24" r="19" fill="none" stroke="#86efac" stroke-width="3.5"
+                stroke-linecap="round" stroke-dasharray="119.38" transform="rotate(-90 24 24)" />
+              <path d="M24 5 L27 11 L21 11 Z" fill="#86efac" />
+              <text x="24" y="28" text-anchor="middle" font-size="12" font-weight="700"
+                fill="#fff" font-family="DM Sans, system-ui, sans-serif">360°</text>
+            </svg>
+          </div>
+          <div class="logo-text">
+            <strong>Service360</strong>
+            <span>Your partner in facilities</span>
+          </div>
+        </div>
+        <p>Cloud facility management for property teams, contractors, and organisations worldwide.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#contact">Contact us</a></li>
+          <li><a href="#">About Service360</a></li>
+          <li><a href="#">Request a demo</a></li>
+          <li><a href="#">Support</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Platform</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#">Security</a></li>
+          <li><a href="#">System status</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#">Privacy policy</a></li>
+          <li><a href="#">Terms of service</a></li>
+          <li><a href="#">Cookie policy</a></li>
+          <li><a href="#">Acceptable use</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© SERVICE360 2026. All rights reserved.</span>
+      <nav class="footer-legal" aria-label="Legal">
+        <a href="#contact">Contact us</a>
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Cookies</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script>
+    var toggle = document.getElementById('login-toggle');
+    var popover = document.getElementById('login-popover');
+    var form = document.getElementById('login-form');
+
+    function openLogin() {
+      popover.classList.add('open');
+      toggle.setAttribute('aria-expanded', 'true');
+    }
+
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = popover.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    document.getElementById('login-cta').addEventListener('click', openLogin);
+    document.getElementById('login-cta-bottom').addEventListener('click', openLogin);
+
+    document.addEventListener('click', function () {
+      popover.classList.remove('open');
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+
+    popover.addEventListener('click', function (e) { e.stopPropagation(); });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      alert('Static mock — login does not call any API.');
+      popover.classList.remove('open');
+    });
+  </script>
+</body>
+</html>

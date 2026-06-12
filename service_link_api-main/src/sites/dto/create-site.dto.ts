@@ -38,6 +38,12 @@ export class SiteItemDto {
 
     @ApiProperty({ default: 'week', required: false, enum: ['day', 'week', 'month', 'year'] })
     frequencyPeriod?: string
+
+    @ApiProperty({ default: 'interval', required: false, enum: ['interval', 'annual', 'both'] })
+    frequencyMode?: string
+
+    @ApiProperty({ default: null, required: false, enum: ['simple', 'detailed'], description: 'Per site+service override; omit to inherit service default' })
+    frequencyType?: 'simple' | 'detailed' | null
 }
 export class CreateSiteDto {
     @ApiProperty({ default: '' })

@@ -1,5 +1,5 @@
 import Layout from '@app/components/layout/Layout';
-import { FileTextOutlined, LoginOutlined, MailOutlined } from '@ant-design/icons';
+import { CustomerServiceOutlined, FileTextOutlined, LoginOutlined, MailOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
 import React, { useCallback, useEffect } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
@@ -51,6 +51,7 @@ const Dashboard: React.FC = () => {
 
   const reportFaultsCount = data?.reportFaultsCount ?? 0;
   const newReportsCount = data?.newReportsCount ?? 0;
+  const newTicketsCount = data?.newTicketsCount ?? 0;
   const messagesUnreadCount = data?.messagesUnreadCount ?? 0;
   const canShowMessages =
     profile &&
@@ -63,6 +64,24 @@ const Dashboard: React.FC = () => {
   const isAdmin = profileType === userType.ADMIN;
   const isCustomer = profileType === userType.CUSTOMER;
   const showReportsSection = isStaff || isAdmin || isCustomer;
+
+  const ticketsBadge = (to: string) => (
+    <Link to={to} className="dashboard-report-badge">
+      <span className="dashboard-report-badge__icon-wrap">
+        <div className="dashboard-report-badge__circle dashboard-report-badge__circle--tickets dashboard-report-badge__circle--action">
+          <CustomerServiceOutlined />
+        </div>
+        {newTicketsCount > 0 ? (
+          <span className="dashboard-messages-badge__count" aria-label={`${newTicketsCount} new tickets`}>
+            {newTicketsCount > 99 ? '99+' : newTicketsCount}
+          </span>
+        ) : null}
+      </span>
+      <div className="dashboard-report-badge__label">
+        {intl.formatMessage({ id: 'sidebar.tickets' })}
+      </div>
+    </Link>
+  );
 
   const newReportBadge = (to: string, showCount: boolean) => (
     <Link to={to} className="dashboard-report-badge">
@@ -131,6 +150,7 @@ const Dashboard: React.FC = () => {
         !isStaff,
         isStaff ? 'Fault Report' : 'Faults Reports',
       )}
+      {(isAdmin || isCustomer) ? ticketsBadge('/tickets?status=2') : null}
       {messagesEnvelopeBadge}
     </div>
   );

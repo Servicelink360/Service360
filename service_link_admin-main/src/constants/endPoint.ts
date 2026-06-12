@@ -10,6 +10,7 @@ const profileEndPoint = {
     GET_USER_PROFILE: "v1/users/profile",
     CHANGE_PROFILE: "v1/users/changeProfile",
     CHANGE_PASSWORD: "v1/users/changePassword",
+    UPDATE_NOTIFICATION_SETTINGS: "v1/users/notificationSettings",
 }
 
 const crmEndPoint = {

@@ -5,6 +5,7 @@ import { store } from './redux/store';
 import Boot from './redux/boot';
 import Routes from './router';
 import AppProvider from './AppProvider';
+import InstallPrompt from './components/pwa/InstallPrompt';
 // import Loading from './components/Common/Loading';
 
 const App = () => (
@@ -12,6 +13,7 @@ const App = () => (
     <AppProvider>
       <>
         <GlobalStyles />
+        <InstallPrompt />
         <Routes />
         {/* <Loading/> */}
       </>

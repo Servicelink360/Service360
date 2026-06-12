@@ -14,6 +14,7 @@ import { CustomerCompany } from './entities/customer-company.entity';
 import { Staff } from './entities/staff.entity';
 import { SettingsModule } from '../settings/settings.module';
 import { UsersCustomerSyncBootstrap } from './users-customer-sync.bootstrap';
+import { CustomerNotificationsService } from './customer-notifications.service';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { UsersCustomerSyncBootstrap } from './users-customer-sync.bootstrap';
     }),
   ],
   controllers: [UsersController],
-  providers: [UsersService, JwtStrategy, UsersCustomerSyncBootstrap],
-  exports: [UsersService],
+  providers: [UsersService, JwtStrategy, UsersCustomerSyncBootstrap, CustomerNotificationsService],
+  exports: [UsersService, CustomerNotificationsService],
 })
 export class UsersModule { }

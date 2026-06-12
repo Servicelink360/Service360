@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ReportFaultsService } from './report-faults.service';
 import { ReportFaultsController } from './report-faults.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -6,6 +6,7 @@ import { ReportFaultAnswer } from './entities/report-fault-answer.entity';
 import { ReportFault } from './entities/report-fault.entity';
 import { ReportFaultAdminVisibility } from './entities/report-fault-admin-visibility.entity';
 import { ReportFaultCustomerVisibility } from './entities/report-fault-customer-visibility.entity';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ReportFaultCustomerVisibility } from './entities/report-fault-customer-
       ReportFaultAdminVisibility,
       ReportFaultCustomerVisibility,
     ]),
+    forwardRef(() => UsersModule),
   ],
   controllers: [ReportFaultsController],
   providers: [ReportFaultsService],

@@ -75,7 +75,13 @@ export function* logout() {
 export function* checkAuthorization() {
   yield takeEvery(actions.CHECK_AUTHORIZATION, function* () {
     const token = getToken().get('idToken');
-    const profile = JSON.parse(getProfile().get('profile'))
+    let profile = null;
+    try {
+      const raw = getProfile().get('profile');
+      profile = raw ? JSON.parse(raw) : null;
+    } catch {
+      profile = null;
+    }
     if (token) {
       yield put({
         type: actions.AUTHORIZATION,
@@ -88,7 +94,12 @@ export function* checkAuthorization() {
 
 export function* forgotPassword() {
   yield takeEvery('FORGOT_PASSWORD', function* ({ payload }: any) {
-    let result: IData = yield callAPI(serviceType.COMMON, "v1/auth/forgotPassword", "POST", { Email: payload.email, OS: "web" });
+    let result: IData = yield callAPI(
+      serviceType.COMMON,
+      'v1/auth/forgotPasswordAdmin',
+      'POST',
+      { email: payload.email },
+    );
 
     if (result.code === errorCode.SUCCESS) {
       notification('success', intl.formatMessage({id: 'notification.sendMailOTP'}),'');
@@ -106,8 +117,13 @@ export function* forgotPassword() {
 
 export function* resetPassword() {
   yield takeEvery('RESET_PASSWORD', function* ({ payload }: any) {
-
-    let result: IData = yield callAPI(serviceType.COMMON, "v1/auth/resetPassword", "POST", { Password: payload.password, Token: payload.code});
+    const token = String(payload.code || '').trim().toUpperCase();
+    let result: IData = yield callAPI(
+      serviceType.COMMON,
+      'v1/auth/resetPassword',
+      'POST',
+      { password: payload.password, token },
+    );
     if (result.code === errorCode.SUCCESS) {
       notification('success', intl.formatMessage({id: 'notification.success'}), '');
       yield put({

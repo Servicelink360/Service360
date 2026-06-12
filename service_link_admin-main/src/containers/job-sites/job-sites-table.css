@@ -65,3 +65,501 @@
 .job-sites-page .job-sites-tasks-table {
   padding-left: 33px;
 }
+
+.job-sites-page .job-sites-schedule-table .ant-table-thead > tr > th {
+  background: #6b5b95 !important;
+  color: #fff !important;
+  font-size: 11px;
+  padding: 6px 4px !important;
+}
+
+.job-sites-page .gm-schedule-wrap__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding-left: 33px;
+  padding-right: 8px;
+}
+
+.job-sites-page .gm-schedule-wrap__title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 12px;
+  color: #6b5b95;
+}
+
+.site-modal .gm-schedule-wrap__header {
+  padding-left: 0;
+}
+
+.job-sites-page .gm-schedule-add-bar,
+.site-modal .gm-schedule-add-bar {
+  padding: 0 33px 8px 33px;
+}
+
+.site-modal .gm-schedule-add-bar {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.job-sites-page .gm-schedule-select {
+  width: 52px;
+  min-width: 52px;
+  font-size: 12px;
+}
+
+.job-sites-page .gm-schedule-select .ant-select-selector {
+  padding: 0 4px !important;
+  min-height: 24px !important;
+}
+
+.job-sites-page .gm-schedule-wrap {
+  padding-left: 0;
+  margin-bottom: 8px;
+}
+
+.job-sites-page .gm-schedule-wrap--empty,
+.job-sites-page .gm-schedule-wrap--error {
+  font-size: 12px;
+  color: #788195;
+  padding: 8px 0 8px 33px;
+}
+
+.job-sites-page .gm-schedule-activity {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.job-sites-page .gm-schedule-cell {
+  display: inline-block;
+  min-width: 18px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.job-sites-page .gm-schedule-cell--fortnight {
+  color: #1565c0;
+}
+
+.job-sites-page .gm-schedule-cell--monthly {
+  color: #e65100;
+}
+
+.job-sites-page .gm-schedule-cell--weekly {
+  color: #2e7d32;
+}
+
+.job-sites-page .gm-schedule-cell--daily {
+  color: #6a1b9a;
+}
+
+.job-sites-page .gm-schedule-cell--empty {
+  color: #bdbdbd;
+  font-weight: 400;
+}
+
+.job-sites-page .gm-schedule-legend {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  color: #788195;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.site-modal .gm-schedule-wrap {
+  padding-left: 0;
+  margin-top: 4px;
+}
+
+.job-sites-service-expand__tasks {
+  margin-top: 16px;
+}
+
+.gm-interval-frequency {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.gm-interval-frequency__title {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #434343;
+}
+
+.gm-frequency-unified__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b5b95;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.gm-frequency-unified-expand .gm-interval-frequency {
+  margin-bottom: 16px;
+}
+
+.gm-frequency-panel {
+  padding: 4px 0 8px;
+}
+
+.gm-frequency-panel__header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.gm-frequency-panel__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.gm-frequency-panel__badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b5b95;
+  background: #f5f0fa;
+  border: 1px solid #e8dff5;
+  border-radius: 999px;
+  padding: 2px 10px;
+  line-height: 1.4;
+}
+
+.gm-frequency-panel__alert {
+  margin-bottom: 12px;
+}
+
+.gm-frequency-panel__body {
+  padding: 14px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.gm-frequency-panel__type {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.gm-frequency-panel__type-option {
+  display: flex;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #ebebeb;
+  border-radius: 6px;
+  background: #fff;
+  width: 100%;
+}
+
+.gm-frequency-panel__type-option.ant-radio-wrapper-checked {
+  border-color: #85c37a;
+  background: #f8fcf7;
+}
+
+.gm-frequency-panel__type-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.3;
+}
+
+.gm-frequency-panel__type-desc {
+  display: block;
+  font-size: 11px;
+  color: #8c8c8c;
+  font-weight: 400;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.gm-frequency-panel__intro {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #595959;
+  line-height: 1.45;
+}
+
+.gm-frequency-panel__intro--muted {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.gm-frequency-column__hint--override {
+  color: #ad6800;
+}
+
+.gm-frequency-panel__body--flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.gm-frequency-panel__base {
+  padding: 14px;
+}
+
+.gm-frequency-panel__editor--base {
+  margin-top: 8px;
+}
+
+.gm-frequency-panel__continue {
+  border-top: 1px dashed #d9d9d9;
+  background: #fcfcfc;
+}
+
+.gm-frequency-panel__continue-toggle {
+  padding: 10px 14px !important;
+  height: auto !important;
+  font-size: 12px;
+}
+
+.gm-frequency-panel__continue-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px 0;
+}
+
+.gm-frequency-panel__continue-line {
+  width: 3px;
+  min-height: 36px;
+  margin-top: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #85c37a 0%, #6b5b95 100%);
+  flex-shrink: 0;
+}
+
+.gm-frequency-panel__continue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.gm-frequency-panel__continue-collapse {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.gm-frequency-panel__editor--detail {
+  margin: 8px 14px 14px 24px;
+  border-left: 2px solid #e8dff5;
+  border-radius: 0 6px 6px 0;
+}
+
+.gm-frequency-panel__body--unified {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gm-frequency-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gm-frequency-panel__section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gm-frequency-panel__section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.gm-frequency-panel__section-desc {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.gm-schedule-month-off {
+  color: #bfbfbf;
+  font-size: 12px;
+}
+
+.gm-schedule-month-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #6b5b95;
+  line-height: 1.4;
+}
+
+.job-sites-schedule-table .gm-schedule-month--inactive {
+  background: #fafafa;
+}
+
+.job-sites-schedule-table .gm-schedule-month--inactive .ant-table-cell {
+  color: #bfbfbf;
+}
+
+.gm-frequency-panel__draft-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #d48806;
+}
+
+.gm-frequency-panel__alert--detail {
+  margin: 8px 14px 14px 24px;
+}
+
+.gm-schedule-add-bar__or {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.gm-schedule-wrap__toolbar {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.gm-schedule-wrap__header--embedded {
+  margin-bottom: 8px;
+}
+
+.gm-schedule-add-bar__controls {
+  flex: 1;
+}
+
+.gm-schedule-add-bar__hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.service-activities-editor {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.service-activities-editor__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.service-activities-editor__hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.service-activities-editor__add {
+  margin-bottom: 10px;
+}
+
+.gm-frequency-panel--detailed .gm-frequency-panel__body {
+  padding: 14px;
+}
+
+.gm-frequency-panel__editor {
+  padding: 12px;
+  border: 1px solid #ebebeb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.gm-frequency-panel__actions {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.gm-frequency-editor--compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.gm-frequency-editor__label {
+  font-size: 12px;
+  color: #595959;
+}
+
+.gm-frequency-editor__preview {
+  font-size: 12px;
+  color: #6b5b95;
+  font-weight: 500;
+}
+
+.gm-schedule-legend--compact {
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.gm-schedule-wrap--embedded {
+  padding-top: 0;
+}
+
+.gm-schedule-wrap--embedded .gm-schedule-wrap__header--embedded {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.gm-frequency-column__mode {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b5b95;
+}
+
+.gm-frequency-column__summary {
+  font-size: 12px;
+  color: #262626;
+  line-height: 1.35;
+}
+
+.gm-frequency-column__hint {
+  font-size: 11px;
+  color: #6b5b95;
+  line-height: 1.35;
+}
+
+.gm-frequency-column__hint--muted {
+  color: #8c8c8c;
+}
+
+.job-sites-recurring-tasks__title {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.job-sites-recurring-tasks__help {
+  margin: 0 0 10px 0;
+  font-size: 11px;
+  color: #8c8c8c;
+  line-height: 1.35;
+}
+
+.site-modal .job-sites-schedule-table .ant-table-thead > tr > th {
+  background: #6b5b95 !important;
+  color: #fff !important;
+}

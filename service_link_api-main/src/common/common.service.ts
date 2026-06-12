@@ -130,6 +130,12 @@ export class CommonService {
 
     const ticketData = await this.ticketsService.dashboard(userInfo);
 
+    let newTicketsCount = 0;
+    if (+userInfo.type === 1 || +userInfo.type === 3) {
+      const resNewTickets = await this.ticketsService.countNewTicketsForDashboard(userInfo);
+      newTicketsCount = resNewTickets?.data ?? 0;
+    }
+
     const newTicketCount = (await this.ticketsService.count(2)).data;
     const inprogressTicketCount = (await this.ticketsService.count(3)).data;
     const completedTicketCount = (await this.ticketsService.count(1)).data;
@@ -143,7 +149,7 @@ export class CommonService {
     return {
       ...errorCode.SUCCESS, data: {
         siteCount, taskCount, pendingTaskCount, inprogressTaskCount, successTaskCount, currentTask, ticketData: ticketData.data, submittedReportCount, newReportsCount, reportFaultsCount
-        , auditReportCount, newTicketCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount
+        , auditReportCount, newTicketCount, newTicketsCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount
       }
     };
   }

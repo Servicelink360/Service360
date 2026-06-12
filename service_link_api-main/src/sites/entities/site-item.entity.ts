@@ -59,6 +59,14 @@ export class SiteItem {
     @Column({ name: 'frequency_period', nullable: true, length: 16 })
     frequencyPeriod?: string | null;
 
+    /** interval | annual | both (both = local unified frequency) */
+    @Column({ name: 'frequency_mode', nullable: true, length: 16 })
+    frequencyMode?: 'interval' | 'annual' | 'both' | null;
+
+    /** Per site+service override; null inherits service.frequency_type */
+    @Column({ name: 'frequency_type', nullable: true, length: 16 })
+    frequencyType?: 'simple' | 'detailed' | null;
+
     @OneToMany(() => SiteItemStaff, t => t.siteItem, { cascade: true })
     staffs?: SiteItemStaff[]
 

@@ -9,6 +9,7 @@ import actions from "./actions";
 import intl from '@app/lib/helpers/intlProvider'
 import actionType from "../../constants/actionType";
 import method from "../../constants/method";
+import { isPersistedDbId } from "@app/library/helpers/persistedRecordId";
 
 function* getDataInit() {
     yield takeEvery(actions.GET_DATA_INIT, function* ({ payload }: any) {
@@ -130,9 +131,19 @@ function* saveInto({ payload }: any) {
                 response = yield callAPI(serviceType.COMMON, `${endPoint.JOB_SITES}/site-item`, method.POST, data);
                 break;
             case actionType.UPDATE_SITE_ITEM:
+                if (!isPersistedDbId(data?.id)) {
+                    notificationComponent('error', 3, 'Save the site service first, then edit it', '');
+                    yield put({ type: actions.SAVE_INTO_FAILURE });
+                    return;
+                }
                 response = yield callAPI(serviceType.COMMON, `${endPoint.JOB_SITES}/site-item/${data.id}`, method.PATCH, data);
                 break;
             case actionType.DELETE_SITE_ITEM:
+                if (!isPersistedDbId(data?.id)) {
+                    notificationComponent('error', 3, 'Save the site service first, then edit it', '');
+                    yield put({ type: actions.SAVE_INTO_FAILURE });
+                    return;
+                }
                 response = yield callAPI(serviceType.COMMON, `${endPoint.JOB_SITES}/site-item/${data.id}`, method.DELETE, data);
                 break;
             default:

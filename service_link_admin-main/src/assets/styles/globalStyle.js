@@ -595,6 +595,43 @@ html[dir='rtl'] .dz-hidden-input {
   color:#f64744;
 }
 
+/* Report faults — evenly spaced row action icons (view, message, restore, delete) */
+.report-faults-row-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-evenly;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.report-faults-row-actions > * {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.report-faults-row-actions .btnLink,
+.report-faults-row-actions .btnDelete,
+.report-faults-row-actions button {
+  margin: 0 !important;
+  padding: 4px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.new-reports-row-actions.ant-space {
+  display: flex !important;
+  justify-content: space-evenly !important;
+}
+
+.new-reports-row-actions .ant-space-item {
+  margin: 0 !important;
+}
+
 .gFontSize{
   font-size: 12px!important;
 }
@@ -1517,6 +1554,11 @@ body.new-reports-page-body-dark .isoBoxWrapper,
   border: 1px solid #2e2e2e !important;
 }
 
+/* Mobile: keep job-site/service search visible when other filters are collapsed */
+.new-reports-list-filters-form--collapsed .ant-form-item:not(.nr-search-row) {
+  display: none !important;
+}
+
 /* Select shells — beats antd default #fff on .ant-select-selector */
 html[data-color-mode="dark"] .new-reports-theme-dark .nr-dark-select-shell,
 html[data-color-mode="dark"] .new-reports-theme-dark .nr-bulk-select-wrap {
@@ -1943,6 +1985,7 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
 
 .dashboard-content--dark .dashboard-report-badge__circle--reports,
 .dashboard-content--dark .dashboard-report-badge__circle--checkin,
+.dashboard-content--dark .dashboard-report-badge__circle--tickets,
 .dashboard-content--dark .dashboard-report-badge__circle--faults,
 .dashboard-content--dark .dashboard-messages-badge__icon-wrap {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.95);
@@ -2045,8 +2088,9 @@ body.dashboard-page-body-dark .dashboard-messages-badge__label {
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
-    justify-content: center;
-    gap: 2px;
+    justify-content: space-evenly;
+    width: 100%;
+    gap: 0;
   }
 
   .report-faults-list-wrap--mobile-portrait .report-faults-row-actions .btnLink,

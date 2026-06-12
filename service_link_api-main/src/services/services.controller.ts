@@ -1,4 +1,4 @@
-﻿
+
 
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Res, UseGuards, Request, ParseIntPipe } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -9,6 +9,10 @@ import { ServicesService } from './services.service';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { GetServicesDto } from './dto/get-services.dto';
+import {
+  CreateServiceActivityDto,
+  UpdateServiceActivityDto,
+} from './dto/service-activity.dto';
 @ApiTags("Services")
 @Controller({
   path: 'services',
@@ -36,6 +40,47 @@ export class ServicesController {
   @Get('getAll')
   async getAll(@Res() res) {
     return customHttpCode(res, await this.servicesService.getAll());
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get(':id/activities')
+  async listActivities(@Res() res, @Param('id', ParseIntPipe) id: number) {
+    return customHttpCode(res, await this.servicesService.listActivities(id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post(':id/activities')
+  async createActivity(
+    @Res() res,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: CreateServiceActivityDto,
+  ) {
+    return customHttpCode(res, await this.servicesService.createActivity(id, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/activities/:activityId')
+  async updateActivity(
+    @Res() res,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('activityId', ParseIntPipe) activityId: number,
+    @Body() body: UpdateServiceActivityDto,
+  ) {
+    return customHttpCode(res, await this.servicesService.updateActivity(id, activityId, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete(':id/activities/:activityId')
+  async removeActivity(
+    @Res() res,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('activityId', ParseIntPipe) activityId: number,
+  ) {
+    return customHttpCode(res, await this.servicesService.removeActivity(id, activityId));
   }
 
   @UseGuards(JwtAuthGuard)

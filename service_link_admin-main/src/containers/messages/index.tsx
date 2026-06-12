@@ -619,17 +619,19 @@ const MessagesPage: React.FC = () => {
           const byPeer = findAdminThreadRow(rows, prev.peerType, prev.peerId);
           if (byPeer) return threadToSelection(byPeer);
           if (prev.threadId === 0) return prev;
+          return null;
         }
         if (prev && rows.some((t) => conversationMatches(prev, t))) {
           const match = rows.find((t) => conversationMatches(prev, t))!;
           return threadToSelection(match);
         }
         if (isCustomer || isStaff) {
-          if (rows.length === 0) return prev;
+          if (rows.length === 0) return null;
           const support =
             rows.find((t) => t.conversationKind === 'admin') ?? rows[0];
           return threadToSelection(support);
         }
+        if (rows.length === 0) return null;
         return prev;
       });
       return rows;
@@ -852,6 +854,7 @@ const MessagesPage: React.FC = () => {
       if (res?.code === 1) {
         message.success('Message moved to Deleted');
         await loadMessages();
+        await loadThreads();
       } else {
         message.error(res?.message || 'Could not delete message');
       }
@@ -873,6 +876,7 @@ const MessagesPage: React.FC = () => {
         message.success('Message restored');
         if (messageTab !== 'all') setMessageTab('all');
         else await loadMessages();
+        await loadThreads();
       } else {
         message.error(res?.message || 'Could not restore message');
       }
@@ -905,6 +909,7 @@ const MessagesPage: React.FC = () => {
       if (res?.code === 1) {
         message.success('Deleted messages cleared');
         await loadMessages();
+        await loadThreads();
       } else {
         message.error(res?.message || 'Could not clear deleted messages');
       }
@@ -1466,13 +1471,17 @@ const MessagesPage: React.FC = () => {
                         ) : null}
                       </span>
                     </div>
-                    <Text type="secondary" ellipsis style={{ fontSize: 12, display: 'block' }}>
-                      {t.lastMessagePreview || 'No messages'}
-                    </Text>
-                    {t.updatedAt ? (
-                      <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
-                        {formatMessageTimestamp(t.updatedAt)}
-                      </Text>
+                    {t.lastMessagePreview ? (
+                      <>
+                        <Text type="secondary" ellipsis style={{ fontSize: 12, display: 'block' }}>
+                          {t.lastMessagePreview}
+                        </Text>
+                        {t.updatedAt ? (
+                          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
+                            {formatMessageTimestamp(t.updatedAt)}
+                          </Text>
+                        ) : null}
+                      </>
                     ) : null}
                   </button>
                 ))

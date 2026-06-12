@@ -1,10 +1,26 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
+  <script>
+    (function () {
+      var env = { NODE_ENV: 'development', PUBLIC_URL: '%PUBLIC_URL%' };
+      var g = typeof globalThis !== 'undefined' ? globalThis : window;
+      if (!g.process) g.process = { env: env };
+      else if (!g.process.env) g.process.env = env;
+      else {
+        if (!g.process.env.NODE_ENV) g.process.env.NODE_ENV = env.NODE_ENV;
+        if (!g.process.env.PUBLIC_URL) g.process.env.PUBLIC_URL = env.PUBLIC_URL;
+      }
+    })();
+  </script>
   <meta charset="utf-8" />
   <link rel="shortcut icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/logo.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#000000" />
+  <meta name="theme-color" content="#85c37a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Service360" />
   <meta name="description" content="Streamline your facility operations with Service360. Manage work orders, preventive maintenance, asset tracking, and service requests from one dashboard. Secure login for facility managers and service teams." />
   <meta name="application-name" content="Service360" />
   <meta property="og:title" content="Service360 - Facility Management System" />
@@ -14,7 +30,7 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="Service360 - Facility Management System" />
   <meta name="twitter:description" content="Streamline your facility operations with Service360. Manage work orders, preventive maintenance, asset tracking, and service requests from one dashboard. Secure login for facility managers and service teams." />
-  <link rel="apple-touch-icon" href="logo.png" />
+  <link rel="apple-touch-icon" href="%PUBLIC_URL%/icons/icon-192x192.png" />
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
   <link async rel="stylesheet" href="%PUBLIC_URL%/css/ionicons.min.css?v=0.0.3" />
   <link
@@ -27,11 +43,6 @@
     crossorigin="" />
   <link rel='nofollow' href="https://cdn.syncfusion.com/ej2/ej2-base/styles/material.css" rel="stylesheet" />
   <title>Service360 - Facility Management System</title>
-  <script>
-    if (typeof window !== 'undefined' && typeof window.process === 'undefined') {
-      window.process = { env: { NODE_ENV: 'development', PUBLIC_URL: '%PUBLIC_URL%' } };
-    }
-  </script>
 
   <!-- <link rel="stylesheet" href="css/style.css"> -->
   

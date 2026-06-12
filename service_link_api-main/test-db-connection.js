@@ -1,5 +1,5 @@
+require('./scripts/load-env');
 const { createConnection } = require('typeorm');
-require('dotenv').config();
 
 async function testDbConnection() {
   try {
