@@ -1387,6 +1387,11 @@ html[dir='rtl'] .dz-hidden-input {
     padding-top: 0 !important;
   }
 
+  .image-upload-grid-wrap .ant-upload-list-picture-card .ant-upload-list-item-actions {
+    z-index: 2;
+    pointer-events: auto;
+  }
+
   .image-upload-grid-wrap .ant-upload-list-picture-card .ant-upload-list-item-thumbnail,
   .image-upload-grid-wrap .ant-upload-list-picture-card .ant-upload-list-item-thumbnail img,
   .image-upload-grid-wrap .ant-upload-list-picture-card .ant-upload-list-item-image {

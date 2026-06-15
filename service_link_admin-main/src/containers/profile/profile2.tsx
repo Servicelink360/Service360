@@ -41,6 +41,8 @@ const MyProfile: React.FC = () => {
   }, [getProfile, success])
 
   const isCustomer = +data?.type === userType.CUSTOMER
+  const isAdmin = +data?.type === userType.ADMIN
+  const showEmailNotifications = isCustomer || isAdmin
 
   return (
     <main>
@@ -70,7 +72,7 @@ const MyProfile: React.FC = () => {
                 id: 'sidebar.users.password_change',
               })}
             </span>
-            {isCustomer ? (
+            {showEmailNotifications ? (
               <span
                 onClick={() => setTab(3)}
                 className={
@@ -89,9 +91,9 @@ const MyProfile: React.FC = () => {
             <Infomation image={image} data={data} />
           ) : tab === 2 ? (
             <ChangePassword />
-          ) : (
-            <EmailNotifications data={data} />
-          )}
+          ) : showEmailNotifications ? (
+            <EmailNotifications data={data} isAdmin={isAdmin} />
+          ) : null}
         </div>
       </SectionInformation>
 

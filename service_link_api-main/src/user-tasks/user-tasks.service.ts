@@ -60,6 +60,13 @@ export class UserTasksService {
       serviceName?: string;
     },
   ): void {
+    void this.customerNotifications.notifyAdminsNewReportAvailable({
+      userTaskId: task.id,
+      taskName: task.taskName || '',
+      siteName: task.siteName || '',
+      serviceName: task.serviceName || '',
+      createdByUserId: +userInfo.userId,
+    });
     if (+userInfo.type === userType.CUSTOMER || !task.customerId) return;
     void this.customerNotifications.notifyNewReportAvailable({
       userTaskId: task.id,

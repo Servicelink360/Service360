@@ -83,11 +83,11 @@ type IProps = {
 const filesToUploadList = (files: string[]) => {
     const list: any[] = []
     if (files && files.length > 0) {
-        for (const img of files) {
+        files.forEach((img, idx) => {
             if (img) {
                 const resolved = resolvePublicMediaUrl(img)
                 list.push({
-                    uid: `server-${img}`,
+                    uid: `server-${idx}-${img}`,
                     percent: 100,
                     name: img.split('/')[img.split('/').length - 1],
                     status: 'done',
@@ -96,7 +96,7 @@ const filesToUploadList = (files: string[]) => {
                     isPending: false,
                 })
             }
-        }
+        })
     }
     return list
 }
@@ -144,14 +144,19 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
     }, [])
 
     const collectServerUrls = useCallback((list: any[]) => {
+        const originalByResolved = new Map<string, string>()
+        for (const f of files) {
+            if (f) originalByResolved.set(resolvePublicMediaUrl(f), f)
+        }
         const urls: string[] = []
         for (const item of list) {
             if (item.status === 'done' && item.url && !isBlobUrl(item.url) && item.url !== 'null') {
-                urls.push(item.url)
+                const resolved = resolvePublicMediaUrl(item.url)
+                urls.push(originalByResolved.get(resolved) || originalByResolved.get(item.url) || item.url)
             }
         }
         return urls
-    }, [])
+    }, [files])
 
     const notifyParent = useCallback(
         (list: any[]) => {
@@ -388,6 +393,7 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                 }}
                 customRequest={deferUpload ? undefined : (options) => handleUpdaloadImage(options)}
                 onPreview={handlePreview}
+                showUploadList={{ showRemoveIcon: true, showPreviewIcon: true }}
                 onRemove={(file) => {
                     removeEntry(file.uid)
                     return true

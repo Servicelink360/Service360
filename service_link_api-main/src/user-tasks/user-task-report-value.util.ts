@@ -112,41 +112,77 @@ export function expandReportItemsForStorage(items: ReportItemInput[]): ReportIte
   return out;
 }
 
-/** Merge __partN rows back into one logical field for display/PDF. */
+function normalizeReportFieldName(name: string): string {
+  return String(name || '')
+    .trim()
+    .replace(/[\u2013\u2014\u2212]/g, '-')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function reportFieldStorageKey(name: string): string {
+  const partRe = /^(.+?)__part(\d+)$/;
+  let n = String(name || '').trim();
+  const partM = partRe.exec(n);
+  if (partM) n = partM[1];
+  const parenM = n.match(/^(.+?)\s\((\d+)\)$/);
+  if (parenM) n = parenM[1];
+  return normalizeReportFieldName(n);
+}
+
+function reportFieldDisplayName(name: string): string {
+  const partRe = /^(.+?)__part(\d+)$/;
+  let n = String(name || '').trim();
+  const partM = partRe.exec(n);
+  if (partM) return partM[1];
+  const parenM = n.match(/^(.+?)\s\(\d+\)$/);
+  if (parenM) return parenM[1];
+  return n;
+}
+
+/** Merge __partN chunks and duplicate " (2)" media rows into one logical field. */
 export function mergeChunkedReportItems<T extends { name: string; type: string; value: string; order?: number }>(
   reports: T[],
 ): T[] {
   if (!reports?.length) return reports;
   const partRe = /^(.+?)__part(\d+)$/;
-  const singles: T[] = [];
-  const groups = new Map<string, T[]>();
+  const nonMedia: T[] = [];
+  const mediaGroups = new Map<string, T[]>();
 
   for (const r of reports) {
-    const m = partRe.exec(r.name);
-    if (m && isMediaFieldType(r.type)) {
-      const base = m[1];
-      if (!groups.has(base)) groups.set(base, []);
-      groups.get(base)!.push(r);
-    } else {
-      singles.push(r);
+    if (!isMediaFieldType(r.type)) {
+      nonMedia.push(r);
+      continue;
     }
+    const key = reportFieldStorageKey(r.name);
+    if (!mediaGroups.has(key)) mediaGroups.set(key, []);
+    mediaGroups.get(key)!.push(r);
   }
 
-  const merged: T[] = [...singles];
-  for (const [base, parts] of groups) {
-    parts.sort((a, b) => {
+  const merged: T[] = [...nonMedia];
+  for (const [, parts] of mediaGroups) {
+    if (parts.length === 1) {
+      merged.push({ ...parts[0], name: reportFieldDisplayName(parts[0].name) });
+      continue;
+    }
+    const sorted = [...parts].sort((a, b) => {
+      const ao = +a.order || 0;
+      const bo = +b.order || 0;
+      if (ao !== bo) return ao - bo;
       const pa = parseInt(partRe.exec(a.name)?.[2] || '0', 10);
       const pb = parseInt(partRe.exec(b.name)?.[2] || '0', 10);
-      return pa - pb;
+      if (pa !== pb) return pa - pb;
+      const da = parseInt(a.name.match(/\((\d+)\)$/)?.[1] || '1', 10);
+      const db = parseInt(b.name.match(/\((\d+)\)$/)?.[1] || '1', 10);
+      return da - db;
     });
     const urls: string[] = [];
-    for (const p of parts) {
+    for (const p of sorted) {
       urls.push(...parseUrlList(p.value));
     }
-    const first = parts[0];
     merged.push({
-      ...first,
-      name: base,
+      ...sorted[0],
+      name: reportFieldDisplayName(sorted[0].name),
       value: JSON.stringify(urls),
     });
   }

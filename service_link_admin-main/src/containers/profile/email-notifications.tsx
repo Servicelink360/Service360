@@ -12,15 +12,17 @@ type NotificationPrefs = {
   emailNotifyUrgentFaultReports?: boolean;
   emailNotifyNewReports?: boolean;
   emailNotifyMessages?: boolean;
+  emailNotifyTickets?: boolean;
 };
 
 type IProps = {
+  isAdmin?: boolean;
   data: {
     notificationPrefs?: NotificationPrefs;
   } | null;
 };
 
-export default function EmailNotifications({ data }: IProps) {
+export default function EmailNotifications({ data, isAdmin }: IProps) {
   const [form] = Form.useForm();
   const intl = useIntl();
   const dispatch = useDispatch();
@@ -32,6 +34,7 @@ export default function EmailNotifications({ data }: IProps) {
       emailNotifyUrgentFaultReports: !!prefs?.emailNotifyUrgentFaultReports,
       emailNotifyNewReports: !!prefs?.emailNotifyNewReports,
       emailNotifyMessages: !!prefs?.emailNotifyMessages,
+      emailNotifyTickets: !!prefs?.emailNotifyTickets,
     });
   }, [prefs, form]);
 
@@ -131,6 +134,27 @@ export default function EmailNotifications({ data }: IProps) {
                 </Form.Item>
               </Col>
             </Row>
+
+            {isAdmin ? (
+              <Row className="left__input" align="middle" style={{ marginTop: 16 }}>
+                <Col
+                  xs={24}
+                  sm={16}
+                  md={16}
+                  lg={SIZE_1680('max') ? 14 : 12}
+                  xl={SIZE_1680('max') ? 14 : 12}
+                >
+                  <h4 style={{ margin: 0, fontWeight: 600 }}>
+                    {intl.formatMessage({ id: 'profile.email_notify_tickets' })}
+                  </h4>
+                </Col>
+                <Col xs={24} sm={8} md={8} lg={6} xl={6}>
+                  <Form.Item name="emailNotifyTickets" valuePropName="checked" noStyle>
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+            ) : null}
 
             <div className="change__password" style={{ marginTop: 24 }}>
               <Button

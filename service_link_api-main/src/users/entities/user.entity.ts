@@ -103,5 +103,20 @@ export class User extends BaseEntity {
     @Column({ name: 'allow_delete' })
     allowDelete: number
 
+    @Column({ name: 'email_notify_normal_fault_reports', default: false })
+    emailNotifyNormalFaultReports: boolean
+
+    @Column({ name: 'email_notify_urgent_fault_reports', default: false })
+    emailNotifyUrgentFaultReports: boolean
+
+    @Column({ name: 'email_notify_new_reports', default: false })
+    emailNotifyNewReports: boolean
+
+    @Column({ name: 'email_notify_messages', default: false })
+    emailNotifyMessages: boolean
+
+    @Column({ name: 'email_notify_tickets', default: false })
+    emailNotifyTickets: boolean
+
 }
 

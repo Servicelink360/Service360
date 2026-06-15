@@ -1485,6 +1485,20 @@ export class MessagesService {
         });
       }
 
+      if (type === userType.CUSTOMER || type === userType.STAFF) {
+        let linkPath = '/messages';
+        if (reportFaultId) {
+          linkPath = `/messages?reportFaultId=${reportFaultId}`;
+        } else if (userTaskId) {
+          linkPath = `/messages?reportId=${userTaskId}`;
+        }
+        void this.customerNotifications.notifyAdminsNewMessage({
+          preview: messageBody.replace(/<[^>]+>/g, ' ').trim(),
+          linkPath,
+          createdByUserId: +userInfo.userId,
+        });
+      }
+
       return {
         ...errorCode.SUCCESS,
         data: { id: msg.id, threadId: thread.id },

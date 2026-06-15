@@ -312,7 +312,7 @@ export class ReportFaultsService {
         await manager.save(ReportFaultAnswer, content);
       });
 
-      if (+userInfo.type !== userType.CUSTOMER && reportFault.customerId) {
+      if (reportFault.customerId && +userInfo.type !== userType.CUSTOMER) {
         void this.customerNotifications.notifyFaultReportCreated({
           faultId: reportFault.id,
           customerId: reportFault.customerId,
@@ -323,6 +323,14 @@ export class ReportFaultsService {
           createdByUserId: +userInfo.userId,
         });
       }
+      void this.customerNotifications.notifyAdminsFaultReportCreated({
+        faultId: reportFault.id,
+        issue: reportFault.issue,
+        siteName: reportFault.siteName,
+        serviceName: reportFault.serviceName,
+        priority: reportFault.priority,
+        createdByUserId: +userInfo.userId,
+      });
 
       return errorCode.SUCCESS;
     } catch (error) {

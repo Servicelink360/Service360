@@ -210,6 +210,8 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.applyCustomerOpenedAtBackfillFromLegacy();
     await this.applyCustomerEmailNotificationPrefs();
     await this.applyCustomerFaultNotificationSubtypes();
+    await this.applyAdminEmailNotificationPrefs();
+    await this.applyAdminEmailNotifyTicketsColumn();
     await this.repairCustomerReadStateFromLegacy();
     await this.ensureDashboardUnreadIndexes();
 
@@ -957,6 +959,66 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('customer fault notification normal/urgent subtypes applied.');
     } catch (e) {
       this.logger.warn(`customer fault notification subtypes: ${(e as Error).message}`);
+    }
+  }
+
+  private async applyAdminEmailNotificationPrefs(): Promise<void> {
+    const patchName = 'admin_email_notification_prefs_v1';
+    try {
+      const existing = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (Array.isArray(existing) && existing.length > 0) {
+        return;
+      }
+      await this.dataSource.query(`
+        ALTER TABLE public.users
+          ADD COLUMN IF NOT EXISTS email_notify_normal_fault_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.users
+          ADD COLUMN IF NOT EXISTS email_notify_urgent_fault_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.users
+          ADD COLUMN IF NOT EXISTS email_notify_new_reports BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.users
+          ADD COLUMN IF NOT EXISTS email_notify_messages BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('admin email notification preference columns ensured.');
+    } catch (e) {
+      this.logger.warn(`admin email notification prefs: ${(e as Error).message}`);
+    }
+  }
+
+  private async applyAdminEmailNotifyTicketsColumn(): Promise<void> {
+    const patchName = 'admin_email_notify_tickets_v1';
+    try {
+      const existing = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (Array.isArray(existing) && existing.length > 0) {
+        return;
+      }
+      await this.dataSource.query(`
+        ALTER TABLE public.users
+          ADD COLUMN IF NOT EXISTS email_notify_tickets BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('admin email_notify_tickets column ensured.');
+    } catch (e) {
+      this.logger.warn(`admin email_notify_tickets: ${(e as Error).message}`);
     }
   }
 

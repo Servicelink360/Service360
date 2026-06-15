@@ -205,21 +205,30 @@ export class UsersService {
   }
 
   private normalizeCustomerOnRead(user: User): User {
-    if (+user.type !== userType.CUSTOMER) {
+    if (+user.type === userType.CUSTOMER) {
+      if (!user.customerInfo) {
+        return user;
+      }
+      user.customerInfo.companyName = this.sanitizeCompanyDisplayName(
+        user.customerInfo.companyName || user.fullName,
+      );
+      (user as User & { notificationPrefs?: Record<string, boolean> }).notificationPrefs = {
+        emailNotifyNormalFaultReports: !!user.customerInfo.emailNotifyNormalFaultReports,
+        emailNotifyUrgentFaultReports: !!user.customerInfo.emailNotifyUrgentFaultReports,
+        emailNotifyNewReports: !!user.customerInfo.emailNotifyNewReports,
+        emailNotifyMessages: !!user.customerInfo.emailNotifyMessages,
+      };
       return user;
     }
-    if (!user.customerInfo) {
-      return user;
+    if (+user.type === userType.ADMIN) {
+      (user as User & { notificationPrefs?: Record<string, boolean> }).notificationPrefs = {
+        emailNotifyNormalFaultReports: !!user.emailNotifyNormalFaultReports,
+        emailNotifyUrgentFaultReports: !!user.emailNotifyUrgentFaultReports,
+        emailNotifyNewReports: !!user.emailNotifyNewReports,
+        emailNotifyMessages: !!user.emailNotifyMessages,
+        emailNotifyTickets: !!user.emailNotifyTickets,
+      };
     }
-    user.customerInfo.companyName = this.sanitizeCompanyDisplayName(
-      user.customerInfo.companyName || user.fullName,
-    );
-    (user as User & { notificationPrefs?: Record<string, boolean> }).notificationPrefs = {
-      emailNotifyNormalFaultReports: !!user.customerInfo.emailNotifyNormalFaultReports,
-      emailNotifyUrgentFaultReports: !!user.customerInfo.emailNotifyUrgentFaultReports,
-      emailNotifyNewReports: !!user.customerInfo.emailNotifyNewReports,
-      emailNotifyMessages: !!user.customerInfo.emailNotifyMessages,
-    };
     return user;
   }
 
@@ -493,27 +502,50 @@ export class UsersService {
         where: { id: userId },
         relations: ['customerInfo'],
       });
-      if (!user || +user.type !== userType.CUSTOMER || !user.customerInfo) {
-        return {
-          ...errorCode.VALIDATION_ERROR,
-          message: 'Email notification settings are only available for customer accounts',
-        };
+      if (!user) {
+        return errorCode.NOT_FOUND;
       }
-      const info = user.customerInfo;
-      if (body.emailNotifyNormalFaultReports !== undefined) {
-        info.emailNotifyNormalFaultReports = !!body.emailNotifyNormalFaultReports;
+      if (+user.type === userType.CUSTOMER && user.customerInfo) {
+        const info = user.customerInfo;
+        if (body.emailNotifyNormalFaultReports !== undefined) {
+          info.emailNotifyNormalFaultReports = !!body.emailNotifyNormalFaultReports;
+        }
+        if (body.emailNotifyUrgentFaultReports !== undefined) {
+          info.emailNotifyUrgentFaultReports = !!body.emailNotifyUrgentFaultReports;
+        }
+        if (body.emailNotifyNewReports !== undefined) {
+          info.emailNotifyNewReports = !!body.emailNotifyNewReports;
+        }
+        if (body.emailNotifyMessages !== undefined) {
+          info.emailNotifyMessages = !!body.emailNotifyMessages;
+        }
+        await this.userRepository.manager.getRepository(Customer).save(info);
+        return this.profile(userId);
       }
-      if (body.emailNotifyUrgentFaultReports !== undefined) {
-        info.emailNotifyUrgentFaultReports = !!body.emailNotifyUrgentFaultReports;
+      if (+user.type === userType.ADMIN) {
+        if (body.emailNotifyNormalFaultReports !== undefined) {
+          user.emailNotifyNormalFaultReports = !!body.emailNotifyNormalFaultReports;
+        }
+        if (body.emailNotifyUrgentFaultReports !== undefined) {
+          user.emailNotifyUrgentFaultReports = !!body.emailNotifyUrgentFaultReports;
+        }
+        if (body.emailNotifyNewReports !== undefined) {
+          user.emailNotifyNewReports = !!body.emailNotifyNewReports;
+        }
+        if (body.emailNotifyMessages !== undefined) {
+          user.emailNotifyMessages = !!body.emailNotifyMessages;
+        }
+        if (body.emailNotifyTickets !== undefined) {
+          user.emailNotifyTickets = !!body.emailNotifyTickets;
+        }
+        user.updatedAt = new Date();
+        await this.userRepository.save(user);
+        return this.profile(userId);
       }
-      if (body.emailNotifyNewReports !== undefined) {
-        info.emailNotifyNewReports = !!body.emailNotifyNewReports;
-      }
-      if (body.emailNotifyMessages !== undefined) {
-        info.emailNotifyMessages = !!body.emailNotifyMessages;
-      }
-      await this.userRepository.manager.getRepository(Customer).save(info);
-      return this.profile(userId);
+      return {
+        ...errorCode.VALIDATION_ERROR,
+        message: 'Email notification settings are only available for customer and admin accounts',
+      };
     } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;

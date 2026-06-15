@@ -21,4 +21,9 @@ export class UpdateCustomerNotificationDto {
   @IsOptional()
   @IsBoolean()
   emailNotifyMessages?: boolean;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsBoolean()
+  emailNotifyTickets?: boolean;
 }

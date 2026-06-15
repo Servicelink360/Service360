@@ -9,7 +9,7 @@ import {
 } from '../helpers/emailContent';
 import { SendMail, isMailConfigured } from '../helpers/sendEmail';
 
-export type CustomerNotifyKind = 'faultReports' | 'newReports' | 'messages';
+export type CustomerNotifyKind = 'faultReports' | 'newReports' | 'messages' | 'tickets';
 
 export interface CustomerNotificationPrefs {
   emailNotifyNormalFaultReports: boolean;
@@ -26,6 +26,7 @@ interface CustomerRecipient {
   emailNotifyUrgentFaultReports: boolean;
   emailNotifyNewReports: boolean;
   emailNotifyMessages: boolean;
+  emailNotifyTickets?: boolean;
 }
 
 @Injectable()
@@ -108,6 +109,40 @@ export class CustomerNotificationsService {
     return rows as CustomerRecipient[];
   }
 
+  private async adminRecipients(): Promise<CustomerRecipient[]> {
+    const rows = await this.dataSource.query(
+      `
+      SELECT u.id AS "userId",
+             TRIM(u.email) AS email,
+             TRIM(u.full_name) AS "fullName",
+             COALESCE(u.email_notify_normal_fault_reports, FALSE) AS "emailNotifyNormalFaultReports",
+             COALESCE(u.email_notify_urgent_fault_reports, FALSE) AS "emailNotifyUrgentFaultReports",
+             COALESCE(u.email_notify_new_reports, FALSE) AS "emailNotifyNewReports",
+             COALESCE(u.email_notify_messages, FALSE) AS "emailNotifyMessages",
+             COALESCE(u.email_notify_tickets, FALSE) AS "emailNotifyTickets"
+      FROM users u
+      WHERE u.type = $1
+        AND u.status = $2
+        AND TRIM(COALESCE(u.email, '')) <> ''
+      `,
+      [userType.ADMIN, userStatus.ACTIVE],
+    );
+    return rows as CustomerRecipient[];
+  }
+
+  private async sendToAdminRecipients(
+    kind: CustomerNotifyKind,
+    opts: {
+      subject: string;
+      html: string | ((recipient: CustomerRecipient) => string);
+      excludeUserIds?: number[];
+      urgentFault?: boolean;
+    },
+  ): Promise<void> {
+    const recipients = await this.adminRecipients();
+    await this.sendToRecipients(recipients, kind, opts);
+  }
+
   private wantsNotification(
     recipient: CustomerRecipient,
     kind: CustomerNotifyKind,
@@ -119,6 +154,7 @@ export class CustomerNotificationsService {
     }
     if (kind === 'newReports') return recipient.emailNotifyNewReports;
     if (kind === 'messages') return recipient.emailNotifyMessages;
+    if (kind === 'tickets') return !!recipient.emailNotifyTickets;
     return false;
   }
 
@@ -184,6 +220,38 @@ export class CustomerNotificationsService {
     }
   }
 
+  async notifyAdminsFaultReportCreated(opts: {
+    faultId: number;
+    issue: string;
+    siteName: string;
+    serviceName: string;
+    priority: number;
+    createdByUserId?: number;
+  }): Promise<void> {
+    try {
+      const link = this.buildEmailDeepLink(`/report-faults?faultId=${opts.faultId}`);
+      const urgent = +opts.priority === 1;
+      const priorityLabel = this.faultPriorityLabel(opts.priority);
+      const subject = `Service360 — ${urgent ? 'Urgent' : 'Normal'} fault: ${opts.issue || opts.siteName || 'New fault'}`;
+      await this.sendToAdminRecipients('faultReports', {
+        subject,
+        html: (r) => `
+        <p>${this.customerGreeting(r.fullName)}</p>
+        <p>A new fault report has been submitted.</p>
+        <p><strong>Priority:</strong> ${priorityLabel}</p>
+        <p><strong>Issue:</strong> ${this.escapeHtml(opts.issue || '—')}</p>
+        <p><strong>Site:</strong> ${this.escapeHtml(opts.siteName || '—')}</p>
+        <p><strong>Service:</strong> ${this.escapeHtml(opts.serviceName || '—')}</p>
+        <p>${emailLinkHtml(link, 'View fault report in Service360')}</p>
+        ${emailSupportFooterHtml()}`,
+        excludeUserIds: opts.createdByUserId ? [opts.createdByUserId] : [],
+        urgentFault: urgent,
+      });
+    } catch (e) {
+      this.logger.warn(`notifyAdminsFaultReportCreated: ${(e as Error).message}`);
+    }
+  }
+
   async notifyNewReportAvailable(opts: {
     userTaskId: number;
     customerId: number;
@@ -209,6 +277,87 @@ export class CustomerNotificationsService {
       });
     } catch (e) {
       this.logger.warn(`notifyNewReportAvailable: ${(e as Error).message}`);
+    }
+  }
+
+  async notifyAdminsNewReportAvailable(opts: {
+    userTaskId: number;
+    taskName: string;
+    siteName: string;
+    serviceName: string;
+    createdByUserId?: number;
+  }): Promise<void> {
+    try {
+      const link = this.buildEmailDeepLink(`/new-reports?reportId=${opts.userTaskId}`);
+      await this.sendToAdminRecipients('newReports', {
+        subject: `Service360 — New report: ${opts.taskName || opts.siteName || 'Report'}`,
+        html: (r) => `
+        <p>${this.customerGreeting(r.fullName)}</p>
+        <p>A new report has been submitted.</p>
+        <p><strong>Report:</strong> ${this.escapeHtml(opts.taskName || '—')}</p>
+        <p><strong>Site:</strong> ${this.escapeHtml(opts.siteName || '—')}</p>
+        <p><strong>Service:</strong> ${this.escapeHtml(opts.serviceName || '—')}</p>
+        <p>${emailLinkHtml(link, 'View report in Service360')}</p>
+        ${emailSupportFooterHtml()}`,
+        excludeUserIds: opts.createdByUserId ? [opts.createdByUserId] : [],
+      });
+    } catch (e) {
+      this.logger.warn(`notifyAdminsNewReportAvailable: ${(e as Error).message}`);
+    }
+  }
+
+  async notifyAdminsNewMessage(opts: {
+    preview: string;
+    linkPath: string;
+    createdByUserId?: number;
+  }): Promise<void> {
+    try {
+      const link = this.buildEmailDeepLink(opts.linkPath);
+      const preview = String(opts.preview || '').slice(0, 500);
+      const previewHtml = preview
+        ? `<p><em>${this.escapeHtml(preview)}</em></p>`
+        : '';
+      await this.sendToAdminRecipients('messages', {
+        subject: 'Service360 — New message',
+        html: (r) => `
+        <p>${this.customerGreeting(r.fullName)}</p>
+        <p>You have a new message in Service360.</p>
+        ${previewHtml}
+        <p>${emailLinkHtml(link, 'Open Messages in Service360')}</p>
+        ${emailSupportFooterHtml()}`,
+        excludeUserIds: opts.createdByUserId ? [opts.createdByUserId] : [],
+      });
+    } catch (e) {
+      this.logger.warn(`notifyAdminsNewMessage: ${(e as Error).message}`);
+    }
+  }
+
+  async notifyAdminsNewTicket(opts: {
+    ticketId: number;
+    subject: string;
+    siteName: string;
+    customerName: string;
+    companyName: string;
+    createdByUserId?: number;
+  }): Promise<void> {
+    try {
+      const link = this.buildEmailDeepLink(`/tickets?status=2&ticketId=${opts.ticketId}`);
+      const subjectLine = `Service360 — New ticket: ${opts.subject || opts.siteName || 'Ticket'}`;
+      await this.sendToAdminRecipients('tickets', {
+        subject: subjectLine,
+        html: (r) => `
+        <p>${this.customerGreeting(r.fullName)}</p>
+        <p>A customer has submitted a new support ticket.</p>
+        <p><strong>Subject:</strong> ${this.escapeHtml(opts.subject || '—')}</p>
+        <p><strong>Customer:</strong> ${this.escapeHtml(opts.customerName || '—')}</p>
+        <p><strong>Company:</strong> ${this.escapeHtml(opts.companyName || '—')}</p>
+        <p><strong>Site:</strong> ${this.escapeHtml(opts.siteName || '—')}</p>
+        <p>${emailLinkHtml(link, 'View ticket in Service360')}</p>
+        ${emailSupportFooterHtml()}`,
+        excludeUserIds: opts.createdByUserId ? [opts.createdByUserId] : [],
+      });
+    } catch (e) {
+      this.logger.warn(`notifyAdminsNewTicket: ${(e as Error).message}`);
     }
   }
 

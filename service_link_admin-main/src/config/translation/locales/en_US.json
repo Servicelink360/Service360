@@ -65,6 +65,7 @@
   "profile.email_notify_urgent_faults": "Urgent fault reports",
   "profile.email_notify_new_reports": "New reports",
   "profile.email_notify_messages": "New messages",
+  "profile.email_notify_tickets": "New tickets",
   "sidebar.users": "Users",
   "sidebar.admins": "Admins",
   "sidebar.staff": "Staff",

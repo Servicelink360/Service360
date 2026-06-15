@@ -16,6 +16,7 @@ import { userType } from '../constants/user';
 import * as moment from 'moment';
 import { applyCustomerScopeToQuery, customerScopeSql } from '../helpers/customer-scope';
 import { ClearDeletedTicketsDto } from './dto/clear-deleted-tickets.dto';
+import { CustomerNotificationsService } from '../users/customer-notifications.service';
 
 @Injectable()
 export class TicketsService {
@@ -25,6 +26,7 @@ export class TicketsService {
     @InjectRepository(Ticket) private readonly ticketsRepository: Repository<Ticket>,
     @InjectRepository(TicketAnswer) private readonly ticketAnswersRepository: Repository<TicketAnswer>,
     @Inject('winston') private readonly logger: Logger,
+    private readonly customerNotifications: CustomerNotificationsService,
   ) { }
 
   private async customerDisplayForUser(
@@ -131,6 +133,17 @@ export class TicketsService {
         content.updatedAt = new Date();
         content.type = 1;
         await this.ticketAnswersRepository.save(content);
+      }
+
+      if (+userInfo.type === userType.CUSTOMER && ticketSaved?.id) {
+        void this.customerNotifications.notifyAdminsNewTicket({
+          ticketId: ticketSaved.id,
+          subject: ticketSaved.subject || body.subject || '',
+          siteName: ticketSaved.siteName || body.siteName || '',
+          customerName: ticketSaved.customerName || userInfo.fullName || '',
+          companyName: ticketSaved.companyName || body.companyName || '',
+          createdByUserId: +userInfo.userId,
+        });
       }
 
       return errorCode.SUCCESS;

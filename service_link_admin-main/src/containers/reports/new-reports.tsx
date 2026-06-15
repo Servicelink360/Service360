@@ -2,20 +2,17 @@
 import Layout from "@app/components/layout/Layout";
 import ReportListKeywordSearch from "./report-list-keyword-search";
 import { Fieldset } from "@app/components/common/Common.styles";
-import UploadImageMultil, { UploadImageMultilHandle } from "@app/components/common/upload-image-multi";
+import { UploadImageMultilHandle } from "@app/components/common/upload-image-multi";
 import { UsersDiv } from "@app/components/common/container.style";
 import endPoint from "@app/constants/endPoint";
 import serviceType from "@app/constants/serviceType";
-import urlConfig from "@app/config/site.config";
-import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined, UploadOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
-import { callAPIAsync, callAPIUploadAsync } from "../../library/helpers/api";
-import { dateFormat, dateTimeFormat } from "@app/config/data.config";
-import { AU_UTC_OFFSET, momentAu } from "@app/library/helpers/australianDatetime";
-import type { UploadFile } from "antd/es/upload/interface";
-import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography, Upload } from "antd";
+import { callAPIAsync } from "../../library/helpers/api";
+import { dateFormat } from "@app/config/data.config";
+import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography } from "antd";
 import moment from "moment";
-import React, { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled, { createGlobalStyle, css } from "styled-components";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
 import MobileReportPdfOverlay from "@app/components/common/MobileReportPdfOverlay";
@@ -26,415 +23,74 @@ import { useIntl } from "react-intl";
 import dashboardActions from "@app/redux/dashboard/actions";
 import { dJobStatus, userType } from "../../constants/statusUser";
 import { fixTextEncoding } from "@app/library/report-templates/templateItemUtils";
+import {
+  EM_DASH,
+  TemplateItem,
+  autoMergeUsesPicker,
+  getOptions,
+  getTemplateFieldKey,
+  getTemplateLabel,
+  getYesNoPreset,
+  isAutoMergeTemplateField,
+  isJunkTemplateField,
+  isJsonMediaFieldType,
+  isTimeLikeLabel,
+  isTimeLikeTemplateItem,
+  legacyFieldKey,
+  matchReportItemForTemplate,
+  mergeReportMediaRowsForForm,
+  parseMediaListValue,
+  parseReportItemValueForForm,
+  reportFieldStorageKey,
+  resolveAutoMergeFieldValue,
+  serviceCandidatesForTemplateAtSite,
+  templateMatchesSiteServices,
+} from "./new-reports-field-utils";
+import {
+  SUBMIT_PROGRESS_MEDIA_MAX,
+  SUBMIT_PROGRESS_SAVE_CAP,
+  SUBMIT_PROGRESS_SAVE_START,
+  TemplateFileUpload,
+  TemplateImageUpload,
+  TemplateVideoUpload,
+  delay,
+} from "./new-reports-template-uploads";
+import {
+  buildCustomReportSavePayload,
+  canUserSoftDeleteCustomReport,
+  clearDeletedCustomReports,
+  createCustomReport,
+  deleteCustomReport,
+  fetchCustomReportById,
+  fetchCustomReportDeletedCount,
+  fetchCustomReportsList,
+  isDuplicateReportFieldNameError,
+  markAllCustomReportsOpened,
+  markCustomReportOpened,
+  markCustomReportUnread,
+  restoreCustomReport,
+  updateCustomReport,
+} from "./custom-reports-api";
+import {
+  REPORT_DISPLAY_DATE,
+  REPORT_LIST_SEP,
+  buildReportDisplayTitle,
+  formatCustomerDisplayName,
+  formatMobileReportCardTitle,
+  formatReportSubmittedAt,
+  formatReportViewDate,
+  formatReportViewTime,
+  formatSubmittedByRow,
+  getReportPdfField,
+  reportPdfLinkLabel,
+  resolveReportPdfHref,
+  resolveReportSubmittedDisplayMoment,
+} from "./new-reports-display-utils";
 
 const { RangePicker } = DatePicker;
 
 type InitData = {
   reportTemplates?: any[];
-};
-
-type TemplateItem = {
-  id?: number;
-  name: string;
-  type: string;
-  order?: number;
-  required?: boolean;
-  value?: string;
-  config?: Record<string, any>;
-};
-
-/** Unique Ant Design form keys � duplicate template item `name` values would otherwise hide fields. */
-const getTemplateFieldKey = (it: TemplateItem, idx: number) => {
-  if (it.id != null && Number.isFinite(+it.id)) return `_tpl_${it.id}`;
-  const base = String(it.name || "field").trim() || "field";
-  return `${base}__${it.order ?? idx + 1}`;
-};
-
-const AUTO_MERGE_FIELD_TYPES = new Set([
-  "[REPORT_DATE]",
-  "[REPORT_TIME]",
-  "[SITE_NAME]",
-  "[SITE_ADDRESS]",
-  "[CUSTOMER_NAME]",
-  "[REPORT_BY]",
-]);
-
-const isAutoMergeTemplateField = (it: TemplateItem) =>
-  AUTO_MERGE_FIELD_TYPES.has(String(it?.type || "").toUpperCase());
-
-const autoMergeUsesPicker = (it: TemplateItem, isStaffUser: boolean): boolean => {
-  const t = String(it?.type || "").toUpperCase();
-  if (t !== "[REPORT_DATE]" && t !== "[REPORT_TIME]") return false;
-  if (!isStaffUser) return true;
-  const visibleToStaff = it?.config?.visibleToStaff;
-  if (typeof visibleToStaff === "boolean") return visibleToStaff;
-  return true;
-};
-
-const resolveAutoMergeFieldValue = (
-  it: TemplateItem,
-  values: Record<string, any>,
-  profile?: { fullName?: string; username?: string },
-): string => {
-  const t = String(it?.type || "").toUpperCase();
-  if (t === "[REPORT_DATE]") return moment().format("YYYY-MM-DD");
-  if (t === "[REPORT_TIME]") return moment().format("HH:mm:ss");
-  if (t === "[SITE_NAME]") return String(values.siteName || "").trim();
-  if (t === "[SITE_ADDRESS]") return String(values.siteAddress || "").trim();
-  if (t === "[CUSTOMER_NAME]") {
-    return String(values.companyName || values.customerName || "").trim();
-  }
-  if (t === "[REPORT_BY]") {
-    return String(
-      values.staffDisplayName ||
-        values.reportBy ||
-        profile?.fullName ||
-        profile?.username ||
-        "",
-    ).trim();
-  }
-  return "";
-};
-
-const isJunkTemplateField = (it: TemplateItem) => {
-  const name = String(it?.name || "").trim().toLowerCase();
-  const junkNames = [
-    "section one - excutive summary",
-    "section one - executive summary",
-    "section two - contract review",
-    "section three - inspections",
-    "section four - staffing",
-    "sective five - financials",
-    "section five - financials",
-    "section six- appendix",
-    "section six - appendix",
-    "description",
-  ];
-  if (junkNames.includes(name)) return true;
-  if (name.startsWith("section one") || name.startsWith("section two") || name.startsWith("section three")) return true;
-  if (name.startsWith("section four") || name.startsWith("section five") || name.startsWith("sective five") || name.startsWith("section six")) return true;
-  // Some templates encode section headers as special types
-  const t = String(it?.type || "").toUpperCase();
-  if (t === "SECTION" || t === "TITLE" || t === "HEADER" || t === "DIVIDER") return true;
-  return false;
-};
-
-/** Stored report values: JSON array string (admin IMAGES/VIDEOS), or legacy URL / comma-separated. */
-const parseMediaListValue = (v: unknown): string[] => {
-  if (v == null || v === "") return [];
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
-  const s = String(v).trim();
-  if (!s || s === "[]") return [];
-  try {
-    const p = JSON.parse(s);
-    if (Array.isArray(p)) return p.map(String).filter(Boolean);
-    if (typeof p === "string" && p) return [p];
-  } catch {
-    if (/^https?:\/\//i.test(s) || s.startsWith("/")) return [s];
-    return s.split(/[|,;]/).map((x) => x.trim()).filter(Boolean);
-  }
-  return [];
-};
-
-const isJsonMediaFieldType = (fieldType: string) =>
-  ["IMAGES", "PHOTOS", "PHOTO", "IMAGE", "VIDEOS", "VIDEO"].includes(fieldType);
-
-/** Single progress scale: photos 1�80%, save report 80�100% (same modal, no page jump). */
-const SUBMIT_PROGRESS_MEDIA_MAX = 80;
-const SUBMIT_PROGRESS_SAVE_START = 80;
-const SUBMIT_PROGRESS_SAVE_CAP = 97;
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const TemplateImageUpload = forwardRef<
-  UploadImageMultilHandle,
-  { value?: string; onChange?: (v: string | undefined) => void; multiple?: boolean }
->(({ value, onChange, multiple = true }, ref) => {
-  const files = useMemo(() => parseMediaListValue(value), [value]);
-  return (
-    <UploadImageMultil
-      ref={ref}
-      deferUpload
-      multiple={multiple}
-      isImage={true}
-      title=""
-      files={files}
-      onChange={(urls: string[]) => {
-        const clean = (urls ?? []).filter(Boolean);
-        onChange?.(clean.length ? JSON.stringify(clean) : undefined);
-      }}
-    />
-  );
-});
-
-const TemplateVideoUpload = forwardRef<
-  UploadImageMultilHandle,
-  { value?: string; onChange?: (v: string | undefined) => void }
->(({ value, onChange }, ref) => {
-  const files = useMemo(() => parseMediaListValue(value), [value]);
-  return (
-    <UploadImageMultil
-      ref={ref}
-      deferUpload
-      multiple={false}
-      isImage={false}
-      title=""
-      files={files}
-      onChange={(urls: string[]) => {
-        const clean = (urls ?? []).filter(Boolean);
-        onChange?.(clean.length ? JSON.stringify(clean) : undefined);
-      }}
-    />
-  );
-});
-
-const TemplateFileUpload: React.FC<{ value?: string; onChange?: (v: string | undefined) => void }> = ({ value, onChange }) => {
-  const [uploadBar, setUploadBar] = useState<{ show: boolean; percent: number }>({ show: false, percent: 0 });
-  const [fileList, setFileList] = useState<UploadFile[]>(() => {
-    if (!value || !String(value).trim()) return [];
-    const name = String(value).split("/").pop() || "file";
-    return [{ uid: "template-file", name, status: "done", url: value }];
-  });
-  const uploadingRef = useRef(false);
-
-  useEffect(() => {
-    if (uploadingRef.current) return;
-    if (!value || !String(value).trim()) {
-      setFileList([]);
-      return;
-    }
-    const name = String(value).split("/").pop() || "file";
-    setFileList([{ uid: "template-file", name, status: "done", url: value }]);
-  }, [value]);
-
-  const customRequest = async (options: any) => {
-    const { file, onSuccess, onError, onProgress } = options;
-    const raw = (file as any)?.originFileObj ?? file;
-    if (!(raw instanceof Blob)) {
-      message.error("Invalid file");
-      onError?.(new Error("Invalid file"));
-      return;
-    }
-    const uid = file.uid || "template-file-upload";
-    const fileSize = raw.size || 0;
-    uploadingRef.current = true;
-    setFileList([
-      {
-        uid,
-        name: (raw as File).name || "upload",
-        status: "uploading",
-      },
-    ]);
-    try {
-      const formData = new FormData();
-      formData.append("file", raw, (raw as File).name || "upload");
-      const response: any = await callAPIUploadAsync(
-        serviceType.COMMON,
-        endPoint.UPLOAD_FILE,
-        "POST",
-        formData,
-        {
-          uploadFileSize: fileSize,
-          onUploadProgress: (pct: number) => {
-            if (pct < 1) return;
-            const clamped = Math.min(100, Math.max(1, Math.round(pct)));
-            setUploadBar({ show: true, percent: clamped });
-            onProgress?.({ percent: clamped });
-            setFileList((prev) =>
-              prev.map((row) =>
-                row.uid === uid ? { ...row, status: "uploading", percent: clamped } : row,
-              ),
-            );
-          },
-        }
-      );
-      if (response?.code === 1 && response.data) {
-        const url = String(response.data);
-        onChange?.(url);
-        setFileList([{ uid: "template-file", name: url.split("/").pop() || "file", status: "done", url, percent: 100 }]);
-        onSuccess?.(response.data, file);
-      } else {
-        message.error(response?.message || "Upload failed");
-        onError?.(new Error(response?.message || "Upload failed"));
-      }
-    } catch {
-      message.error("Upload failed");
-      onError?.(new Error("Upload failed"));
-    } finally {
-      uploadingRef.current = false;
-      setUploadBar({ show: false, percent: 0 });
-    }
-  };
-
-  return (
-    <div>
-      {uploadBar.show ? (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: "10px 12px",
-            background: "#f6ffed",
-            border: "1px solid #b7eb8f",
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <Typography.Text strong style={{ color: "#135200" }}>Uploading�</Typography.Text>
-            <Typography.Text strong style={{ color: "#135200" }}>{uploadBar.percent}%</Typography.Text>
-          </div>
-          <Progress
-            percent={uploadBar.percent}
-            status={uploadBar.percent >= 100 ? "success" : "active"}
-            showInfo={false}
-            strokeColor="#397d36"
-            strokeWidth={10}
-          />
-        </div>
-      ) : null}
-      <Upload
-        maxCount={1}
-        fileList={fileList}
-        customRequest={customRequest}
-        onRemove={() => {
-          onChange?.(undefined);
-          setFileList([]);
-        }}
-        disabled={uploadBar.show}
-        showUploadList={{ showRemoveIcon: true }}
-      >
-        <Button type="default" icon={<UploadOutlined />} loading={uploadBar.show} size="large" style={{ borderRadius: 8 }}>
-          Choose file
-        </Button>
-      </Upload>
-    </div>
-  );
-};
-
-const getTemplateLabel = (it: TemplateItem) => {
-  const raw = String(it?.config?.label || (it as any)?.label || it?.name || "").trim();
-  return fixTextEncoding(raw);
-};
-
-const isTimeLikeTemplateItem = (it: TemplateItem): boolean => {
-  // Some templates have "Time", "Time " or "Time (optional)" as label/name.
-  const raw = String(getTemplateLabel(it) || it?.name || "");
-  const normalized = raw
-    // Strip icons / punctuation / zero-width chars etc.
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .toLowerCase();
-  if (!normalized) return false;
-  if (normalized.includes("time and date")) return false;
-  return /\btime\b/.test(normalized);
-};
-
-const isTimeLikeLabel = (label: unknown): boolean => {
-  const raw = String(label ?? "");
-  const normalized = raw
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .toLowerCase();
-  if (!normalized) return false;
-  if (normalized.includes("time and date")) return false;
-  return /\btime\b/.test(normalized);
-};
-
-const legacyFieldKey = (r: any, idx: number) =>
-  `_legacy_${r?.id != null && Number.isFinite(+r.id) ? +r.id : r?.order != null && Number.isFinite(+r.order) ? +r.order : idx}`;
-
-function matchReportItemForTemplate(
-  reports: any[],
-  it: TemplateItem,
-  idx: number,
-): any | undefined {
-  if (!Array.isArray(reports) || !reports.length) return undefined;
-  const sorted = [...reports].sort((a, b) => (+a.order || 0) - (+b.order || 0));
-  const label = getTemplateLabel(it);
-  const typeMatch = (rep: any) =>
-    String(rep.type || "").toUpperCase() === String(it.type || "").toUpperCase();
-  // Prefer name+type match. Index-based mapping breaks when older rows have chunked media parts.
-  return (
-    sorted.find((rep) => rep.name === it.name && typeMatch(rep)) ??
-    (label ? sorted.find((rep) => rep.name === label && typeMatch(rep)) : undefined) ??
-    (sorted[idx] && typeMatch(sorted[idx]) ? sorted[idx] : undefined)
-  );
-}
-
-function parseReportItemValueForForm(r: any): any {
-  if (!r) return undefined;
-  const rt = String(r.type || "").toUpperCase();
-  const isTimeLabel = isTimeLikeLabel(r?.name);
-  if (rt === "TIME") {
-    const v = String(r.value ?? "").trim();
-    // Corrupt legacy values: TIME field sometimes stored photo JSON/URLs.
-    if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
-    return moment(moment().format(`YYYY-MM-DD ${v}`));
-  }
-  if (rt === "DATE" || rt === "DATE_PICKER") {
-    return r.value ? moment(r.value) : undefined;
-  }
-  if (rt === "[REPORT_DATE]") {
-    return r.value ? moment(r.value, "YYYY-MM-DD") : undefined;
-  }
-  if (rt === "[REPORT_TIME]") {
-    const v = String(r.value ?? "").trim();
-    if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
-    return moment(moment().format(`YYYY-MM-DD ${v}`));
-  }
-  if ((rt === "TEXT" || rt === "DATETIME") && isTimeLabel) {
-    const s = String(r.value ?? "").trim();
-    if (!s || s.startsWith("[") || /^https?:\/\//i.test(s)) return undefined;
-    const strict = moment(s, ["HH:mm:ss", "HH:mm", "h:mm:ss a", "h:mm a"], true);
-    if (strict.isValid()) return strict;
-    const loose = moment(new Date(s));
-    return loose.isValid() ? loose : undefined;
-  }
-  return r.value;
-}
-
-/** Admin preset on YES_NO template fields (stored in item.value / config.defaultValue). */
-const getYesNoPreset = (item: TemplateItem): "YES" | "NO" | undefined => {
-  const raw = String(item.value ?? item.config?.defaultValue ?? "")
-    .trim()
-    .toUpperCase();
-  if (raw === "YES" || raw === "NO") return raw;
-  return undefined;
-};
-
-function templateServiceIds(tpl: any): number[] {
-  const raw = tpl?.serviceIds;
-  if (!Array.isArray(raw)) return [];
-  return raw.map((v) => +v).filter((n) => Number.isFinite(n) && n > 0);
-}
-
-/** Whether a template may be used at a site given that site's Service ids. */
-function templateMatchesSiteServices(tpl: any, siteDeptIds: number[]): boolean {
-  if (!siteDeptIds.length) return false;
-  const tplIds = templateServiceIds(tpl);
-  if (!tplIds.length) return true;
-  return tplIds.some((id) => siteDeptIds.includes(id));
-}
-
-function serviceCandidatesForTemplateAtSite(
-  tpl: any,
-  siteServices: { id: number | string }[],
-): number[] {
-  const siteDeptIds = siteServices
-    .map((d) => +d.id)
-    .filter((n) => Number.isFinite(n) && n > 0);
-  const tplIds = templateServiceIds(tpl);
-  if (!tplIds.length) return siteDeptIds;
-  return tplIds.filter((id) => siteDeptIds.includes(id));
-}
-
-const getOptions = (item: TemplateItem): string[] => {
-  const configOptions = Array.isArray(item?.config?.options) ? item.config?.options : [];
-  if (configOptions.length) return configOptions;
-  const t = String(item.type || "").toUpperCase();
-  if (typeof item.value === "string" && (t === "SELECT" || t === "CHECKLIST")) {
-    return item.value.split(/[|,;]/).map((x) => x.trim()).filter(Boolean);
-  }
-  return [];
 };
 
 type ListQueryFilters = {
@@ -447,215 +103,8 @@ type ListQueryFilters = {
 
 type ReportListTab = "active" | "deleted";
 
-/** PDF URLs from the API are usually absolute; older rows may store `public/pdf/...` only � resolve against the API origin so links work from the admin SPA. */
-function resolveReportPdfHref(raw: unknown): string {
-  const s = typeof raw === "string" ? raw.trim() : "";
-  if (!s) return "";
-  if (/^https?:\/\//i.test(s)) return s;
-  const base = String(urlConfig.orderApiURL || "").replace(/\/+$/, "");
-  const path = s.replace(/^\/+/, "");
-  return path ? `${base}/${path}` : "";
-}
-
-function getUserTaskPdfField(row: any): string {
-  const v = row?.pdfFile ?? row?.pdf_file;
-  return typeof v === "string" ? v.trim() : "";
-}
-
-/** Prefer task name; then template name; then PDF filename from URL � avoids a generic label when `taskName` is blank. */
-function reportPdfLinkLabel(row: any, href: string): string {
-  const taskName = String(row?.taskName || "").trim();
-  if (taskName) return taskName;
-  const tpl = String(row?.reportTemplate?.name || "").trim();
-  if (tpl) return tpl;
-  try {
-    const pathOnly = href.split(/[?#]/)[0];
-    const last = pathOnly.split("/").filter(Boolean).pop() || "";
-    const base = decodeURIComponent(last.replace(/\.pdf$/i, ""));
-    if (base) return base.replace(/-/g, " ");
-  } catch {
-    /* ignore */
-  }
-  return "PDF";
-}
-
-/** Admin uploads embed epoch ms in filenames; use when check_in predates actual submit. */
-function inferSubmissionFromReportMedia(row: any): moment.Moment | null {
-  const reports = row?.reports;
-  if (!Array.isArray(reports)) return null;
-  let maxTs = 0;
-  for (const r of reports) {
-    const val = String(r?.value ?? "");
-    const re = /\/(\d{13})(?:-|\.)/g;
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(val)) !== null) {
-      const ts = Number(match[1]);
-      if (Number.isFinite(ts) && ts > maxTs) maxTs = ts;
-    }
-  }
-  if (maxTs <= 0) return null;
-  const m = moment(maxTs);
-  return m.isValid() ? m : null;
-}
-
-/** When the report was submitted — align with PDF reference time, not PDF regen / bad check_in. */
-function getReportSubmittedAt(row: any): string | Date | null | undefined {
-  const checkIn = row?.checkIn ?? row?.check_in ?? null;
-  const createdAt = row?.createdAt ?? row?.created_at ?? null;
-  const media = inferSubmissionFromReportMedia(row);
-
-  let ref: string | Date | null = createdAt ?? checkIn;
-
-  if (checkIn && createdAt) {
-    const ci = moment(checkIn);
-    const ca = moment(createdAt);
-    if (ci.isValid() && ca.isValid()) {
-      const forwardSkewMin = ci.diff(ca, "minutes");
-      // check_in stored as AU wall clock tagged Z (~+10h ahead of real created_at).
-      if (forwardSkewMin >= 540 && forwardSkewMin <= 660) ref = createdAt;
-    }
-  }
-
-  if (media && ref) {
-    const refM = moment(ref);
-    if (refM.isValid()) {
-      const aheadMin = media.diff(refM, "minutes");
-      const behindMin = refM.diff(media, "minutes");
-      if (aheadMin > 30 || behindMin > 30) ref = media.toDate();
-    }
-  } else if (media && !ref) {
-    ref = media.toDate();
-  }
-
-  return ref;
-}
-
-function resolveReportSubmittedDisplayMoment(row: any): moment.Moment | null {
-  const t = getReportSubmittedAt(row);
-  if (!t) return null;
-  const checkIn = row?.checkIn ?? row?.check_in ?? null;
-  const createdAt = row?.createdAt ?? row?.created_at ?? null;
-  const wallClockStorage =
-    checkIn &&
-    createdAt &&
-    Math.abs(moment(checkIn).diff(moment(createdAt), "minutes")) <= 2;
-  const m = wallClockStorage
-    ? moment(t).utcOffset(AU_UTC_OFFSET, true)
-    : momentAu(t);
-  return m && m.isValid() ? m : null;
-}
-
-function formatReportSubmittedAt(row: any): string {
-  const m = resolveReportSubmittedDisplayMoment(row);
-  return m ? m.format(dateTimeFormat) : "—";
-}
-
-/** e.g. "26 May 2026" — view modal and PDF body dates. */
-const REPORT_DISPLAY_DATE = "D MMM YYYY";
-const REPORT_LIST_SEP = " · ";
-
-function formatReportViewDate(raw: unknown): string {
-  const s = String(raw ?? "").trim();
-  if (!s) return "";
-  if (moment(s, "YYYY-MM-DD", true).isValid()) {
-    return moment(s, "YYYY-MM-DD", true).format(REPORT_DISPLAY_DATE);
-  }
-  const m = moment(s);
-  return m.isValid() ? m.format(REPORT_DISPLAY_DATE) : s;
-}
-
-function formatReportViewTime(raw: unknown): string {
-  const s = String(raw ?? "").trim();
-  if (!s || s === "Invalid date") return "";
-  const strict = moment(s, ["HH:mm:ss", "HH:mm"], true);
-  if (strict.isValid()) return strict.format("HH:mm");
-  const m = moment(s);
-  return m.isValid() ? m.format("HH:mm") : s;
-}
-
-const AUTO_TASK_NAME_SUFFIX = / - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$/;
-const AUTO_TASK_NAME_PREFIX = /^New Report - \d{4}-\d{2}-\d{2}/;
-
-function isAutoGeneratedTaskName(name: string): boolean {
-  const s = String(name || "").trim();
-  if (!s) return false;
-  return AUTO_TASK_NAME_PREFIX.test(s) || AUTO_TASK_NAME_SUFFIX.test(s);
-}
-
-/** e.g. "Bayside Public Amenities Cleaning Report" */
-function buildReportDisplayTitle(row: {
-  siteName?: string;
-  serviceName?: string;
-  taskName?: string;
-  reportTemplate?: { name?: string };
-}): string {
-  const site = String(row.siteName || "").trim();
-  const service = String(row.serviceName || "").trim();
-  const tpl = String(row.reportTemplate?.name || "").trim();
-
-  if (site && service) {
-    let suffix = service;
-    const siteLower = site.toLowerCase();
-    const svcLower = service.toLowerCase();
-    if (siteLower.endsWith("public amenities") && svcLower.startsWith("public amenities ")) {
-      suffix = service.slice("Public Amenities ".length).trim() || service;
-    } else if (svcLower.startsWith(`${siteLower} `)) {
-      suffix = service.slice(site.length).trim() || service;
-    }
-    const base = `${site} ${suffix}`.replace(/\s+/g, " ").trim();
-    return / report$/i.test(base) ? base : `${base} Report`;
-  }
-  if (site && tpl) {
-    const base = `${site} ${tpl}`.replace(/\s+/g, " ").trim();
-    return / report$/i.test(base) ? base : `${base} Report`;
-  }
-  if (site) {
-    return / report$/i.test(site) ? site : `${site} Report`;
-  }
-
-  const taskName = String(row.taskName || "").trim();
-  if (taskName && !isAutoGeneratedTaskName(taskName)) {
-    return taskName.replace(AUTO_TASK_NAME_SUFFIX, "").trim();
-  }
-  if (tpl) return tpl;
-  return "Report";
-}
-
-/** Mobile card title: "Bayside Public Amenities Cleaning Report 25 May 18:25" */
-function formatMobileReportCardTitle(row: any): string {
-  const base = buildReportDisplayTitle(row);
-  const m = resolveReportSubmittedDisplayMoment(row);
-  if (!m) return base;
-  return `${base} ${m.format("D MMM")} ${m.format("HH:mm")}`;
-}
-
-/** List/view: staff name for field submissions; "Admin" when submitted via admin portal. */
-function formatSubmittedByRow(row: any): string {
-  const staffName = String(row?.staff?.fullName || row?.staff?.username || "").trim();
-  const creatorType = row?.createdUser?.type != null ? +row.createdUser.type : 0;
-  const createdBy = row?.createdBy != null ? +row.createdBy : 0;
-  const staffId = row?.staffId != null ? +row.staffId : 0;
-
-  if (creatorType === userType.ADMIN || (createdBy > 0 && staffId > 0 && createdBy !== staffId)) {
-    return "Admin";
-  }
-  return staffName || "�";
-}
-
-/** Customer / company label for admin list (denormalized fields + joined user). */
-function formatCustomerDisplayName(row: any): string {
-  const company =
-    String(row?.companyName || row?.customer?.customerInfo?.companyName || "").trim();
-  const person = String(
-    row?.customer?.fullName || row?.customerName || row?.customer?.username || "",
-  ).trim();
-  if (company) return company;
-  if (person) return person;
-  return "�";
-}
-
 const staffPrimaryGreen = { background: "#389e0d", borderColor: "#389e0d" };
-/** Submitted Reports modal � reference UI */
+/** Submitted Reports modal — reference UI */
 const submittedMetaLabel: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
@@ -744,7 +193,7 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
   }
 `;
 
-/** Mobile card list � $dark sets explicit colors (no CSS-variable fallbacks to white). */
+/** Mobile card list — $dark sets explicit colors (no CSS-variable fallbacks to white). */
 const MobileReportsList = styled.div<MobileStyledDark>`
   display: flex;
   flex-direction: column;
@@ -1021,7 +470,7 @@ const ReportReadStatusCell: React.FC<{
           lineHeight: 0,
           opacity: markingUnread ? 0.6 : 1,
         }}
-        aria-label="Read � click to mark unread"
+        aria-label="Read — click to mark unread"
       >
         {markingUnread ? <Spin size="small" /> : icon}
       </span>
@@ -1059,7 +508,7 @@ const submittedDeleteFooterBtn: React.CSSProperties = {
 const submittedYesGreen = "#52c41a";
 
 function buildSubmittedReportBlocks(reports: any[] | undefined) {
-  const sorted = [...(reports || [])]
+  const sorted = mergeReportMediaRowsForForm(reports || [])
     .filter((r) => !isJunkTemplateField({ name: r.name, type: r.type }))
     .sort((a, b) => (+a.order || 0) - (+b.order || 0));
   let n = 0;
@@ -1147,7 +596,7 @@ const NewReports: React.FC = () => {
   const location = useLocation();
   const history = useHistory();
   const [init, setInit] = useState<InitData>({});
-  /** Table/list fetch only � not report submit (progress uses progressOpen). */
+  /** Table/list fetch only — not report submit (progress uses progressOpen). */
   const [listLoading, setListLoading] = useState(false);
   const [progressOpen, setProgressOpen] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<{
@@ -1202,6 +651,7 @@ const NewReports: React.FC = () => {
   const [markingUnreadId, setMarkingUnreadId] = useState<number | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [form] = Form.useForm();
+  const [reportStaffId, setReportStaffId] = useState(0);
   const [listForm] = Form.useForm();
   const [listFiltersOpen, setListFiltersOpen] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -1329,16 +779,9 @@ const NewReports: React.FC = () => {
     async (row: { id?: number }) => {
       const id = row?.id;
       if (!id) return;
-      const markPath =
-        +profileType === userType.ADMIN
-          ? `${endPoint.USER_TASKS}/markAdminUnread/${id}`
-          : +profileType === userType.CUSTOMER
-            ? `${endPoint.USER_TASKS}/markCustomerUnread/${id}`
-            : null;
-      if (!markPath) return;
       setMarkingUnreadId(+id);
       try {
-        const res = await callAPIAsync(serviceType.COMMON, markPath, "PATCH", {});
+        const res = await markCustomReportUnread(+id, +profileType);
         if (res?.code === 1) {
           clearRowReadState(+id);
           refreshDashboard();
@@ -1381,15 +824,7 @@ const NewReports: React.FC = () => {
         return true;
       }
 
-      const markPath =
-        +profileType === userType.ADMIN
-          ? `${endPoint.USER_TASKS}/markAdminOpened/${id}`
-          : +profileType === userType.CUSTOMER
-            ? `${endPoint.USER_TASKS}/markCustomerOpened/${id}`
-            : +profileType === userType.STAFF
-              ? `${endPoint.USER_TASKS}/markStaffOpened/${id}`
-              : null;
-      if (!markPath) return false;
+      if (![+userType.ADMIN, +userType.CUSTOMER, +userType.STAFF].includes(+profileType)) return false;
 
       markReportOpenedInFlightRef.current.add(id);
       if (
@@ -1400,7 +835,7 @@ const NewReports: React.FC = () => {
         patchRowReadState(id);
       }
       try {
-        const res = await callAPIAsync(serviceType.COMMON, markPath, "PATCH", {});
+        const res = await markCustomReportOpened(id, +profileType);
         if (res?.code === 1) {
           markReportOpenedDoneRef.current.add(id);
           return true;
@@ -1459,26 +894,9 @@ const NewReports: React.FC = () => {
   const loadDeletedReportCount = useCallback(async (filters: ListQueryFilters = listFilters) => {
     if (!showReportDeletedTabs || !profileId) return;
     try {
-      const params: Record<string, unknown> = {
-        type: "CUSTOM",
-        status: "deleted",
-      };
-      if (+profileType === userType.STAFF) params.staffId = +profileId;
-      if (filters.startDate) params.startDate = filters.startDate;
-      if (filters.endDate) params.endDate = filters.endDate;
-      if (filters.siteId) params.siteId = filters.siteId;
-      if (filters.serviceId) params.serviceId = filters.serviceId;
-      if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
-      const res = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/getCountUserTasksByUserId`,
-        "GET",
-        params,
-      );
-      if (res?.code === 1) {
-        const n = typeof res.data === "number" ? res.data : +(res?.data?.count ?? 0);
-        setDeletedReportCount(Number.isFinite(n) ? n : 0);
-      }
+      const staffId = +profileType === userType.STAFF ? +profileId : undefined;
+      const n = await fetchCustomReportDeletedCount(filters, staffId);
+      setDeletedReportCount(n);
     } catch {
       /* ignore */
     }
@@ -1495,48 +913,38 @@ const NewReports: React.FC = () => {
       setListLoading(true);
       try {
         const reportIdFromUrl = new URLSearchParams(location.search).get("reportId");
-        let params: Record<string, any>;
+        let list: any[] = [];
+        let total = 0;
 
         if (reportIdFromUrl) {
-          params = {
-            type: "CUSTOM",
-            reportId: +reportIdFromUrl,
-            page: 1,
-            limit: 1,
-          };
+          const rid = +reportIdFromUrl;
+          const listed = await fetchCustomReportsList({ reportId: rid });
+          list = listed.rows;
+          total = list.length;
+          if (!list.length) {
+            const one = await fetchCustomReportById(rid);
+            if (one) list = [one];
+            total = list.length;
+          }
         } else {
-          params = {
-            type: "CUSTOM",
-            status: tab === "deleted" ? "deleted" : "s",
+          const listed = await fetchCustomReportsList({
             page: nextPage,
             limit: nextLimit,
-          };
-          if (sort.orderBy) {
-            params.orderBy = sort.orderBy;
-            params.orderValue = sort.orderValue;
-          }
-          if (profileId && +profileType === userType.STAFF) params.staffId = +profileId;
-          if (filters.startDate) params.startDate = filters.startDate;
-          if (filters.endDate) params.endDate = filters.endDate;
-          if (filters.siteId) params.siteId = filters.siteId;
-          if (filters.serviceId) params.serviceId = filters.serviceId;
-          if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
-        }
-
-        const res = await callAPIAsync(serviceType.COMMON, `${endPoint.USER_TASKS}/getAllUserTasksByUserId`, "GET", params);
-        let list = res?.code === 1 ? res?.data?.rows || [] : [];
-
-        if (reportIdFromUrl && list.length === 0) {
-          const one = await callAPIAsync(
-            serviceType.COMMON,
-            `${endPoint.USER_TASKS}/${reportIdFromUrl}`,
-            "GET",
-          );
-          if (one?.code === 1 && one?.data) list = [one.data];
+            tab,
+            staffId: profileId && +profileType === userType.STAFF ? +profileId : undefined,
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+            siteId: filters.siteId,
+            serviceId: filters.serviceId,
+            keyword: filters.keyword,
+            sort: sort.orderBy ? sort : undefined,
+          });
+          list = listed.rows;
+          total = listed.count;
         }
 
         setRows(list);
-        setCount(reportIdFromUrl ? list.length : res?.data?.count || 0);
+        setCount(reportIdFromUrl ? list.length : total);
         if (reportIdFromUrl) setPage(1);
         const visibleIds = new Set(list.map((r: any) => r.id));
         setSelectedRowKeys((prev) => prev.filter((k) => visibleIds.has(k)));
@@ -1574,12 +982,7 @@ const NewReports: React.FC = () => {
     const type = profile ? +profile.type : 0;
     if (type !== userType.ADMIN && type !== userType.CUSTOMER) return;
     void (async () => {
-      const res = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/markAllNewReportsOpened`,
-        "PATCH",
-        {},
-      );
+      const res = await markAllCustomReportsOpened();
       if (res?.code === 1) {
         refreshDashboard();
       }
@@ -1631,7 +1034,7 @@ const NewReports: React.FC = () => {
       setListSort({ orderBy: orderField, orderValue: "DESC" });
       return;
     }
-    // readStatus: two-state only (unread first ? read first), no �clear sort�
+    // readStatus: two-state only (unread first → read first), no "clear sort"
     if (field === "readStatus") {
       setListSort((prev) =>
         prev.orderBy === "readStatus"
@@ -1724,7 +1127,17 @@ const NewReports: React.FC = () => {
   };
 
   const openView = useCallback(async (row: any) => {
-    setViewRow(row);
+    let viewData = row;
+    try {
+      const one = await fetchCustomReportById(+row.id);
+      if (one) viewData = one;
+    } catch {
+      /* list row fallback */
+    }
+    const mergedReports = mergeReportMediaRowsForForm(
+      Array.isArray(viewData.reports) ? viewData.reports : [],
+    );
+    setViewRow({ ...viewData, reports: mergedReports });
     setViewOpen(true);
     await markReportOpenedForViewer(row);
   }, [markReportOpenedForViewer]);
@@ -1738,7 +1151,7 @@ const NewReports: React.FC = () => {
     if (!viewRow) return "";
     const tpl = reportTemplates.find((x: any) => +x.id === +viewRow.reportTemplateId);
     const fromTpl = tpl?.name && String(tpl.name).trim();
-    return fromTpl || viewRow.reportTemplate?.name || viewRow.taskName || "Report";
+    return fromTpl || buildReportDisplayTitle(viewRow);
   }, [viewRow, reportTemplates]);
 
   const viewReports = viewRow?.reports;
@@ -1760,7 +1173,7 @@ const NewReports: React.FC = () => {
   }, [viewRow, profileType, markingUnreadId, markReportUnread]);
 
   const viewPdfHref = useMemo(
-    () => (viewRow ? resolveReportPdfHref(getUserTaskPdfField(viewRow)) : ""),
+    () => (viewRow ? resolveReportPdfHref(getReportPdfField(viewRow)) : ""),
     [viewRow],
   );
 
@@ -1817,12 +1230,7 @@ const NewReports: React.FC = () => {
       okText: isAdmin ? "Delete" : "Remove",
       okType: "danger",
       onOk: async () => {
-        const res = await callAPIAsync(
-          serviceType.COMMON,
-          `${endPoint.USER_TASKS}/${viewRow.id}`,
-          "DELETE",
-          null,
-        );
+        const res = await deleteCustomReport(+viewRow.id);
         if (res?.code === 1) {
           message.success(
             isAdmin ? "Report deleted" : "Report moved to Deleted",
@@ -1897,14 +1305,6 @@ const NewReports: React.FC = () => {
     return templateItemsForSubmit.filter((it) => !isHiddenFromStaffCreate(it));
   }, [templateItemsForSubmit, isStaffUser, isHiddenFromStaffCreate]);
 
-  const ensureAutoTaskName = useCallback(() => {
-    const current = form.getFieldValue("taskName");
-    if (current && String(current).trim()) return;
-    const tplName = selectedTemplateName || "New Report";
-    // Task name must be unique (DB constraint). Include time to avoid collisions.
-    const auto = `${tplName} - ${moment().format("YYYY-MM-DD HH-mm-ss")}`;
-    form.setFieldsValue({ taskName: auto });
-  }, [form, selectedTemplateName]);
 
   const applyTemplateFieldDefaults = useCallback(
     (tpl: { items?: TemplateItem[] } | null | undefined) => {
@@ -1963,11 +1363,7 @@ const NewReports: React.FC = () => {
     setServicesSiteId(null);
     setLoadingSiteServices(false);
     setCustomers([]);
-    form.setFieldsValue({
-      notifiesStaff: 1,
-      staffId: isStaffUser && profile?.id ? +profile.id : 0,
-    });
-    ensureAutoTaskName();
+    setReportStaffId(isStaffUser && profile?.id ? +profile.id : 0);
     setVisible(true);
   };
 
@@ -1991,10 +1387,7 @@ const NewReports: React.FC = () => {
     if (serviceId != null && Number.isFinite(+serviceId) && +serviceId > 0) {
       params.serviceId = +serviceId;
     }
-    const formStaffId = form.getFieldValue("staffId");
-    if (isAdminUser && formStaffId != null && formStaffId !== "" && +formStaffId > 0) {
-      params.staffId = +formStaffId;
-    }
+    if (isAdminUser && reportStaffId > 0) params.staffId = reportStaffId;
     const assignRes = await callAPIAsync(
       serviceType.COMMON,
       `${endPoint.JOB_SITES}/getStaffReportAssignmentBySite`,
@@ -2014,7 +1407,7 @@ const NewReports: React.FC = () => {
         customerId: undefined,
         customerName: "",
         companyName: "",
-        staffId: isStaffUser && profile?.id ? +profile.id : undefined,
+        
       });
       return false;
     }
@@ -2025,14 +1418,11 @@ const NewReports: React.FC = () => {
       customerName: a.customerName || "",
       companyName: a.companyName || "",
     };
-    if (a.staffId != null && +a.staffId > 0) {
-      patch.staffId = +a.staffId;
-    } else if (isStaffUser && profile?.id) {
-      patch.staffId = +profile.id;
-    }
+    if (a.staffId != null && +a.staffId > 0) setReportStaffId(+a.staffId);
+    else if (isStaffUser && profile?.id) setReportStaffId(+profile.id);
     form.setFieldsValue(patch);
     return true;
-  }, [form, isAdminUser, isStaffUser, profile]);
+  }, [form, isAdminUser, isStaffUser, profile, reportStaffId]);
 
   const openEdit = useCallback(async (row: any) => {
     resetSubmitUi();
@@ -2040,28 +1430,27 @@ const NewReports: React.FC = () => {
 
     let editRow = row;
     try {
-      const one = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/${row.id}`,
-        "GET",
-      );
-      if (one?.code === 1 && one?.data) editRow = one.data;
+      const one = await fetchCustomReportById(+row.id);
+      if (one) editRow = one;
     } catch {
       /* list row fallback */
     }
 
-    setEditing(editRow);
+    const mergedReports = mergeReportMediaRowsForForm(
+      Array.isArray(editRow.reports) ? editRow.reports : [],
+    );
+    setEditing({ ...editRow, reports: mergedReports });
     form.resetFields();
     const reportValues: Record<string, any> = {};
     const editTpl = reportTemplates.find((t: any) => +t.id === +editRow.reportTemplateId);
-    if (editTpl?.items?.length && Array.isArray(editRow.reports)) {
+    if (editTpl?.items?.length && mergedReports.length) {
       const sortedTpl = editTpl.items
         .slice()
         .filter((it: TemplateItem) => !isJunkTemplateField(it))
         .sort((a: TemplateItem, b: TemplateItem) => (+a.order || 0) - (+b.order || 0));
       sortedTpl.forEach((it: TemplateItem, idx: number) => {
         const fieldKey = getTemplateFieldKey(it, idx);
-        const rep = matchReportItemForTemplate(editRow.reports, it, idx);
+        const rep = matchReportItemForTemplate(mergedReports, it, idx);
         let parsed = parseReportItemValueForForm(rep);
         if (isTimeLikeTemplateItem(it)) {
           if (moment.isMoment(parsed) && parsed.isValid()) {
@@ -2079,8 +1468,21 @@ const NewReports: React.FC = () => {
         }
         if (parsed !== undefined) reportValues[fieldKey] = parsed;
       });
-    } else if (Array.isArray(editRow.reports)) {
-      editRow.reports
+
+      const coveredKeys = new Set<string>();
+      sortedTpl.forEach((it: TemplateItem, idx: number) => {
+        const rep = matchReportItemForTemplate(mergedReports, it, idx);
+        if (rep) coveredKeys.add(reportFieldStorageKey(rep.name));
+      });
+      mergedReports.forEach((r: any, idx: number) => {
+        if (coveredKeys.has(reportFieldStorageKey(r.name))) return;
+        const parsed = parseReportItemValueForForm(r);
+        if (parsed !== undefined) {
+          reportValues[legacyFieldKey(r, idx)] = parsed;
+        }
+      });
+    } else if (mergedReports.length) {
+      mergedReports
         .slice()
         .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
         .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0))
@@ -2137,21 +1539,19 @@ const NewReports: React.FC = () => {
 
     form.setFieldsValue({
       ...reportValues,
-      taskName: editRow.taskName,
       description: editRow.description,
       siteId: editRow.siteId,
       siteName: editRow.siteName,
       siteLocation: editRow.siteLocation,
       siteAddress: editRow.siteAddress,
-      staffId: editRow.staffId ?? (profile?.id ? +profile.id : 0),
       serviceId: editRow.serviceId != null ? String(editRow.serviceId) : undefined,
       serviceName: editRow.serviceName,
       customerId: editRow.customerId != null ? +editRow.customerId : undefined,
       customerName: editRow.customerName,
       companyName: editRow.companyName,
       reportTemplateId: editRow.reportTemplateId,
-      notifiesStaff: editRow.notifiesStaff ?? 1,
-    });
+      });
+    setReportStaffId(editRow.staffId ?? (profile?.id ? +profile.id : 0));
 
     if (isStaffUser && editRow.siteId && (editRow.customerId == null || editRow.customerId === "")) {
       await applyStaffSiteAssignment(+editRow.siteId);
@@ -2309,9 +1709,16 @@ const NewReports: React.FC = () => {
   };
 
   const uploadPendingMediaFields = async (): Promise<boolean> => {
-    const mediaFields = templateItemsForSubmit
+    const templateMedia = templateItemsForSubmit
       .map((it, idx) => ({ it, idx, fieldKey: getTemplateFieldKey(it, idx) }))
       .filter(({ it }) => isJsonMediaFieldType(String(it.type || "").toUpperCase()));
+    const extraMedia = extraSavedReportRowsForEdit
+      .map((r, idx) => ({ r, fieldKey: legacyFieldKey(r, idx) }))
+      .filter(({ r }) => isJsonMediaFieldType(String(r.type || "").toUpperCase()));
+    const mediaFields = [
+      ...templateMedia,
+      ...extraMedia.map(({ r, fieldKey }) => ({ it: r, idx: 0, fieldKey })),
+    ];
     const withPending = mediaFields.filter(({ fieldKey }) =>
       mediaUploadRefs.current[fieldKey]?.hasPending(),
     );
@@ -2434,8 +1841,9 @@ const NewReports: React.FC = () => {
         const fieldKey = getTemplateFieldKey(it, idx);
         const fieldType = String(it.type || "").toUpperCase();
         let raw = values[fieldKey];
+        const hasFormValue = Object.prototype.hasOwnProperty.call(values, fieldKey);
 
-        if ((raw === undefined || raw === null || raw === "") && editing?.reports) {
+        if ((raw === undefined || raw === null) && !hasFormValue && editing?.reports) {
           raw = parseReportItemValueForForm(
             matchReportItemForTemplate(editing.reports, it, idx),
           );
@@ -2479,6 +1887,33 @@ const NewReports: React.FC = () => {
           value,
         };
       })
+      .concat(
+        extraSavedReportRowsForEdit
+          .map((r: any, idx: number) => {
+            const fieldKey = legacyFieldKey(r, idx);
+            const fieldType = String(r.type || "").toUpperCase();
+            const raw = values[fieldKey];
+            if (raw === undefined || raw === null || raw === "") return null;
+
+            let value: any = raw;
+            if (fieldType === "TIME" && moment.isMoment(raw)) value = raw.format("HH:mm:ss");
+            if ((fieldType === "DATE" || fieldType === "DATE_PICKER") && moment.isMoment(raw)) {
+              value = raw.format("YYYY-MM-DD");
+            }
+            if (isJsonMediaFieldType(fieldType)) {
+              const arr = parseMediaListValue(raw);
+              if (!arr.length) return null;
+              value = JSON.stringify(arr);
+            }
+            return {
+              name: String(r.name ?? "").trim() || `field_${idx + 1}`,
+              type: r.type,
+              order: r.order ?? idx + 1,
+              value,
+            };
+          })
+          .filter(Boolean) as Array<{ name: string; type: string; order: number; value: any }>,
+      )
       .filter(Boolean);
   };
 
@@ -2537,12 +1972,9 @@ const NewReports: React.FC = () => {
       }
       return;
     }
-    if (isAdminUser && !editing) {
-      const submitStaffId = values.staffId != null && values.staffId !== "" ? +values.staffId : 0;
-      if (!Number.isFinite(submitStaffId) || submitStaffId <= 0) {
-        message.error("This job site has no staff assignment. Choose another site or update the site setup.");
-        return;
-      }
+    if (isAdminUser && !editing && (!Number.isFinite(reportStaffId) || reportStaffId <= 0)) {
+      message.error("This job site has no staff assignment. Choose another site or update the site setup.");
+      return;
     }
     const customerIdNum = Number(values.customerId);
     if (!Number.isFinite(customerIdNum) || customerIdNum <= 0) {
@@ -2591,55 +2023,34 @@ const NewReports: React.FC = () => {
 
     const items = ensureUniqueReportItemNames(buildReportItems(values) as any);
 
-    const now = new Date();
-    const startTime = editing?.startTime ? new Date(editing.startTime) : now;
-    const endTime = editing?.endTime ? new Date(editing.endTime) : now;
-    const checkIn = editing?.checkIn ? new Date(editing.checkIn) : now;
-    const completed = editing?.checkOut ? new Date(editing.checkOut) : now;
-
-    const payload = {
-      taskName: values.taskName,
-      description: values.description || "",
-      siteId: +values.siteId,
-      siteName: values.siteName || "",
-      siteLocation: values.siteLocation || "",
-      siteAddress: values.siteAddress || "",
-      staffId: values.staffId ? +values.staffId : profile?.id ? +profile.id : 0,
-      serviceId: values.serviceId || "",
-      serviceName: values.serviceName || "",
-      customerName: values.customerName || "",
-      companyName: values.companyName || "",
-      customerId: customerIdNum,
-      startTime,
-      endTime,
-      checkIn,
-      completed,
-      status: 1,
-      reportTemplateId: +values.reportTemplateId,
-      notifiesStaff: +values.notifiesStaff || 1,
+    const payload = buildCustomReportSavePayload({
+      values,
       items,
-    };
+      profile,
+      staffId: reportStaffId,
+      editing,
+      templateLabel: selectedTemplateName,
+    });
 
     startSaveProgressTicker();
     try {
       let res: any;
       if (editing?.id) {
-        res = await callAPIAsync(serviceType.COMMON, `${endPoint.USER_TASKS}/updateCustomerReports/${editing.id}`, "PUT", payload);
+        res = await updateCustomReport(+editing.id, payload);
       } else {
-        res = await callAPIAsync(serviceType.COMMON, `${endPoint.USER_TASKS}/createCustomerReports`, "POST", payload);
+        res = await createCustomReport(payload);
       }
       clearSaveProgressTimer();
       if (res?.code !== 1) {
-        const pg = res?.details?.pg;
-        const pgDetail = String(pg?.detail || res?.message || "");
-        if (pgDetail.includes("uq_user_task_reports_task_name")) {
+        if (isDuplicateReportFieldNameError(res)) {
           message.error(
             "This template has duplicate field names (e.g. two items named the same). Rename duplicate items in Report Templates (Items step) and try again.",
           );
         } else {
+          const pg = res?.details?.pg;
           const detailMsg = [res?.message, pg?.detail, pg?.column && `column=${pg.column}`, pg?.table && `table=${pg.table}`]
             .filter(Boolean)
-            .join(" � ");
+            .join(REPORT_LIST_SEP);
           message.error(detailMsg || res?.error || "Could not save report. Check required fields and try again.");
         }
         if (res?.details) {
@@ -2666,36 +2077,14 @@ const NewReports: React.FC = () => {
   const profileTypeNum = profileType != null ? +profileType : 0;
   /** Staff/customer may soft-delete or restore only their own custom reports. */
   const canSoftDeleteReport = useCallback(
-    (row: any) => {
-      if (!profileIdNum || !row?.id) return false;
-      if (profileTypeNum === userType.ADMIN) return true;
-      if (profileTypeNum === userType.CUSTOMER) {
-        return (
-          row?.type === "CUSTOM" &&
-          (+row.customerId === profileIdNum || +row.createdBy === profileIdNum)
-        );
-      }
-      if (profileTypeNum === userType.STAFF) {
-        return (
-          row.type === "CUSTOM" &&
-          +row.staffId === profileIdNum &&
-          +row.createdBy === profileIdNum
-        );
-      }
-      return false;
-    },
+    (row: any) => canUserSoftDeleteCustomReport(row, profileIdNum, profileTypeNum),
     [profileIdNum, profileTypeNum],
   );
 
   const deleteReport = useCallback(
     async (row: any) => {
       const isAdmin = +profileType === userType.ADMIN;
-      const res = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/${row.id}`,
-        "DELETE",
-        null,
-      );
+      const res = await deleteCustomReport(+row.id);
       if (res?.code === 1) {
         message.success(
           isAdmin
@@ -2716,12 +2105,7 @@ const NewReports: React.FC = () => {
 
   const restoreReport = useCallback(
     async (row: any) => {
-      const res = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/${row.id}/restore`,
-        "PATCH",
-        {},
-      );
+      const res = await restoreCustomReport(+row.id);
       if (res?.code === 1) {
         message.success(
           isAdminUser ? "Report restored to Reports" : "Report restored",
@@ -2752,12 +2136,7 @@ const NewReports: React.FC = () => {
     let failed = 0;
     try {
       for (const id of ids) {
-        const res = await callAPIAsync(
-          serviceType.COMMON,
-          `${endPoint.USER_TASKS}/${id}/restore`,
-          "PATCH",
-          {},
-        );
+        const res = await restoreCustomReport(id);
         if (res?.code === 1) succeeded += 1;
         else failed += 1;
       }
@@ -2799,12 +2178,7 @@ const NewReports: React.FC = () => {
     }
     setBulkDeleting(true);
     try {
-      const res: any = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/clear-deleted`,
-        "PATCH",
-        { ids },
-      );
+      const res: any = await clearDeletedCustomReports(ids);
       if (res?.code === 1) {
         const clearedCount = +res?.data?.clearedCount || ids.length;
         message.success(
@@ -2839,23 +2213,6 @@ const NewReports: React.FC = () => {
 
   const displayRows = filterReportRowsByKeyword(rows, listSearchDraft);
 
-  const deletableRowsOnPage = useMemo(
-    () =>
-      rows.filter((r) =>
-        isDeletedReportTab && isAdminUser ? Boolean(r?.id) : canSoftDeleteReport(r),
-      ),
-    [rows, canSoftDeleteReport, isDeletedReportTab, isAdminUser],
-  );
-
-  const reportSelectOptions = useMemo(
-    () =>
-      deletableRowsOnPage.map((r) => ({
-        value: r.id,
-        label: `${r.taskName || "Report"} � ${r.siteName || "�"} (#${r.id})`,
-      })),
-    [deletableRowsOnPage],
-  );
-
   const deleteSelectedReports = useCallback(async () => {
     const ids = selectedRowKeys
       .map((k) => rows.find((r) => +r.id === +k))
@@ -2871,12 +2228,7 @@ const NewReports: React.FC = () => {
     let failed = 0;
     try {
       for (const id of ids) {
-        const res = await callAPIAsync(
-          serviceType.COMMON,
-          `${endPoint.USER_TASKS}/${id}`,
-          "DELETE",
-          null,
-        );
+        const res = await deleteCustomReport(id);
         if (res?.code === 1) succeeded += 1;
         else failed += 1;
       }
@@ -2922,12 +2274,7 @@ const NewReports: React.FC = () => {
         message.success("Deleted folder is already empty");
         return;
       }
-      const res: any = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.USER_TASKS}/clear-deleted`,
-        "PATCH",
-        { ids: visibleIds },
-      );
+      const res: any = await clearDeletedCustomReports(visibleIds);
       if (res?.code === 1) {
         const clearedCount = +res?.data?.clearedCount || 0;
         const shownCount = visibleIds.length;
@@ -3012,6 +2359,24 @@ const NewReports: React.FC = () => {
 
   const isEditMode = Boolean(editing?.id);
   const templateChosen = Boolean(selectedTemplateId);
+
+  /** Saved rows with no matching template item (e.g. report from AWS, older template on localhost). */
+  const extraSavedReportRowsForEdit = useMemo(() => {
+    if (!isEditMode || !Array.isArray(editing?.reports) || !templateItemsForSubmit.length) {
+      return [];
+    }
+    const covered = new Set<string>();
+    templateItemsForSubmit.forEach((it, idx) => {
+      const rep = matchReportItemForTemplate(editing.reports, it, idx);
+      if (rep) covered.add(reportFieldStorageKey(rep.name));
+    });
+    return editing.reports
+      .slice()
+      .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
+      .filter((r: any) => !covered.has(reportFieldStorageKey(r.name)))
+      .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
+  }, [isEditMode, editing, templateItemsForSubmit]);
+
   const legacyReportsForRender = useMemo(() => {
     if (!isEditMode || templateChosen) return [];
     if (!Array.isArray(editing?.reports)) return [];
@@ -3067,7 +2432,7 @@ const NewReports: React.FC = () => {
           onClick={() => openView(r)}
         />
         {(+profileType === userType.CUSTOMER || +profileType === userType.ADMIN) && !isDeletedReportTab ? (
-          <Link to={`/messages?userTaskId=${r.id}`} title="Message about this report">
+          <Link to={`/messages?reportId=${r.id}`} title="Message about this report">
             <Button type="link" size="small" icon={<MailOutlined />} aria-label="Message about this report" />
           </Link>
         ) : null}
@@ -3177,7 +2542,7 @@ const NewReports: React.FC = () => {
 
   const renderMobileReportCard = useCallback(
     (r: any) => {
-      const pdfHref = resolveReportPdfHref(getUserTaskPdfField(r));
+      const pdfHref = resolveReportPdfHref(getReportPdfField(r));
       const title = formatMobileReportCardTitle(r);
       const submittedLabel = formatReportSubmittedAt(r);
       const highlighted = linkedReportId != null && +r.id === +linkedReportId;
@@ -3379,9 +2744,9 @@ const NewReports: React.FC = () => {
       width: 56,
       align: "center" as const,
       render: (_: unknown, r: any) => {
-        const href = resolveReportPdfHref(getUserTaskPdfField(r));
+        const href = resolveReportPdfHref(getReportPdfField(r));
         if (!href) {
-          return <span style={{ color: "#bfbfbf" }}>�</span>;
+          return <span style={{ color: "#bfbfbf" }}>{EM_DASH}</span>;
         }
         const label = reportPdfLinkLabel(r, href);
         return (
@@ -3551,7 +2916,6 @@ const NewReports: React.FC = () => {
             options={filteredReportTemplates.map((t: any) => ({ value: t.id, label: t.name }))}
             onChange={(tplId) => {
               setTimeout(() => {
-                ensureAutoTaskName();
                 const tpl = reportTemplates.find((t: any) => +t.id === +tplId);
                 applyTemplateFieldDefaults(tpl);
                 if (useStaffStyleCreate) {
@@ -3811,44 +3175,6 @@ const NewReports: React.FC = () => {
                     }),
             }}
           >
-            <Typography.Text
-              strong
-              style={{
-                marginRight: 4,
-                color: mobileUiDark ? "#ffffff" : undefined,
-              }}
-            >
-              Select reports:
-            </Typography.Text>
-            <div
-              className={
-                mobileUiDark ? "nr-bulk-select-wrap nr-dark-select-shell" : undefined
-              }
-            >
-              <Select
-                className={
-                  mobileUiDark
-                    ? "nr-mobile-dark-field nr-mobile-select-dark nr-bulk-select-dark"
-                    : undefined
-                }
-                popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
-                dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
-                mode="multiple"
-                allowClear
-                placeholder="Select one or more reports on this page"
-                style={
-                  showMobileCards || mobileUiDark
-                    ? { width: "100%", maxWidth: "none" }
-                    : { flex: "1 1 280px", minWidth: 220, maxWidth: 520 }
-                }
-                value={selectedRowKeys}
-                onChange={(vals) => setSelectedRowKeys(vals)}
-                options={reportSelectOptions}
-                optionFilterProp="label"
-                maxTagCount="responsive"
-                disabled={bulkDeleting || listLoading || !reportSelectOptions.length}
-              />
-            </div>
             <Space
               wrap={!showMobileCards}
               style={showMobileCards ? { width: "100%", justifyContent: "stretch" } : undefined}
@@ -3985,7 +3311,7 @@ const NewReports: React.FC = () => {
                     ? "Permanently delete all reports on this page?"
                     : "Clear all deleted reports?"}
                   <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
-                    This hides them from your Deleted tab (soft clear). You can�t restore after clearing.
+                    This hides them from your Deleted tab (soft clear). You can't restore after clearing.
                   </div>
                 </span>
               }
@@ -4175,7 +3501,7 @@ const NewReports: React.FC = () => {
             <Row gutter={[40, 8]}>
               <Col xs={24} sm={12}>
                 <div style={submittedMetaLabel}>Site</div>
-                <span style={submittedMetaValue}>{viewRow.siteName || "�"}</span>
+                <span style={submittedMetaValue}>{viewRow.siteName || EM_DASH}</span>
                 <div style={{ ...submittedMetaLabel, marginTop: 18 }}>Submitted by</div>
                 <span style={submittedGreenPill}>{formatSubmittedByRow(viewRow)}</span>
                 {viewPdfHref ? (
@@ -4194,7 +3520,7 @@ const NewReports: React.FC = () => {
               </Col>
               <Col xs={24} sm={12}>
                 <div style={submittedMetaLabel}>Service</div>
-                <span style={submittedMetaValue}>{viewRow.serviceName || "�"}</span>
+                <span style={submittedMetaValue}>{viewRow.serviceName || EM_DASH}</span>
                 <div style={{ ...submittedMetaLabel, marginTop: 18 }}>Submitted date</div>
                 <span
                   style={{
@@ -4222,7 +3548,7 @@ const NewReports: React.FC = () => {
                       </span>
                     </>
                   ) : (
-                    "�"
+                    EM_DASH
                   )}
                 </span>
                 {+profileType !== userType.STAFF ? (
@@ -4468,15 +3794,6 @@ const NewReports: React.FC = () => {
       >
         <Form layout="vertical" form={form} requiredMark="optional" preserve>
           <Row gutter={12}>
-            <Form.Item name="staffId" style={{ display: "none" }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="taskName" style={{ display: "none" }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="notifiesStaff" style={{ display: "none" }}>
-              <Input />
-            </Form.Item>
             <Form.Item name="customerName" style={{ display: "none" }}>
               <Input />
             </Form.Item>
@@ -4519,7 +3836,6 @@ const NewReports: React.FC = () => {
                   );
                 })
               : null}
-            {/* taskName is required by API but hidden from staff UI */}
             <Col span={24}>
               <Typography.Text
                 strong
@@ -4588,7 +3904,7 @@ const NewReports: React.FC = () => {
             {/* notifiesStaff is required by API but hidden from staff UI */}
           </Row>
 
-          {templateItemsForRender.length > 0 ? (
+          {(templateItemsForRender.length > 0 || extraSavedReportRowsForEdit.length > 0) ? (
             <div
               className={isMobilePortrait ? "nr-template-fields-mobile" : undefined}
               style={{ marginTop: 20 }}
@@ -4840,6 +4156,88 @@ const NewReports: React.FC = () => {
                     </Col>
                   );
                 })}
+                {extraSavedReportRowsForEdit.length > 0 ? (
+                  <>
+                    <Col span={24}>
+                      <Divider
+                        orientation="left"
+                        plain
+                        style={{ margin: "16px 0 8px", fontSize: 14, fontWeight: 600 }}
+                      >
+                        Additional saved fields
+                      </Divider>
+                    </Col>
+                    {extraSavedReportRowsForEdit.map((r: any, idx: number) => {
+                      const fieldKey = legacyFieldKey(r, idx);
+                      const label = fixTextEncoding(String(r?.name || "").trim()) || `Field ${idx + 1}`;
+                      const fieldType = String(r?.type || "").toUpperCase();
+                      const templateFieldColSpan = isMobilePortrait ? 24 : 12;
+
+                      if (isJsonMediaFieldType(fieldType)) {
+                        const multiple = fieldType === "IMAGES" || fieldType === "PHOTOS";
+                        return (
+                          <Col xs={24} sm={24} md={12} span={24} key={fieldKey}>
+                            <Form.Item name={fieldKey} label={label}>
+                              {multiple ? (
+                                <TemplateImageUpload
+                                  multiple
+                                  ref={(instance) => {
+                                    mediaUploadRefs.current[fieldKey] = instance;
+                                  }}
+                                />
+                              ) : (
+                                <TemplateVideoUpload
+                                  ref={(instance) => {
+                                    mediaUploadRefs.current[fieldKey] = instance;
+                                  }}
+                                />
+                              )}
+                            </Form.Item>
+                          </Col>
+                        );
+                      }
+
+                      if (fieldType === "FILE" || fieldType === "FILES" || fieldType === "UPLOAD") {
+                        return (
+                          <Col span={templateFieldColSpan} key={fieldKey}>
+                            <Form.Item name={fieldKey} label={label}>
+                              <TemplateFileUpload />
+                            </Form.Item>
+                          </Col>
+                        );
+                      }
+
+                      if (fieldType === "YES_NO") {
+                        return (
+                          <Col span={templateFieldColSpan} key={fieldKey}>
+                            <Form.Item name={fieldKey} label={label}>
+                              <Select
+                                {...selectProps}
+                                placeholder="Select"
+                                options={[
+                                  { value: "YES", label: "YES" },
+                                  { value: "NO", label: "NO" },
+                                ]}
+                              />
+                            </Form.Item>
+                          </Col>
+                        );
+                      }
+
+                      return (
+                        <Col span={templateFieldColSpan} key={fieldKey}>
+                          <Form.Item name={fieldKey} label={label}>
+                            <Input
+                              size={controlSize}
+                              className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                              style={{ borderRadius: 8 }}
+                            />
+                          </Form.Item>
+                        </Col>
+                      );
+                    })}
+                  </>
+                ) : null}
               </Row>
             </div>
           ) : legacyReportsForRender.length > 0 ? (
@@ -4906,19 +4304,35 @@ const NewReports: React.FC = () => {
                     );
                   }
 
-                  if (isJsonMediaFieldType(fieldType)) {
-                    const multiple = fieldType === "IMAGES";
-                    const UploadComp = multiple ? TemplateImageUpload : TemplateVideoUpload;
+                  if (fieldType === "IMAGES" || fieldType === "PHOTOS") {
                     return (
                       <Col span={24} key={fieldKey}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <UploadComp />
+                          <TemplateImageUpload multiple />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+                  if (fieldType === "PHOTO" || fieldType === "IMAGE") {
+                    return (
+                      <Col span={24} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <TemplateImageUpload multiple={false} />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+                  if (fieldType === "VIDEOS" || fieldType === "VIDEO") {
+                    return (
+                      <Col span={24} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <TemplateVideoUpload />
                         </Form.Item>
                       </Col>
                     );
                   }
 
-                  if (fieldType === "FILE") {
+                  if (fieldType === "FILE" || fieldType === "FILES" || fieldType === "UPLOAD") {
                     return (
                       <Col span={24} key={fieldKey}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
