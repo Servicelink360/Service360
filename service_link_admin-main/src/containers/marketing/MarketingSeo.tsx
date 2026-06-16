@@ -3,7 +3,7 @@ import {
   DEFAULT_HOME_DESCRIPTION,
   DEFAULT_HOME_TITLE,
   applyMarketingSeo,
-} from './marketingSeo';
+} from './marketingSeoUtils';
 
 type Props = {
   path: string;

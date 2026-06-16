@@ -6,7 +6,7 @@ import MarketingNavbar from './MarketingNavbar';
 import MarketingSeo from './MarketingSeo';
 import HomePage from './HomePage';
 import MarketingPageView from './MarketingPageView';
-import { DEFAULT_HOME_DESCRIPTION, DEFAULT_HOME_TITLE } from './marketingSeo';
+import { DEFAULT_HOME_DESCRIPTION, DEFAULT_HOME_TITLE } from './marketingSeoUtils';
 import { getPageByPath } from './siteData';
 import './marketing.css';
 
