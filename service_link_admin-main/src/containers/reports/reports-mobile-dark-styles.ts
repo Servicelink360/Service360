@@ -67,6 +67,65 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     color: #ffffff !important;
   }
 
+  /* New Reports — mobile portrait / card list: beat white antd defaults */
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker-range,
+  .new-reports-theme-dark.new-reports-list-wrap .nr-dark-picker-shell .ant-picker,
+  .new-reports-theme-dark.new-reports-list-wrap .nr-mobile-dark-field.ant-picker,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-input,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-input-affix-wrapper,
+  .new-reports-theme-dark.new-reports-list-wrap input.ant-input,
+  .new-reports-theme-dark.new-reports-list-wrap .nr-search-row .ant-input {
+    background: #141414 !important;
+    background-color: #141414 !important;
+    border-color: #444444 !important;
+    color: #ffffff !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker-input > input {
+    background: transparent !important;
+    color: #ffffff !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker-input > input::placeholder,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-input::placeholder {
+    color: #737373 !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker-suffix,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker-separator,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-calendar-picker-icon {
+    color: #9a9a9a !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .ant-picker-active-bar {
+    display: none !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-mobile-tabs--dark .ant-tabs-nav::before {
+    border-bottom-color: #333333 !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-mobile-tabs--dark .ant-tabs-tab .ant-tabs-tab-btn {
+    color: #8c8c8c !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-mobile-tabs--dark .ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: #ffffff !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .nr-mobile-btn-dark.ant-btn {
+    background: #141414 !important;
+    border-color: #444444 !important;
+    color: #ffffff !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters-form--collapsed .nr-search-row .ant-input {
+    background: #141414 !important;
+    border-color: #444444 !important;
+    color: #ffffff !important;
+  }
+
   /* Report Faults table (mobile portrait dark) */
   .new-reports-theme-dark.report-faults-list-wrap .ant-table-wrapper.table.report-faults-table--dark,
   .new-reports-theme-dark.report-faults-list-wrap .table.report-faults-table--dark .ant-table,

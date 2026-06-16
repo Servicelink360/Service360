@@ -72,6 +72,7 @@ export default function TopbarUser({ user, userPhoto, rows, topbarDark }: IProps
 					<div>
 						<h5
 							className="username"
+							title={name}
 							style={topbarDark ? { color: '#ffffff' } : undefined}
 						>
 							{name}

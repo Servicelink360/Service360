@@ -1,7 +1,7 @@
 import appActions from '@app/redux/app/actions';
 import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 import { useColorMode } from '@app/context/ColorModeContext';
-import { DashboardOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
+import { HomeOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
 import { useHistory, useLocation } from 'react-router-dom';
 import { Layout } from 'antd';
 import React from 'react';
@@ -75,10 +75,10 @@ export default function Topbar() {
               type="button"
               className="topbarDashboardBtn"
               onClick={() => history.push('/dashboard')}
-              aria-label={intl.formatMessage({ id: 'sidebar.dashboard' })}
+              aria-label="Home"
               style={topbarDark ? { color: '#ffffff' } : undefined}
             >
-              <DashboardOutlined aria-hidden />
+              <HomeOutlined aria-hidden />
             </button>
           ) : null}
         </div>

@@ -39,9 +39,71 @@ const TopbarWrapper = styled.div`
     &.mobile-portrait-topbar {
       padding: ${(props) =>
     props["data-rtl"] === "rtl" ? "0 15px !important" : "0 15px !important"};
+      height: auto;
+      min-height: 45px;
+      align-items: center;
 
       h2 {
         font-size: 0.78em;
+      }
+
+      .isoLeft {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+        margin-right: 8px;
+
+        h2 {
+          flex: 1 1 auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
+      .isoRight {
+        flex-shrink: 0;
+        align-items: center;
+
+        li {
+          margin-right: ${(props) =>
+    props["data-rtl"] === "rtl" ? "0" : "8px"};
+          margin-left: ${(props) => (props["data-rtl"] === "rtl" ? "8px" : "0")};
+
+          &:last-child {
+            margin-right: 0;
+            margin-left: 0;
+          }
+        }
+
+        li.isoColorMode {
+          margin-right: 6px;
+        }
+
+        li.isoUser {
+          overflow: visible;
+          flex: 0 1 auto;
+          min-width: 0;
+          max-width: none;
+
+          .usernameWrapper {
+            min-width: 0;
+
+            .information h5.username {
+              max-width: none;
+              width: auto;
+              overflow: visible;
+              text-overflow: unset;
+              white-space: normal;
+              word-break: break-word;
+              line-height: 1.25;
+              font-size: 12px;
+              margin-left: 0.35rem;
+              text-align: right;
+            }
+          }
+        }
       }
 
       .topbarDashboardBtn {
@@ -51,8 +113,8 @@ const TopbarWrapper = styled.div`
         flex-shrink: 0;
         width: 32px;
         height: 32px;
-        margin-left: 70px;
-        margin-right: 2px;
+        margin-left: 6px;
+        margin-right: 0;
         padding: 0;
         border: 0;
         background: transparent;

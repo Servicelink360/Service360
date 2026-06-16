@@ -59,9 +59,9 @@ const actions = {
   logout: () => ({
     type: actions.LOGOUT,
   }),
-  forgotPassword: (email: string) => ({
+  forgotPassword: (data: { email: string }) => ({
     type: actions.FORGOT_PASSWORD,
-    payload: email,
+    payload: data,
   }),
   resetPassword: (formReset: { password: string, code: string }) => ({
     type: actions.RESET_PASSWORD,

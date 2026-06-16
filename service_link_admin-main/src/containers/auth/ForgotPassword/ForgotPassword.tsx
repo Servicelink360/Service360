@@ -1,82 +1,108 @@
-import logo_mini from '@app/assets/images/signin/logo.png'
-import Button from '@app/components/uielements/button';
-import Input from '@app/components/uielements/input';
-import IntlMessages from '@app/components/utility/intlMessages';
+import MarketingLogo from '@app/containers/marketing/MarketingLogo';
+import MarketingNavbar from '@app/containers/marketing/MarketingNavbar';
+import { notificationComponent } from '@app/components/common/Notification';
 import authAction from '@app/redux/auth/actions';
-import { Form } from 'antd';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useIntl } from 'react-intl';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useHistory } from 'react-router-dom';
-import { ArrowLeftOutlined } from '@ant-design/icons';
-import ForgotPasswordStyleWrapper from './ForgotPassword.styles';
-import { useIntl } from 'react-intl';
-const { forgotPassword } = authAction
-export default function () {
+import {
+  EmailIcon,
+  FormDiv,
+  MainParent,
+  SignInBody,
+  SignInShell,
+  SubmitButton,
+  WrapperForm,
+} from '../SignIn/SignIn.styles';
+import '@app/containers/marketing/marketing.css';
+
+const { forgotPassword } = authAction;
+
+export default function ForgotPassword() {
   const dispatch = useDispatch();
-  let history = useHistory();
-  const intl = useIntl()
+  const history = useHistory();
+  const intl = useIntl();
   const loading = useSelector((state: any) => state.Auth.loading);
   const isSuccess = useSelector((state: any) => state.Auth.isSuccess);
-  const onFinish = (values: any) => {
-    dispatch(forgotPassword(values))
+  const [email, setEmail] = useState('');
+
+  const handleSubmit = () => {
+    const trimmed = email.trim();
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+    if (!valid) {
+      notificationComponent(
+        'warning',
+        3,
+        intl.formatMessage({ id: 'sidebar.users.warning' }),
+        intl.formatMessage({ id: 'form.error.validEmail' }),
+      );
+      return;
+    }
+    dispatch(forgotPassword({ email: trimmed }));
   };
+
   useEffect(() => {
     if (isSuccess) {
-      history.push("/resetpassword")
+      history.push('/resetpassword');
     }
-  }, [isSuccess, history])
+  }, [isSuccess, history]);
+
   return (
-    <ForgotPasswordStyleWrapper className="isoForgotPassPage">
-      <ArrowLeftOutlined className='backIcon' onClick={() => history.push("/signin")} />
-      <div className="isoFormContentWrapper">
-        <div className="isoFormContent">
-          <div className="isoLogoWrapper">
-            <Link to="/">
-              <img width={150} srcSet={`${logo_mini} 2x`} alt='' />
-            </Link>
-          </div>
-          <div className="isoFormHeadText">
-            <h3>
-              <IntlMessages id="page.forgetPassSubTitle" />
-            </h3>
-            <p>
-              <IntlMessages id="page.forgetPassDescription" />
-            </p>
-          </div>
-
-          <div className="isoForgotPassForm">
-            <Form
-              name="basic"
-              labelCol={{ span: 8 }}
-              wrapperCol={{ span: 16 }}
-              initialValues={{ email: "" }}
-              onFinish={onFinish}
-              autoComplete="off"
-            >
-              <div className="isoInputWrapper">
-
-                <Form.Item
-                  name="email"
-                  wrapperCol={{ span: 24 }}
-                  rules={[
-                    { required: true, message: <IntlMessages id='form.error.validEmail' /> }, 
-                    { type: 'email', message: <IntlMessages id='form.error.validEmail'/> }]}
-                >
-                  <Input size="large" autoComplete='off' placeholder={intl.formatMessage({ id: 'form.email' })} />
-                </Form.Item>
-              </div>
-              <Form.Item wrapperCol={{ span: 24 }}>
-
-                <Button type="primary" className="btn100" htmlType="submit" loading={loading}>
-                  <IntlMessages id="page.sendRequest" />
-                </Button>
-              </Form.Item>
-            </Form>
-
-          </div>
-        </div>
+    <MainParent>
+      <div className="marketing-site marketing-site--nav-only">
+        <MarketingNavbar />
       </div>
+      <SignInBody>
+        <SignInShell>
+          <WrapperForm onFinish={handleSubmit}>
+            <FormDiv>
+              <div className="form-header">
+                <div className="logo-row">
+                  <div className="logo-mark">
+                    <MarketingLogo variant="light" />
+                  </div>
+                  <div className="logo-type">
+                    <strong>Service360</strong>
+                    <span>Facility management platform</span>
+                  </div>
+                </div>
+                <h2>{intl.formatMessage({ id: 'page.forgetPassSubTitle' })}</h2>
+                <p className="subtitle">{intl.formatMessage({ id: 'page.forgetPassDescription' })}</p>
+              </div>
 
-    </ForgotPasswordStyleWrapper >
+              <div className="wrapperForm">
+                <div className="field">
+                  <label htmlFor="forgot-email">
+                    <EmailIcon />
+                    {intl.formatMessage({ id: 'form.email' })}
+                  </label>
+                  <div className="field-input">
+                    <input
+                      id="forgot-email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={intl.formatMessage({ id: 'form.email' })}
+                    />
+                  </div>
+                </div>
+
+                <div className="save">
+                  <SubmitButton type="primary" htmlType="submit" loading={loading}>
+                    {intl.formatMessage({ id: 'page.sendRequest' })}
+                  </SubmitButton>
+                </div>
+              </div>
+
+              <Link className="forgot" to="/signin">
+                {intl.formatMessage({ id: 'sidebar.signIn' })}
+              </Link>
+            </FormDiv>
+          </WrapperForm>
+        </SignInShell>
+      </SignInBody>
+    </MainParent>
   );
 }

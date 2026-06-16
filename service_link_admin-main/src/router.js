@@ -3,6 +3,7 @@ import React, { lazy, Suspense } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { BrowserRouter as Router, Redirect, Route, Switch } from 'react-router-dom';
 import { PUBLIC_ROUTE } from './route.constants';
+import { MARKETING_PATHS } from './containers/marketing/siteData';
 import { GlobalHotKeys, configure } from "react-hotkeys";
 import appActions from "@app/redux/app/actions";
 import actions from "@app/redux/auth/actions"
@@ -10,6 +11,7 @@ import actions from "@app/redux/auth/actions"
 const { toggleCollapsed } = appActions;
 
 const Dashboard = lazy(() => import('./containers/dashboard/Dashboard'));
+const MarketingRouter = lazy(() => import('@app/containers/marketing/MarketingRouter'));
 
 (async () => {
   if (!localStorage.getItem('id_token')) {
@@ -20,13 +22,15 @@ const Dashboard = lazy(() => import('./containers/dashboard/Dashboard'));
     window.location.href = window.location.origin + "/dashboard/";
   }
 })()
-const publicRoutes = [
 
-  {
-    path: PUBLIC_ROUTE.LANDING,
-    exact: true,
-    component: lazy(() => import('@app/containers/auth/SignIn/SignIn')),
-  },
+const marketingPublicRoutes = MARKETING_PATHS.map((path) => ({
+  path,
+  exact: path === PUBLIC_ROUTE.LANDING,
+  component: MarketingRouter,
+}));
+
+const publicRoutes = [
+  ...marketingPublicRoutes,
   {
     path: PUBLIC_ROUTE.PAGE_404,
     component: lazy(() => import('@app/containers/auth/404/404')),

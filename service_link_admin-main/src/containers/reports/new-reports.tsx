@@ -3049,7 +3049,10 @@ const NewReports: React.FC = () => {
                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                 popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
                 format="DD/MM/YYYY"
-                style={isMobilePortrait || mobileUiDark ? { width: "100%" } : undefined}
+                style={{
+                  ...(isMobilePortrait || mobileUiDark ? { width: "100%" } : undefined),
+                  ...mobileDarkFieldStyle,
+                }}
                 onChange={() => {
                   setTimeout(() => void applyListFiltersFromForm(), 0);
                 }}
@@ -3124,6 +3127,7 @@ const NewReports: React.FC = () => {
                   disabled={bulkDeleting}
                   mobileUiDark={mobileUiDark}
                   isMobilePortrait={isMobilePortrait}
+                  fieldStyle={mobileDarkFieldStyle}
                   onChange={onListSearchInputChange}
                   onSearch={onListSearchInputSearch}
                 />

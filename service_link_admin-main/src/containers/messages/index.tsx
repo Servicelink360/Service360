@@ -34,6 +34,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useHistory, useLocation } from 'react-router-dom';
 import { dateTimeFormat } from '@app/config/data.config';
 import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
+import { useColorModeOptional } from '@app/context/ColorModeContext';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { userType } from '../../constants/statusUser';
@@ -263,10 +264,11 @@ const MessageBubble: React.FC<{
   msg: MessageRow;
   myDisplayName?: string;
   isDeletedTab?: boolean;
+  darkMode?: boolean;
   onDelete?: (id: number) => void;
   onRestore?: (id: number) => void;
   actionLoading?: boolean;
-}> = ({ msg, myDisplayName, isDeletedTab, onDelete, onRestore, actionLoading }) => {
+}> = ({ msg, myDisplayName, isDeletedTab, onDelete, onRestore, actionLoading, darkMode }) => {
   const roleLabel = senderRoleLabel(msg.senderType, msg.senderCompanyName);
   const displayName = msg.isMine
     ? myDisplayName || 'You'
@@ -301,7 +303,7 @@ const MessageBubble: React.FC<{
           justifyContent: msg.isMine ? 'flex-end' : 'flex-start',
         }}
       >
-        <Text strong style={{ fontSize: 13, margin: 0 }}>
+        <Text strong style={{ fontSize: 13, margin: 0, color: darkMode ? '#f0f0f0' : undefined }}>
           {displayName}
         </Text>
         <Tag color={senderRoleColor(msg.senderType)} style={{ margin: 0, fontSize: 10 }}>
@@ -327,9 +329,9 @@ const MessageBubble: React.FC<{
           maxWidth: 'min(520px, 92%)',
           padding: '10px 14px',
           borderRadius: 12,
-          background: msg.isMine ? '#1677ff' : '#f5f5f5',
-          color: msg.isMine ? '#fff' : 'inherit',
-          border: msg.isMine ? 'none' : '1px solid #d9d9d9',
+          background: msg.isMine ? '#1677ff' : darkMode ? '#2a2a2a' : '#f5f5f5',
+          color: msg.isMine ? '#fff' : darkMode ? '#f0f0f0' : 'inherit',
+          border: msg.isMine ? 'none' : `1px solid ${darkMode ? '#444444' : '#d9d9d9'}`,
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           fontSize: 14,
@@ -1339,6 +1341,34 @@ const MessagesPage: React.FC = () => {
   );
 
   const isMobilePortrait = useMobilePortrait();
+  const { isDark } = useColorModeOptional();
+  const messagesPageDark = isDark && isMobilePortrait;
+
+  useEffect(() => {
+    const cls = 'messages-page-body-dark';
+    if (messagesPageDark) document.body.classList.add(cls);
+    else document.body.classList.remove(cls);
+    return () => document.body.classList.remove(cls);
+  }, [messagesPageDark]);
+
+  const ui = messagesPageDark
+    ? {
+        rootBg: '#121212',
+        panelBg: '#1a1a1a',
+        border: '#333333',
+        text: '#f0f0f0',
+        textMuted: '#a3a3a3',
+        threadSelected: '#1f3a5f',
+      }
+    : {
+        rootBg: '#ffffff',
+        panelBg: '#fafafa',
+        border: '#f0f0f0',
+        text: undefined as string | undefined,
+        textMuted: undefined as string | undefined,
+        threadSelected: '#e6f4ff',
+      };
+
   const hasOpenConversation = Boolean(
     isAdmin ? selectedConversation : activeConversation,
   );
@@ -1367,17 +1397,18 @@ const MessagesPage: React.FC = () => {
   return (
     <Layout title="Messages">
       <div
-        className="messages-page-root"
+        className={`messages-page-root${messagesPageDark ? ' messages-page-dark messages-theme-dark' : ''}`}
         style={{
           display: 'flex',
           flexDirection: isMobilePortrait ? 'column' : 'row',
           height: isMobilePortrait ? 'auto' : 'calc(100vh - 180px)',
           minHeight: isMobilePortrait ? 480 : 480,
-          background: '#fff',
+          background: ui.rootBg,
           borderRadius: isMobilePortrait ? 0 : 8,
-          border: isMobilePortrait ? 'none' : '1px solid #f0f0f0',
+          border: isMobilePortrait ? 'none' : `1px solid ${ui.border}`,
           overflow: 'hidden',
           width: '100%',
+          color: ui.text,
         }}
       >
         {showListPane ? (
@@ -1388,15 +1419,15 @@ const MessagesPage: React.FC = () => {
               flexShrink: 0,
               flex: isMobilePortrait && !hasOpenConversation ? 1 : undefined,
               minHeight: isMobilePortrait ? 420 : undefined,
-              borderRight: isMobilePortrait ? 'none' : '1px solid #f0f0f0',
-              borderBottom: isMobilePortrait ? '1px solid #f0f0f0' : 'none',
+              borderRight: isMobilePortrait ? 'none' : `1px solid ${ui.border}`,
+              borderBottom: isMobilePortrait ? `1px solid ${ui.border}` : 'none',
               display: 'flex',
               flexDirection: 'column',
-              background: '#fafafa',
+              background: ui.panelBg,
             }}
           >
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid #f0f0f0' }}>
-              <Title level={5} style={{ margin: '0 0 10px' }}>
+            <div style={{ padding: '12px 14px', borderBottom: `1px solid ${ui.border}` }}>
+              <Title level={5} style={{ margin: '0 0 10px', color: ui.text }}>
                 <MailOutlined style={{ marginRight: 8 }} />
                 Conversations
               </Title>
@@ -1437,14 +1468,15 @@ const MessagesPage: React.FC = () => {
                       textAlign: 'left',
                       padding: '12px 14px',
                       border: 'none',
-                      borderBottom: '1px solid #f0f0f0',
+                      borderBottom: `1px solid ${ui.border}`,
                       background:
-                        conversationMatches(selectedConversation, t) ? '#e6f4ff' : 'transparent',
+                        conversationMatches(selectedConversation, t) ? ui.threadSelected : 'transparent',
                       cursor: 'pointer',
+                      color: ui.text,
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Text strong style={{ fontSize: 13 }}>
+                      <Text strong style={{ fontSize: 13, color: ui.text }}>
                         {t.customerName}
                       </Text>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1496,7 +1528,7 @@ const MessagesPage: React.FC = () => {
           style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, width: '100%' }}
         >
           {isMobilePortrait && hasOpenConversation ? (
-            <div style={{ padding: '8px 12px 0', background: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ padding: '8px 12px 0', background: ui.panelBg, borderBottom: `1px solid ${ui.border}` }}>
               <Button
                 type="link"
                 icon={<ArrowLeftOutlined />}
@@ -1511,11 +1543,11 @@ const MessagesPage: React.FC = () => {
             className="messages-page-chat-header"
             style={{
               padding: isMobilePortrait ? '12px 12px 0' : '12px 20px 0',
-              borderBottom: '1px solid #f0f0f0',
-              background: '#fafafa',
+              borderBottom: `1px solid ${ui.border}`,
+              background: ui.panelBg,
             }}
           >
-            <Title level={5} style={{ margin: '0 0 8px', wordBreak: 'break-word' }}>
+            <Title level={5} style={{ margin: '0 0 8px', wordBreak: 'break-word', color: ui.text }}>
               {isAdmin
                 ? selectedThread
                   ? (
@@ -1686,6 +1718,7 @@ const MessagesPage: React.FC = () => {
                   key={m.id}
                   msg={m}
                   myDisplayName={myDisplayName}
+                  darkMode={messagesPageDark}
                   isDeletedTab={messageTab === 'deleted'}
                   onDelete={messageTab === 'deleted' ? undefined : softDeleteMessage}
                   onRestore={messageTab === 'deleted' ? restoreMessage : undefined}
@@ -1700,8 +1733,8 @@ const MessagesPage: React.FC = () => {
               className="messages-page-composer"
               style={{
                 padding: isMobilePortrait ? '10px 12px' : '12px 16px',
-                borderTop: '1px solid #f0f0f0',
-                background: '#fff',
+                borderTop: `1px solid ${ui.border}`,
+                background: ui.rootBg,
               }}
             >
               {showCcComposer ? (
@@ -1709,9 +1742,9 @@ const MessagesPage: React.FC = () => {
                   style={{
                     marginBottom: 8,
                     padding: '6px 10px',
-                    background: '#fafafa',
+                    background: ui.panelBg,
                     borderRadius: 6,
-                    border: '1px solid #f0f0f0',
+                    border: `1px solid ${ui.border}`,
                   }}
                 >
                   <div

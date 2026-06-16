@@ -6,6 +6,7 @@ type Props = {
   disabled?: boolean;
   mobileUiDark?: boolean;
   isMobilePortrait?: boolean;
+  fieldStyle?: React.CSSProperties;
   onChange: (value: string) => void;
   onSearch: (value: string) => void;
 };
@@ -15,6 +16,7 @@ const ReportListKeywordSearch: React.FC<Props> = ({
   disabled,
   mobileUiDark,
   isMobilePortrait,
+  fieldStyle,
   onChange,
   onSearch,
 }) => (
@@ -26,11 +28,12 @@ const ReportListKeywordSearch: React.FC<Props> = ({
     value={value}
     onChange={(e) => onChange(e.target.value)}
     onPressEnter={(e) => onSearch((e.target as HTMLInputElement).value)}
-    style={
-      isMobilePortrait || mobileUiDark
+    style={{
+      ...(isMobilePortrait || mobileUiDark
         ? { flex: 1, minWidth: 160, width: "100%" }
-        : { width: 280, maxWidth: 520 }
-    }
+        : { width: 280, maxWidth: 520 }),
+      ...fieldStyle,
+    }}
   />
 );
 
