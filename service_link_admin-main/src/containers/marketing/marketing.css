@@ -190,6 +190,7 @@
   margin: 0 auto 56px;
 }
 
+.marketing-site .section-header h2,
 .marketing-site .section-header h3 {
   font-size: 2rem;
   font-weight: 800;
@@ -325,6 +326,14 @@
   padding: 56px 5% 48px;
   background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
   border-bottom: 1px solid var(--m-gray-200);
+}
+
+.marketing-site .page-hero--home {
+  text-align: center;
+}
+
+.marketing-site .page-hero--home .page-hero-inner {
+  max-width: 820px;
 }
 
 .marketing-site .page-hero-inner {
@@ -672,6 +681,7 @@
     white-space: nowrap;
   }
 
+  .marketing-site .section-header h2,
   .marketing-site .section-header h3,
   .marketing-site .page-hero h1 {
     font-size: 1.7rem;
@@ -685,6 +695,7 @@
     margin-bottom: 36px;
   }
 
+  .marketing-site .section-header h2,
   .marketing-site .section-header h3 {
     font-size: 1.5rem;
     line-height: 1.25;

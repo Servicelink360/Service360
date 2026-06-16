@@ -90,7 +90,7 @@ export const MARKETING_PAGES: MarketingPage[] = [
   {
     slug: 'platform',
     path: PUBLIC_ROUTE.MARKETING_PLATFORM,
-    title: 'Platform — Service360',
+    title: 'Facility Management Platform — Service360',
     navKey: 'platform',
     hero: 'The Service360 platform',
     lead: 'A cloud facility management system for property teams, contractors, and organisations — with dedicated workspaces, role-based access, and every module connected.',
@@ -104,7 +104,7 @@ export const MARKETING_PAGES: MarketingPage[] = [
   {
     slug: 'features',
     path: PUBLIC_ROUTE.MARKETING_FEATURES,
-    title: 'Features — Service360',
+    title: 'Facility Management Features — Service360',
     navKey: 'features',
     hero: 'Platform features',
     lead: 'Every module in Service360 maps to real screens in the live application — from job sites and tasks to reports, tickets, and staff management.',

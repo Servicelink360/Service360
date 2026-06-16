@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://service360.com.au/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://service360.com.au/platform</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://service360.com.au/features</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://service360.com.au/how-it-works</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/contact</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/about</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/support</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/job-sites</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/tasks-schedules</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/reports-faults</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/inspections-compliance</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/tickets-messages</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://service360.com.au/roles-permissions</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/companies-services</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/staff-customers</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/assets-ppe</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/site-check-in-info</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://service360.com.au/staff-attendance-info</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://service360.com.au/training-induction</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://service360.com.au/report-templates-info</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://service360.com.au/dashboard-info</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://service360.com.au/how-to-info</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://service360.com.au/local-government</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/commercial-property</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/facilities-contractors</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/corporate-estates</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://service360.com.au/privacy</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://service360.com.au/terms</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://service360.com.au/gdpr</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://service360.com.au/cookies</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://service360.com.au/acceptable-use</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>

@@ -1,2 +1,41 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
+Allow: /
+
+# App / auth screens — not useful in search results
+Disallow: /signin
+Disallow: /signup
+Disallow: /forgotpassword
+Disallow: /resetpassword
+Disallow: /signin_cookie
+Disallow: /nopermission
+Disallow: /dashboard
+Disallow: /task-today
+Disallow: /user-task-today
+Disallow: /tickets
+Disallow: /messages
+Disallow: /reports
+Disallow: /new-reports
+Disallow: /report-faults
+Disallow: /profile
+Disallow: /settings
+Disallow: /admins
+Disallow: /staffs
+Disallow: /customers
+Disallow: /sites
+Disallow: /companies
+Disallow: /services
+Disallow: /roles
+Disallow: /groups
+Disallow: /positions
+Disallow: /report-templates
+Disallow: /schedule-tasks
+Disallow: /assets
+Disallow: /ppe
+Disallow: /attendance
+Disallow: /training
+Disallow: /induction
+Disallow: /how-to
+Disallow: /logs
+
+Sitemap: https://service360.com.au/sitemap.xml

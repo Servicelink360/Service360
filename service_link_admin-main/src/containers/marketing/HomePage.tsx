@@ -33,9 +33,19 @@ const AUDIENCE_ICONS: Record<string, React.ReactNode> = {
 export default function HomePage() {
   return (
     <>
+      <section className="page-hero page-hero--home">
+        <div className="page-hero-inner">
+          <h1>Facility management platform for modern property teams</h1>
+          <p>
+            Service360 helps organisations manage job sites, maintenance schedules, faults,
+            inspections, tickets, and field teams from one secure workspace.
+          </p>
+        </div>
+      </section>
+
       <div className="section">
         <div className="section-header">
-          <h3>Built for multi‑organisation facility management</h3>
+          <h2>Built for multi‑organisation facility management</h2>
           <p>
             Each customer gets their own secure workspace. No shared data between organisations —
             just one platform to run operations at scale.
@@ -55,7 +65,7 @@ export default function HomePage() {
 
       <div className="section section-light">
         <div className="section-header">
-          <h3>Who uses Service360</h3>
+          <h2>Who uses Service360</h2>
           <p>Trusted by facility managers, contractors, and property teams across sectors.</p>
         </div>
         <div className="features-grid audience">
