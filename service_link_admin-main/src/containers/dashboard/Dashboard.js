@@ -1,4 +1,4 @@
-import siteConfig from '@app/config/site.config';
+import FooterCopyright from '@app/components/common/FooterCopyright';
 import useWindowSize from '@app/lib/hooks/useWindowSize';
 import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 import { useColorModeOptional } from '@app/context/ColorModeContext';
@@ -82,7 +82,7 @@ export default function Dashboard() {
                   : styles.footer
               }
             >
-              {siteConfig.footerText}
+              <FooterCopyright />
             </Footer>
           </Layout>
         </Layout>

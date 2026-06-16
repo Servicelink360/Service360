@@ -19,6 +19,7 @@ const env: IConfig = {
   version: readReactEnv("REACT_APP_VERSION"),
   siteName: readReactEnv("REACT_APP_SITE_NAME"),
   footerText: buildFooterText(),
+  footerCompanyUrl: readReactEnv("REACT_APP_FOOTER_COMPANY_URL") || "https://servicelink.net.au/",
   orderApiURL: readReactEnv("REACT_APP_ORDER_API_URL"),
 };
 

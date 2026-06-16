@@ -1,6 +1,6 @@
 import { notificationComponent } from '@app/components/common/Notification';
 import BlockScreen from '@app/components/common/BlockScreen';
-import siteConfig from '@app/config/site.config';
+import FooterCopyright from '@app/components/common/FooterCopyright';
 import MarketingLogo from '@app/containers/marketing/MarketingLogo';
 import MarketingNavbar from '@app/containers/marketing/MarketingNavbar';
 import appAction from '@app/redux/app/actions';
@@ -247,7 +247,7 @@ export default function SignIn() {
               <Link className="forgot" to="/forgotpassword">
                 {intl.formatMessage({ id: 'signin.forgot_password' })}
               </Link>
-              <span className="endOfForm">{siteConfig.footerText}</span>
+              <FooterCopyright className="endOfForm" />
             </FormDiv>
           </WrapperForm>
         </SignInShell>

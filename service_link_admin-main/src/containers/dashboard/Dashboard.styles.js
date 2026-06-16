@@ -320,4 +320,13 @@ export const DashboardContainer = styled.div`
   ${'' /* button {
     border-radius: 0;
   } */};
+
+  .ant-layout-footer a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .ant-layout-footer a:hover {
+    text-decoration: underline;
+  }
 `;

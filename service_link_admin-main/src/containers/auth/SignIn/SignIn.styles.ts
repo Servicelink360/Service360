@@ -257,6 +257,12 @@ export const FormDiv = styled.div`
     padding: 0 32px 24px;
     font-size: 0.75rem;
     color: #9ca3af;
+    text-decoration: none;
+
+    &:hover {
+      color: #0f5c3f;
+      text-decoration: underline;
+    }
   }
 
   @media only screen and (max-width: ${breakPoint.LDPhone}px) {
