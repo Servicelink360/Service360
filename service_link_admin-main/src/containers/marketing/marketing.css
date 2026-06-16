@@ -559,17 +559,31 @@
 
 @media (max-width: 640px) {
   .marketing-site .footer-links {
-    flex-direction: column;
-    gap: 10px;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px 12px;
   }
 
   .marketing-site .footer-group {
+    flex: 1;
+    min-width: 0;
     flex-direction: column;
-    gap: 8px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 5px;
+  }
+
+  .marketing-site .footer-group-label {
+    margin-bottom: 2px;
   }
 
   .marketing-site .footer-group a {
     white-space: normal;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    text-align: left;
   }
 
   .marketing-site .footer-bottom p {
@@ -771,6 +785,10 @@
 
   .marketing-site footer {
     padding: 24px 16px 20px;
+  }
+
+  .marketing-site .footer-group a {
+    font-size: 0.65rem;
   }
 }
 
