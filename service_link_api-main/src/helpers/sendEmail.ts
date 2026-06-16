@@ -14,7 +14,12 @@ export const isMailConfigured = (): boolean => {
 const htmlToPlainText = (html: string): string =>
   html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-const SendMail = async function (to: string, subject: string, body: string) {
+const SendMail = async function (
+  to: string,
+  subject: string,
+  body: string,
+  opts?: { replyTo?: { email: string; name?: string } },
+) {
   if (!to?.trim()) {
     console.error('SendMail skipped: missing recipient');
     return false;
@@ -27,13 +32,19 @@ const SendMail = async function (to: string, subject: string, body: string) {
   }
 
   const senderName = config.MAIL_FROM_NAME || 'Service360';
-  const payload = {
+  const payload: Record<string, unknown> = {
     sender: { name: senderName, email: config.MAIL_FROM },
     to: [{ email: to.trim() }],
     subject,
     htmlContent: body,
     textContent: htmlToPlainText(body),
   };
+  if (opts?.replyTo?.email?.trim()) {
+    payload.replyTo = {
+      email: opts.replyTo.email.trim(),
+      name: opts.replyTo.name?.trim() || opts.replyTo.email.trim(),
+    };
+  }
 
   try {
     await axios.post(BREVO_SEND_URL, payload, {

@@ -31,6 +31,7 @@ import { AdminModule } from './admin/admin.module';
 import { MessagesModule } from './messages/messages.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DeployStatusController } from './deploy-status.controller';
+import { ContactModule } from './contact/contact.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -93,6 +94,7 @@ import { DeployStatusController } from './deploy-status.controller';
     AdminModule,
     MessagesModule,
     CompaniesModule,
+    ContactModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

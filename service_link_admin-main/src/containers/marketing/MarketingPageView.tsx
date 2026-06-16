@@ -1,19 +1,64 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { message } from 'antd';
+import urlConfig from '@app/config/site.config';
 import type { MarketingPage, PageSection } from './siteData';
+
+const CONTACT_INBOX = 'helpdesk@servicelink.net.au';
+
+const buildContactApiUrl = () => {
+  const base = String(urlConfig.orderApiURL || '').replace(/\/+$/, '');
+  return `${base}/v1/contact/enquiry`;
+};
 
 function ContactForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [body, setBody] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    message.success('Thank you — this demo form does not submit to a server.');
-    setName('');
-    setEmail('');
-    setBody('');
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedMessage = body.trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedMessage) {
+      message.warning('Please fill in your name, email, and message.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await fetch(buildContactApiUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          email: trimmedEmail,
+          message: trimmedMessage,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.code === 1) {
+        message.success('Thank you — your message has been sent. We will get back to you soon.');
+        setName('');
+        setEmail('');
+        setBody('');
+        return;
+      }
+      message.error(
+        data?.message ||
+          `Could not send your message. Please email ${CONTACT_INBOX} directly.`,
+      );
+    } catch {
+      message.error(`Could not send your message. Please email ${CONTACT_INBOX} directly.`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -25,6 +70,9 @@ function ContactForm() {
         placeholder="Your name"
         value={name}
         onChange={(e) => setName(e.target.value)}
+        required
+        maxLength={120}
+        disabled={submitting}
       />
       <label htmlFor="contact-email">Email</label>
       <input
@@ -33,6 +81,10 @@ function ContactForm() {
         placeholder="you@organisation.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        required
+        maxLength={200}
+        autoComplete="email"
+        disabled={submitting}
       />
       <label htmlFor="contact-message">Message</label>
       <textarea
@@ -40,9 +92,12 @@ function ContactForm() {
         placeholder="How can we help?"
         value={body}
         onChange={(e) => setBody(e.target.value)}
+        required
+        maxLength={5000}
+        disabled={submitting}
       />
-      <button type="submit" className="btn-primary">
-        Send message
+      <button type="submit" className="btn-primary" disabled={submitting}>
+        {submitting ? 'Sending…' : 'Send message'}
       </button>
     </form>
   );

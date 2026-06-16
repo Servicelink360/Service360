@@ -48,4 +48,5 @@ export default {
 
     APP_URL: process.env.APP_URL,
     SUPPORT_EMAIL: process.env.SUPPORT_EMAIL,
+    CONTACT_EMAIL: process.env.CONTACT_EMAIL,
 }
