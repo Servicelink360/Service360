@@ -52,16 +52,29 @@ export default function SignIn() {
     }
   }, []);
 
+  const readFieldValues = () => {
+    const emailInput = document.getElementById('signin-email') as HTMLInputElement | null;
+    const passwordInput = document.getElementById('signin-password') as HTMLInputElement | null;
+    const emailValue = (emailInput?.value ?? data?.email ?? '').trim();
+    const passwordValue = passwordInput?.value ?? data?.password ?? '';
+    return { emailValue, passwordValue };
+  };
+
   const handleSubmit = (): void => {
-    if (data && data?.email && data?.email !== '' && email === 1) {
-      if (data && data?.password && data?.password !== '') {
+    const { emailValue, passwordValue } = readFieldValues();
+    const emailStatus =
+      emailValue === '' ? -1 : emailValue.length >= 5 ? 1 : 0;
+
+    if (emailValue && emailStatus === 1) {
+      if (passwordValue) {
+        const submitData = { ...data, email: emailValue, password: passwordValue };
         const obj = {
-          username: data?.email,
-          password: data?.password,
+          username: emailValue,
+          password: passwordValue,
         };
-        if (data?.save) {
-          localStorage.setItem('signin', JSON.stringify(data));
-          dispatch({ type: actions.RESET_SIGNIN, payload: data });
+        if (submitData?.save) {
+          localStorage.setItem('signin', JSON.stringify(submitData));
+          dispatch({ type: actions.RESET_SIGNIN, payload: submitData });
         } else {
           localStorage.removeItem('signin');
           dispatch({ type: actions.RESET_SIGNIN, payload: '' });
@@ -90,7 +103,7 @@ export default function SignIn() {
           intl.formatMessage({ id: 'signin.forget_password' }),
         );
       }
-    } else if (email === -1) {
+    } else if (emailStatus === -1) {
       notificationComponent(
         'warning',
         3,
@@ -143,9 +156,7 @@ export default function SignIn() {
                   </div>
                 </div>
                 <h2>{intl.formatMessage({ id: 'sidebar.signin.member_signin' })}</h2>
-                <p className="subtitle">
-                  {intl.formatMessage({ id: 'sidebar.signin.member' })} — access your workspace
-                </p>
+                <p className="subtitle">Access your workspace with your member account</p>
               </div>
 
               <div className="wrapperForm">
@@ -157,8 +168,14 @@ export default function SignIn() {
                   <div className="field-input">
                     <input
                       id="signin-email"
+                      type="email"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       value={data?.email || ''}
                       onChange={handleOnChangeEmail}
+                      onInput={handleOnChangeEmail}
                       placeholder={intl.formatMessage({ id: 'profile.enter_username' })}
                       autoComplete="username"
                     />
@@ -186,7 +203,11 @@ export default function SignIn() {
                       id="signin-password"
                       value={data?.password || ''}
                       onChange={(e) => setData({ ...data, password: e.target.value })}
+                      onInput={(e) => setData({ ...data, password: e.currentTarget.value })}
                       type={showPassword ? 'text' : 'password'}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       placeholder={intl.formatMessage({ id: 'sidebar.users.enter_password' })}
                       autoComplete="current-password"
                     />

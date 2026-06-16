@@ -42,6 +42,7 @@ export const SignInBody = styled.div`
   align-items: center;
   justify-content: center;
   padding: 40px 5% 64px;
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
   position: relative;
   width: 100%;
 
@@ -191,13 +192,23 @@ export const FormDiv = styled.div`
         outline: none;
         background: transparent;
         padding: 12px 0;
-        font-size: 0.95rem;
+        /* 16px prevents iOS Safari zoom-on-focus, which breaks the login layout */
+        font-size: 16px;
+        line-height: 1.25;
         color: #111827;
-        font-family: inherit;
+        /* System font: custom webfonts break password bullets on iOS (show as long lines) */
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        letter-spacing: normal;
         min-width: 0;
+        -webkit-text-size-adjust: 100%;
 
         &::placeholder {
           color: #9ca3af;
+          font-size: 16px;
+        }
+
+        &[type='password'] {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
       }
 
