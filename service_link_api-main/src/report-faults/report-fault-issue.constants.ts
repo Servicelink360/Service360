@@ -14,6 +14,7 @@ export const REPORT_FAULT_ISSUE_OPTIONS = [
   { id: 'Toilet Blockage', name: 'Toilet Blockage' },
   { id: 'Toilet Paper Dispenser Broken/Damaged', name: 'Toilet Paper Dispenser Broken/Damaged' },
   { id: 'Urinal Blockage', name: 'Urinal Blockage' },
+  { id: 'Vandalism', name: 'Vandalism' },
   { id: 'Wall Damage', name: 'Wall Damage' },
   { id: 'Water Leaks', name: 'Water Leaks' },
   { id: 'Other', name: 'Other' },
