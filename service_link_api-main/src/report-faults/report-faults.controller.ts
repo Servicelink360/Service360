@@ -34,6 +34,13 @@ export class ReportFaultsController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Get('issueOptions')
+  async getIssueOptions(@Res() res) {
+    return customHttpCode(res, this.reportFaultsService.getIssueOptions());
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Get('findAllGroupByDate')
   async findAllGroupByDate(@Res() res, @Query() body: GetReportFaultsDto, @Request() req) {
     const user: IUserInfo = req.user;

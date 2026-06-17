@@ -25,6 +25,7 @@ import {
 } from '../helpers/customer-scope';
 import { Customer } from '../users/entities/customer.entity';
 import { CustomerNotificationsService } from '../users/customer-notifications.service';
+import { REPORT_FAULT_ISSUE_OPTIONS } from './report-fault-issue.constants';
 
 @Injectable()
 export class ReportFaultsService {
@@ -148,6 +149,13 @@ export class ReportFaultsService {
     @Inject('winston') private readonly logger: Logger,
     private readonly customerNotifications: CustomerNotificationsService,
   ) { }
+
+  getIssueOptions() {
+    return {
+      ...errorCode.SUCCESS,
+      data: REPORT_FAULT_ISSUE_OPTIONS.map((o) => ({ id: o.id, name: o.name })),
+    };
+  }
 
   /** Tables may lack SERIAL/IDENTITY on id (legacy MySQL-style schema). */
   private async nextTableId(

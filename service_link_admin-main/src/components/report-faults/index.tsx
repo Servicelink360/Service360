@@ -38,11 +38,12 @@ type IProps = {
     data: any
     title: string
     sites: any[]
+    issueOptions?: { id: string; name: string }[]
     uiDark?: boolean
 }
 
 const ReportFaultModal = (props: IProps) => {
-    const { modalType, isSuccess, loadingAction, data, title, sites, uiDark } = props
+    const { modalType, isSuccess, loadingAction, data, title, sites, issueOptions, uiDark } = props
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
@@ -463,6 +464,11 @@ const ReportFaultModal = (props: IProps) => {
         companyName: c.companyName || c.customerInfo?.companyName || c.fullName || `#${c.id}`,
     }));
 
+    const issueSelectOptions = useMemo(
+        () => (issueOptions?.length ? issueOptions : [...REPORT_FAULT_ISSUE_OPTIONS]),
+        [issueOptions],
+    );
+
     const siteOptionsWithOther = useMemo(() => {
         let base = sites;
         if (data?.siteId) {
@@ -575,7 +581,7 @@ const ReportFaultModal = (props: IProps) => {
                                     name="issue"
                                     allowClear={false}
                                     label="Issues"
-                                    options={[...REPORT_FAULT_ISSUE_OPTIONS]}
+                                    options={issueSelectOptions}
                                     className="break-line"
                                     optionValue="id"
                                     optionLabel="name"

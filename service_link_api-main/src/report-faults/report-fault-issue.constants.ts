@@ -1,8 +1,8 @@
-/** Fallback when API issueOptions is unavailable (keep in sync with API report-fault-issue.constants). */
+/** Predefined issue types for report fault create/edit. */
 export const REPORT_FAULT_ISSUE_OPTIONS = [
   { id: 'Broken Door Locks & Latches', name: 'Broken Door Locks & Latches' },
   { id: 'Broken Grab Rails / Accessible Fixtures', name: 'Broken Grab Rails / Accessible Fixtures' },
-  { id: 'Door Won\'t Open / Stuck Shut', name: 'Door Won\'t Open / Stuck Shut' },
+  { id: "Door Won't Open / Stuck Shut", name: "Door Won't Open / Stuck Shut" },
   { id: 'Faulty Flush Mechanisms', name: 'Faulty Flush Mechanisms' },
   { id: 'Graffiti', name: 'Graffiti' },
   { id: 'Light Bulb Burned Out', name: 'Light Bulb Burned Out' },
