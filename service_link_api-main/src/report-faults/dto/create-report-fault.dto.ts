@@ -8,6 +8,9 @@ export class CreateReportFaultDto {
     @ApiProperty()
     issue: string
 
+    @ApiProperty({ required: false })
+    toiletArea?: string
+
     @ApiProperty()
     customerId: number
 

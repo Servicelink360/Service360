@@ -5,6 +5,7 @@ import moment from "moment";
 import React from "react";
 import { Link } from "react-router-dom";
 import { userType } from "../../constants/statusUser";
+import { isPublicAmenitiesCleaningService } from "../../constants/reportFaultToiletArea";
 
 const valueStyle: React.CSSProperties = {
   fontSize: 14,
@@ -161,6 +162,10 @@ const FaultReportViewModal: React.FC<Props> = ({
   const created = record.createdAt || record.updatedAt;
   const customerLabel =
     record.companyName || record.customerName || record.customer?.fullName || "—";
+  const toiletArea =
+    String(record.toiletArea ?? record.toilet_area ?? "").trim() || "";
+  const showToiletArea =
+    Boolean(toiletArea) || isPublicAmenitiesCleaningService(record.serviceName);
   const canMessage =
     (viewerType === userType.ADMIN || viewerType === userType.CUSTOMER) && Boolean(faultId);
 
@@ -236,6 +241,12 @@ const FaultReportViewModal: React.FC<Props> = ({
           {record.issue?.trim() || record.subject?.trim() || "—"}
         </MetaInline>
       </div>
+
+      {showToiletArea ? (
+        <div style={{ marginTop: 16 }}>
+          <MetaInline label="Toilet">{toiletArea || "—"}</MetaInline>
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 16 }}>
         <Field label="Message" compactValue>

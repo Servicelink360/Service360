@@ -61,12 +61,17 @@ const hawbReducer = (state = initialState, action: any) => {
             return {
                 ...initialState,
             }
-        case actions.MODAL:
+        case actions.MODAL: {
+            const payload =
+                action.payload && typeof action.payload === 'object'
+                    ? action.payload
+                    : { modalType: null, row: {} };
             return {
                 ...state,
-                modalType: action.payload.modalType,
-                row: action.payload.row,
-            }
+                modalType: payload.modalType ?? null,
+                row: payload.row ?? {},
+            };
+        }
         case actions.SAVE_INTO:
             return {
                 ...state,

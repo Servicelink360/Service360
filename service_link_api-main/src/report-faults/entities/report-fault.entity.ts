@@ -13,6 +13,9 @@ export class ReportFault  extends BaseEntity{
     @Column({ nullable: true })
     issue: string
 
+    @Column({ name: 'toilet_area', nullable: true })
+    toiletArea?: string | null
+
     @Column({ name: 'customer_id' })
     customerId: number
 

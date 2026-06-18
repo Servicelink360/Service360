@@ -1,12 +1,9 @@
 import { PUBLIC_ROUTE } from '@app/route.constants';
 import type { PageSection } from './siteData';
-import { LEGAL_OPERATOR, LEGAL_PRODUCT, LEGAL_WEBSITE } from './legalContent';
+import { LEGAL_WEBSITE } from './legalContent';
 
 export const ABOUT_SECTIONS: PageSection[] = [
-  {
-    type: 'paragraph',
-    text: `${LEGAL_PRODUCT} is a cloud facility management platform operated by ${LEGAL_OPERATOR}. We help property teams, facilities contractors, and organisations run day-to-day operations from one secure workspace — without spreadsheets, disconnected tools, or shared data between customers.`,
-  },
+  { type: 'paragraph', text: 'about-intro' },
   { type: 'heading', text: 'What we do' },
   {
     type: 'paragraph',

@@ -34,6 +34,7 @@ const crmEndPoint = {
     USER_TASKS: 'v1/user-tasks',
     USER_DAILY_JOBS: 'v1/user-daily-jobs',
     REPORT_FAULTS: 'v1/report-faults',
+    FAULT_ISSUES: 'v1/fault-issues',
     MESSAGES: 'v1/messages',
     /** Multipart upload (must match API UploadController version prefix). */
     UPLOAD_FILE: 'v1/uploadFile',

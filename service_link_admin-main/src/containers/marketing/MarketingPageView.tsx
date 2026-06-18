@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { message } from 'antd';
 import urlConfig from '@app/config/site.config';
 import type { MarketingPage, PageSection } from './siteData';
+import {
+  LEGAL_OPERATOR,
+  LEGAL_OPERATOR_WEBSITE,
+  LEGAL_PRODUCT,
+} from './legalContent';
 
 const CONTACT_INBOX = 'helpdesk@servicelink.net.au';
 
@@ -110,6 +115,19 @@ function renderSection(section: PageSection, index: number) {
     case 'paragraph':
       if (section.text === 'contact-form') {
         return <ContactForm key={index} />;
+      }
+      if (section.text === 'about-intro') {
+        return (
+          <p key={index}>
+            {LEGAL_PRODUCT} is a cloud facility management platform operated by{' '}
+            <a href={LEGAL_OPERATOR_WEBSITE} target="_blank" rel="noopener noreferrer">
+              {LEGAL_OPERATOR}
+            </a>
+            . We help property teams, facilities contractors, and organisations run day-to-day
+            operations from one secure workspace — without spreadsheets, disconnected tools, or
+            shared data between customers.
+          </p>
+        );
       }
       return (
         <p key={index}>

@@ -32,6 +32,7 @@ import { MessagesModule } from './messages/messages.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DeployStatusController } from './deploy-status.controller';
 import { ContactModule } from './contact/contact.module';
+import { FaultIssuesModule } from './fault-issues/fault-issues.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -95,6 +96,7 @@ import { ContactModule } from './contact/contact.module';
     MessagesModule,
     CompaniesModule,
     ContactModule,
+    FaultIssuesModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

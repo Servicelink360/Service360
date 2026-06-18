@@ -3,6 +3,7 @@ import {
   ArrowLeftOutlined,
   DeleteOutlined,
   InboxOutlined,
+  InfoCircleOutlined,
   MailOutlined,
   PaperClipOutlined,
   PlusOutlined,
@@ -24,6 +25,7 @@ import {
   Spin,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   Upload,
   message,
@@ -1889,16 +1891,33 @@ const MessagesPage: React.FC = () => {
         {isCustomer || isStaff ? (
           <>
             <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              Choose a Servicelink admin or a colleague. You can attach files after opening the
-              conversation.
+              Choose a Service Provider or one of My Colleagues. You can attach files after opening
+              the conversation.{' '}
+              <Tooltip
+                title={
+                  <>
+                    Pick <strong>one</strong> person to message — either a Service Provider
+                    (Servicelink) or a colleague from My Colleagues, not both.
+                    <br />
+                    <br />
+                    After you click <strong>Start conversation</strong>, type your message in the
+                    chat panel. Use the attach button there to attach photos or documents.
+                  </>
+                }
+              >
+                <InfoCircleOutlined
+                  style={{ color: ui.textMuted ?? 'rgba(0, 0, 0, 0.45)', cursor: 'help' }}
+                  aria-label="How to start a new message"
+                />
+              </Tooltip>
             </Text>
             <Text strong style={{ display: 'block', marginBottom: 8 }}>
-              Admin
+              Service Provider
             </Text>
             <Select
               showSearch
               allowClear
-              placeholder="Select admin"
+              placeholder="Select service provider"
               style={{ width: '100%' }}
               loading={loadingRecipients}
               value={newMessageAdminId ?? undefined}
@@ -1914,12 +1933,12 @@ const MessagesPage: React.FC = () => {
             />
             <Divider style={{ margin: '16px 0' }} />
             <Text strong style={{ display: 'block', marginBottom: 8 }}>
-              Colleague
+              My Colleagues
             </Text>
             <Select
               showSearch
               allowClear
-              placeholder={isStaff ? 'Select staff colleague' : 'Select customer colleague'}
+              placeholder="Select a colleague"
               style={{ width: '100%' }}
               loading={loadingRecipients}
               value={newMessageColleagueId ?? undefined}

@@ -25,7 +25,8 @@ import {
 } from '../helpers/customer-scope';
 import { Customer } from '../users/entities/customer.entity';
 import { CustomerNotificationsService } from '../users/customer-notifications.service';
-import { REPORT_FAULT_ISSUE_OPTIONS } from './report-fault-issue.constants';
+import { FaultIssuesService } from '../fault-issues/fault-issues.service';
+import { isPublicAmenitiesCleaningService } from './report-fault-toilet-area.constants';
 
 @Injectable()
 export class ReportFaultsService {
@@ -148,13 +149,15 @@ export class ReportFaultsService {
     @InjectRepository(ReportFaultAnswer) private readonly reportFaultAnswersRepository: Repository<ReportFaultAnswer>,
     @Inject('winston') private readonly logger: Logger,
     private readonly customerNotifications: CustomerNotificationsService,
+    private readonly faultIssuesService: FaultIssuesService,
   ) { }
 
-  getIssueOptions() {
-    return {
-      ...errorCode.SUCCESS,
-      data: REPORT_FAULT_ISSUE_OPTIONS.map((o) => ({ id: o.id, name: o.name })),
-    };
+  getIssueOptions(serviceId?: string | number) {
+    return this.faultIssuesService.getIssueOptionsForService(
+      serviceId != null && String(serviceId).trim() !== ''
+        ? +serviceId
+        : undefined,
+    );
   }
 
   /** Tables may lack SERIAL/IDENTITY on id (legacy MySQL-style schema). */
@@ -258,6 +261,22 @@ export class ReportFaultsService {
       if (!issue) {
         return { ...errorCode.VALIDATION_ERROR, message: 'Issue is required' };
       }
+      const issueAllowed = await this.faultIssuesService.isIssueAllowedForService(
+        +body.serviceId,
+        issue,
+      );
+      if (!issueAllowed) {
+        return {
+          ...errorCode.VALIDATION_ERROR,
+          message: 'Selected issue is not valid for this service',
+        };
+      }
+
+      const serviceName = body.serviceName?.trim() ?? '';
+      const toiletArea = body.toiletArea?.trim() ?? '';
+      if (isPublicAmenitiesCleaningService(serviceName) && !toiletArea) {
+        return { ...errorCode.VALIDATION_ERROR, message: 'Toilet is required' };
+      }
 
       const message = body.message?.trim() ?? '';
 
@@ -293,6 +312,7 @@ export class ReportFaultsService {
       reportFault.siteName = body.siteName?.trim() ?? '';
       reportFault.subject = issue;
       reportFault.issue = issue;
+      reportFault.toiletArea = toiletArea || null;
       reportFault.status = reportFaultStatus.PENDING;
       reportFault.createdBy = +userInfo.userId;
       reportFault.updatedBy = +userInfo.userId;
@@ -481,6 +501,7 @@ export class ReportFaultsService {
       id: fault.id,
       subject: fault.subject,
       issue: fault.issue,
+      toiletArea: fault.toiletArea ?? null,
       message: answer.message,
       attachFiles: answer.attachFiles,
       createdAt: answer.createdAt,
@@ -746,8 +767,24 @@ export class ReportFaultsService {
       }
       if (body.subject !== undefined)
         data.subject = body.subject;
-      if (body.issue !== undefined)
-        data.issue = body.issue?.trim() ?? '';
+      if (body.issue !== undefined) {
+        const issue = body.issue?.trim() ?? '';
+        const serviceId = body.serviceId !== undefined ? +body.serviceId : +data.serviceId;
+        if (issue) {
+          const issueAllowed = await this.faultIssuesService.isIssueAllowedForService(
+            serviceId,
+            issue,
+          );
+          if (!issueAllowed) {
+            return {
+              ...errorCode.VALIDATION_ERROR,
+              message: 'Selected issue is not valid for this service',
+            };
+          }
+        }
+        data.issue = issue;
+        data.subject = issue;
+      }
       if (body.message !== undefined)
         data.message = body.message;
       if (body.customerId !== undefined)
@@ -771,6 +808,15 @@ export class ReportFaultsService {
         data.subject = body.subject;
       if (body.companyName !== undefined)
         data.companyName = body.companyName;
+      if (body.toiletArea !== undefined) {
+        const toiletArea = body.toiletArea?.trim() ?? '';
+        const serviceName =
+          body.serviceName !== undefined ? body.serviceName?.trim() ?? '' : data.serviceName;
+        if (isPublicAmenitiesCleaningService(serviceName) && !toiletArea) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'Toilet is required' };
+        }
+        data.toiletArea = toiletArea || null;
+      }
       data.updatedBy = userInfo.userId;
       data.updatedAt = new Date();
       const newItem = await this.reportFaultsRepository.update(+id, data);

@@ -373,7 +373,6 @@ const ReportFaults: React.FC = () => {
     const { loading, rows: reduxRows, row, success, modalType, count, loadingAction } = useSelector((state: any) => state?.reportFaults);
     const dispatch = useDispatch();
     const [sites, setSites] = useState<any[]>([]);
-    const [issueOptions, setIssueOptions] = useState<{ id: string; name: string }[]>([]);
     const [viewFaultOpen, setViewFaultOpen] = useState(false);
     const [viewFaultRow, setViewFaultRow] = useState<any | null>(null);
     const [listRows, setListRows] = useState<any[]>([]);
@@ -588,15 +587,9 @@ const ReportFaults: React.FC = () => {
     }, [history, location.search]);
 
     const getFilter = async () => {
-        const [sitesRes, issuesRes] = await Promise.all([
-            callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getSites`, 'GET'),
-            callAPIAsync(serviceType.COMMON, `${endPoint.REPORT_FAULTS}/issueOptions`, 'GET'),
-        ]);
+        const sitesRes = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getSites`, 'GET');
         if (sitesRes?.data) {
             setSites(sitesRes.data);
-        }
-        if (issuesRes?.data) {
-            setIssueOptions(issuesRes.data);
         }
     }
 
@@ -1969,7 +1962,6 @@ const ReportFaults: React.FC = () => {
                     modalType={modalType}
                     isSuccess={success}
                     sites={sites}
-                    issueOptions={issueOptions}
                     uiDark={modalUiDark}
                 />
             ) : null}

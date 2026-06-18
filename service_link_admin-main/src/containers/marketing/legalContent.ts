@@ -3,6 +3,7 @@ import type { PageSection } from './siteData';
 
 export const LEGAL_EFFECTIVE_DATE = '16 June 2026';
 export const LEGAL_OPERATOR = 'SERVICELINK';
+export const LEGAL_OPERATOR_WEBSITE = 'https://servicelink.net.au/';
 export const LEGAL_PRODUCT = 'Service360';
 export const LEGAL_WEBSITE = 'https://service360.com.au';
 export const LEGAL_JURISDICTION = 'New South Wales, Australia';

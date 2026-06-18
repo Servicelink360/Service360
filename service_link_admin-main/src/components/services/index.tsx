@@ -16,6 +16,7 @@ import {
   normalizeServiceFrequencyType,
   resolveServiceFrequencyType,
 } from '@app/library/helpers/serviceFrequencyType'
+import ServiceFaultIssuesPanel from './service-fault-issues-panel'
 
 type IProps = {
     loadingAction: boolean
@@ -75,6 +76,10 @@ const Index = (props: IProps) => {
         }
     }
 
+    const closeModal = () => {
+        dispatch({ type: actions.MODAL, payload: { modalType: null, row: {} } });
+    };
+
     const ActionBTN = () => {
         return (<>
             <ActionHeaderModalWrap>
@@ -106,7 +111,7 @@ const Index = (props: IProps) => {
                 <ActionBtn
                     type="secondary"
                     icon={<CloseCircleOutlined />}
-                    onClick={() => dispatch({ type: actions.MODAL, payload: '' })}
+                    onClick={closeModal}
                 >
                     {intl.formatMessage({ id: 'button.Close' })}
                 </ActionBtn>
@@ -116,10 +121,11 @@ const Index = (props: IProps) => {
 
     return (
         <Modal
-            visible={modalType ? true : false}
-            onCancel={() => dispatch({ type: actions.MODAL, payload: null })}
+            open={Boolean(modalType)}
+            onCancel={closeModal}
             title={title}
             closable={false}
+            maskClosable={false}
             width={900}
             footer={null}
         >
@@ -178,6 +184,15 @@ const Index = (props: IProps) => {
                             </Fieldset>
                         </Col>
                     </Row>
+                    {data?.id ? (
+                        <Row>
+                            <Col md={12} sm={12} xs={24} className="r-padding-media-max-576">
+                                <Fieldset>
+                                    <ServiceFaultIssuesPanel serviceId={+data.id} />
+                                </Fieldset>
+                            </Col>
+                        </Row>
+                    ) : null}
                 </Form>
             </BodyModalWrap>
             <FooterModalWrap style={{ borderTop: '1px solid rgb(240, 240, 240)' }}>

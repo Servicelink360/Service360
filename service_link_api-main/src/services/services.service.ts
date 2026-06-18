@@ -20,6 +20,7 @@ import {
   normalizeServiceFrequencyType,
   resolveServiceFrequencyType,
 } from './service-frequency.util';
+import { FaultIssuesService } from '../fault-issues/fault-issues.service';
 
 @Injectable()
 export class ServicesService {
@@ -28,6 +29,7 @@ export class ServicesService {
     @InjectRepository(ServiceActivity)
     private readonly serviceActivitiesRepository: Repository<ServiceActivity>,
     @Inject('winston') private readonly logger: Logger,
+    private readonly faultIssuesService: FaultIssuesService,
   ) { }
   async getAll() {
     const data = await this.servicesRepository.createQueryBuilder('services')
@@ -57,6 +59,7 @@ export class ServicesService {
       if (!newItem) {
         return errorCode.EXCEPTION;
       }
+      await this.faultIssuesService.ensureOtherOnService(newItem.id);
       return { ...errorCode.SUCCESS, data: { id: newItem.id } };
     } catch (error) {
       console.log("error", error);

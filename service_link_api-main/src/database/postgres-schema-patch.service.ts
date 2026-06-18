@@ -95,6 +95,10 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     }
 
     await this.ensureReportTemplateServicesTable();
+    await this.ensureFaultIssuesTables();
+    await this.ensureRoofGutterFaultIssues();
+    await this.ensureGroundMaintenanceFaultIssues();
+    await this.ensureReportFaultToiletAreaColumn();
     await this.applyRenameDepartmentsToServices();
 
     try {
@@ -1461,5 +1465,368 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       [String(seq)],
     );
     this.logger.log(`${table}.id sequence synced: ${seq}`);
+  }
+
+  /** fault_issues catalog + per-service links for report fault create. */
+  private async ensureFaultIssuesTables(): Promise<void> {
+    const patchName = 'fault_issues_v1';
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.schema_patches_applied (
+          name VARCHAR(120) PRIMARY KEY,
+          applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.fault_issues (
+          id SERIAL PRIMARY KEY,
+          label VARCHAR(200) NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          CONSTRAINT uq_fault_issues_label UNIQUE (label)
+        );
+      `);
+
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.service_fault_issues (
+          service_id INT NOT NULL,
+          fault_issue_id INT NOT NULL,
+          sort_order INT NOT NULL DEFAULT 0,
+          PRIMARY KEY (service_id, fault_issue_id)
+        );
+      `);
+
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_service_fault_issues_service_id
+          ON public.service_fault_issues (service_id);
+      `);
+
+      await this.dataSource.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'fk_sfi_service'
+          ) THEN
+            ALTER TABLE public.service_fault_issues
+              ADD CONSTRAINT fk_sfi_service
+              FOREIGN KEY (service_id)
+              REFERENCES public.services(id) ON DELETE CASCADE;
+          END IF;
+        END$$;
+      `);
+
+      await this.dataSource.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'fk_sfi_fault_issue'
+          ) THEN
+            ALTER TABLE public.service_fault_issues
+              ADD CONSTRAINT fk_sfi_fault_issue
+              FOREIGN KEY (fault_issue_id)
+              REFERENCES public.fault_issues(id) ON DELETE CASCADE;
+          END IF;
+        END$$;
+      `);
+
+      const applied = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (applied?.length) {
+        this.logger.log('fault_issues seed already applied');
+        return;
+      }
+
+      const seedLabels = [
+        'Broken Door Locks & Latches',
+        'Broken Grab Rails / Accessible Fixtures',
+        "Door Won't Open / Stuck Shut",
+        'Faulty Flush Mechanisms',
+        'Graffiti',
+        'Light Bulb Burned Out',
+        'No Lights',
+        'Paper Towel Dispenser Broken/Damaged',
+        'Slippery Floor / Flooding',
+        'Soap Dispenser Broken/Damaged',
+        'Tap or Urinal Running',
+        'Toilet Blockage',
+        'Toilet Paper Dispenser Broken/Damaged',
+        'Urinal Blockage',
+        'Vandalism',
+        'Wall Damage',
+        'Water Leaks',
+        'Other',
+      ];
+
+      for (let i = 0; i < seedLabels.length; i++) {
+        await this.dataSource.query(
+          `INSERT INTO public.fault_issues (label, sort_order, is_active)
+           VALUES ($1, $2, true)
+           ON CONFLICT (label) DO NOTHING`,
+          [seedLabels[i], i],
+        );
+      }
+
+      const services: { id: number; name: string }[] = await this.dataSource.query(
+        `SELECT id, name FROM public.services`,
+      );
+
+      const otherRow: { id: number }[] = await this.dataSource.query(
+        `SELECT id FROM public.fault_issues WHERE label = 'Other' LIMIT 1`,
+      );
+      const otherId = otherRow?.[0]?.id;
+
+      for (const service of services ?? []) {
+        if (otherId) {
+          await this.dataSource.query(
+            `INSERT INTO public.service_fault_issues (service_id, fault_issue_id, sort_order)
+             VALUES ($1, $2, 9999)
+             ON CONFLICT (service_id, fault_issue_id) DO NOTHING`,
+            [service.id, otherId],
+          );
+        }
+
+        if (/public amenities/i.test(String(service.name ?? ''))) {
+          const issueRows: { id: number; label: string }[] = await this.dataSource.query(
+            `SELECT id, label FROM public.fault_issues WHERE label <> 'Other' ORDER BY sort_order, label`,
+          );
+          for (let i = 0; i < issueRows.length; i++) {
+            await this.dataSource.query(
+              `INSERT INTO public.service_fault_issues (service_id, fault_issue_id, sort_order)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (service_id, fault_issue_id) DO NOTHING`,
+              [service.id, issueRows[i].id, i],
+            );
+          }
+        }
+      }
+
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('fault_issues tables ensured and seed applied');
+    } catch (e) {
+      this.logger.warn(`fault_issues patch: ${(e as Error).message}`);
+    }
+  }
+
+  /** Roof and gutter service fault issues for Report Fault issue dropdowns. */
+  private async ensureRoofGutterFaultIssues(): Promise<void> {
+    const patchName = 'fault_issues_roof_gutter_v1';
+    try {
+      const applied = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (applied?.length) {
+        this.logger.log('roof gutter fault_issues seed already applied');
+        return;
+      }
+
+      const seedLabels = [
+        'Overhanging branches dropping leaves, twigs, and sap onto the roof',
+        'Leaf litter and debris clogging gutters',
+        'Leaf litter and debris clogging downpipes',
+        'Moss growth on roof tiles from tree shade',
+        'Lichen and algae growth trapping moisture',
+        'Branches rubbing against tiles, causing wear',
+        'Sap and berry residue promoting fungal growth',
+        'Tree roots blocking underground downpipes',
+        'Falling branches cracking roof tiles',
+        'Falling branches denting or splitting gutters',
+        'Gutters completely blocked with compacted debris',
+        'Downpipes jammed at bends or outlets',
+        'Gutters overflowing during rain',
+        'Standing water in gutters from poor slope',
+        'Sagging gutters from heavy debris weight',
+        'Rust in gutters from wet decomposing leaves',
+        'Corrosion and holes forming in gutters',
+        'Cracked or split gutters from branch impact',
+        'Leaking joints from broken sealant',
+        'Damaged or missing roof tiles',
+        'Lifted or curled tiles from trapped moisture',
+        'Rotten fascia boards from water overflow',
+        'Rotten soffit boards from water overflow',
+        'Downspouts discharging too close to foundation',
+        'Tree roots invading stormwater drainage',
+      ];
+
+      const catalogBaseSort = 100;
+      for (let i = 0; i < seedLabels.length; i++) {
+        await this.dataSource.query(
+          `INSERT INTO public.fault_issues (label, sort_order, is_active)
+           VALUES ($1, $2, true)
+           ON CONFLICT (label) DO NOTHING`,
+          [seedLabels[i], catalogBaseSort + i],
+        );
+      }
+
+      const services: { id: number; name: string }[] = await this.dataSource.query(
+        `SELECT id, name FROM public.services`,
+      );
+
+      const issueRows: { id: number; label: string }[] = await this.dataSource.query(
+        `SELECT id, label FROM public.fault_issues
+         WHERE label = ANY($1::text[])
+         ORDER BY sort_order, label`,
+        [seedLabels],
+      );
+
+      const otherRow: { id: number }[] = await this.dataSource.query(
+        `SELECT id FROM public.fault_issues WHERE label = 'Other' LIMIT 1`,
+      );
+      const otherId = otherRow?.[0]?.id;
+
+      const isRoofGutterService = (name: string) =>
+        /^roof\s*(and|&)\s*gutter/i.test(String(name ?? '').trim());
+
+      for (const service of services ?? []) {
+        if (!isRoofGutterService(service.name)) continue;
+
+        if (otherId) {
+          await this.dataSource.query(
+            `INSERT INTO public.service_fault_issues (service_id, fault_issue_id, sort_order)
+             VALUES ($1, $2, 9999)
+             ON CONFLICT (service_id, fault_issue_id) DO NOTHING`,
+            [service.id, otherId],
+          );
+        }
+
+        for (let i = 0; i < issueRows.length; i++) {
+          await this.dataSource.query(
+            `INSERT INTO public.service_fault_issues (service_id, fault_issue_id, sort_order)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (service_id, fault_issue_id) DO NOTHING`,
+            [service.id, issueRows[i].id, i],
+          );
+        }
+      }
+
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('roof gutter fault_issues seed applied');
+    } catch (e) {
+      this.logger.warn(`roof gutter fault_issues patch: ${(e as Error).message}`);
+    }
+  }
+
+  /** Ground maintenance service fault issues for Report Fault issue dropdowns. */
+  private async ensureGroundMaintenanceFaultIssues(): Promise<void> {
+    const patchName = 'fault_issues_ground_maintenance_v1';
+    try {
+      const applied = await this.dataSource.query(
+        `SELECT 1 FROM public.schema_patches_applied WHERE name = $1 LIMIT 1`,
+        [patchName],
+      );
+      if (applied?.length) {
+        this.logger.log('ground maintenance fault_issues seed already applied');
+        return;
+      }
+
+      const seedLabels = [
+        'Weeds infesting garden beds and lawns',
+        'Dead or dying plants and shrubs needing removal',
+        'Overgrown hedges blocking pathways',
+        'Overgrown hedges blocking windows',
+        'Tree branches hanging low over footpaths',
+        'Tree branches hanging low over driveways',
+        'Tree roots lifting and cracking paved pathways',
+        'Tree roots cracking and damaging retaining walls',
+        'Uneven or sunken paving creating trip hazards',
+        'Cracked or broken concrete paths',
+        'Cracked or broken concrete driveways',
+        'Loose or missing paving stones',
+        'Mulch depleted or missing from garden beds',
+        'Soil erosion on slopes or embankments',
+        'Poor drainage causing puddles and boggy areas',
+        'Blocked surface drains or grates',
+        'Downpipe outlets flooding garden beds',
+        'Sprinkler system broken or leaking',
+        'Irrigation heads blocked or misaligned',
+        'Fences leaning, damaged, or rotting',
+        'Gates not closing or latching properly',
+        'Rust or corrosion on metal gates and fences',
+        'Paint peeling or flaking on fences',
+        'Decking boards rotting, warped, or loose',
+        'General rubbish and green waste scattered around',
+      ];
+
+      const catalogBaseSort = 200;
+      for (let i = 0; i < seedLabels.length; i++) {
+        await this.dataSource.query(
+          `INSERT INTO public.fault_issues (label, sort_order, is_active)
+           VALUES ($1, $2, true)
+           ON CONFLICT (label) DO NOTHING`,
+          [seedLabels[i], catalogBaseSort + i],
+        );
+      }
+
+      const services: { id: number; name: string }[] = await this.dataSource.query(
+        `SELECT id, name FROM public.services`,
+      );
+
+      const issueRows: { id: number; label: string }[] = await this.dataSource.query(
+        `SELECT id, label FROM public.fault_issues
+         WHERE label = ANY($1::text[])
+         ORDER BY sort_order, label`,
+        [seedLabels],
+      );
+
+      const otherRow: { id: number }[] = await this.dataSource.query(
+        `SELECT id FROM public.fault_issues WHERE label = 'Other' LIMIT 1`,
+      );
+      const otherId = otherRow?.[0]?.id;
+
+      const isGroundMaintenanceService = (name: string) =>
+        /^ground\s*maintenance$/i.test(String(name ?? '').trim());
+
+      for (const service of services ?? []) {
+        if (!isGroundMaintenanceService(service.name)) continue;
+
+        if (otherId) {
+          await this.dataSource.query(
+            `INSERT INTO public.service_fault_issues (service_id, fault_issue_id, sort_order)
+             VALUES ($1, $2, 9999)
+             ON CONFLICT (service_id, fault_issue_id) DO NOTHING`,
+            [service.id, otherId],
+          );
+        }
+
+        for (let i = 0; i < issueRows.length; i++) {
+          await this.dataSource.query(
+            `INSERT INTO public.service_fault_issues (service_id, fault_issue_id, sort_order)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (service_id, fault_issue_id) DO NOTHING`,
+            [service.id, issueRows[i].id, i],
+          );
+        }
+      }
+
+      await this.dataSource.query(
+        `INSERT INTO public.schema_patches_applied (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+        [patchName],
+      );
+      this.logger.log('ground maintenance fault_issues seed applied');
+    } catch (e) {
+      this.logger.warn(`ground maintenance fault_issues patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureReportFaultToiletAreaColumn(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS toilet_area VARCHAR(64) NULL;
+      `);
+      this.logger.log('report_faults.toilet_area ensured');
+    } catch (e) {
+      this.logger.warn(`report_faults toilet_area patch: ${(e as Error).message}`);
+    }
   }
 }

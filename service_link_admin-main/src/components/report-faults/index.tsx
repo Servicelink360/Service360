@@ -24,12 +24,17 @@ import { notificationComponent } from '@app/components/common/Notification/index
 import FormSelect from "@app/components/common/FormItem/Select";
 import SvCheckBox from '../common/FormItem/Checkbox'
 import { userType } from '../../constants/statusUser'
-import { REPORT_FAULT_ISSUE_OPTIONS } from '../../constants/reportFaultIssues'
 import {
     isOtherSiteId,
     OTHER_SITE_ID,
     OTHER_SITE_OPTION,
 } from '../../constants/reportFaultSites'
+import {
+    isPublicAmenitiesCleaningService,
+    REPORT_FAULT_TOILET_AREA_OPTIONS,
+} from '../../constants/reportFaultToiletArea'
+
+type IssueOption = { id: string; name: string }
 
 type IProps = {
     loadingAction: boolean
@@ -38,22 +43,25 @@ type IProps = {
     data: any
     title: string
     sites: any[]
-    issueOptions?: { id: string; name: string }[]
     uiDark?: boolean
 }
 
 const ReportFaultModal = (props: IProps) => {
-    const { modalType, isSuccess, loadingAction, data, title, sites, issueOptions, uiDark } = props
+    const { modalType, isSuccess, loadingAction, data, title, sites, uiDark } = props
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
     const [open, setOpen] = useState(true)
     const [form] = Form.useForm()
+    const watchedServiceId = Form.useWatch('serviceId', form)
     const [services, setServices] = useState<any[]>([])
     const [customers, setCustomers] = useState<any[]>([])
     const [selectedSiteId, setSelectedSiteId] = useState<number | undefined>()
     const [isOtherSite, setIsOtherSite] = useState(false)
     const [staffAssignment, setStaffAssignment] = useState<any>(null)
+    const [serviceIssueOptions, setServiceIssueOptions] = useState<IssueOption[]>([])
+    const [issuesLoading, setIssuesLoading] = useState(false)
+    const [resolvedServiceId, setResolvedServiceId] = useState<string | number | undefined>()
 
     const tmpFileList: any[] = [];
     if (data && data.attachFiles) {
@@ -87,6 +95,31 @@ const ReportFaultModal = (props: IProps) => {
 
     const isStaffUser = profile && +profile.type === userType.STAFF
     const hideDeptCustomerForStaff = isStaffUser && !data
+
+    const activeServiceName = useMemo(() => {
+        if (hideDeptCustomerForStaff && staffAssignment?.serviceName) {
+            return staffAssignment.serviceName
+        }
+        const serviceId = watchedServiceId ?? resolvedServiceId ?? form.getFieldValue('serviceId')
+        const match = services.find((s) => String(s.id) === String(serviceId))
+        return match?.name || match?.serviceName || data?.serviceName || ''
+    }, [
+        hideDeptCustomerForStaff,
+        staffAssignment,
+        watchedServiceId,
+        resolvedServiceId,
+        services,
+        data?.serviceName,
+        form,
+    ])
+
+    const showToiletArea = isPublicAmenitiesCleaningService(activeServiceName)
+
+    useEffect(() => {
+        if (!showToiletArea) {
+            form.setFieldsValue({ toiletArea: undefined })
+        }
+    }, [showToiletArea, form])
 
     const handlePreview = async (file: any) => {
         if (!file.url && !file.preview) {
@@ -144,9 +177,41 @@ const ReportFaultModal = (props: IProps) => {
         }
     };
 
+    const loadIssueOptionsForService = useCallback(async (serviceId: string | number | undefined) => {
+        if (serviceId == null || serviceId === '') {
+            setServiceIssueOptions([])
+            setResolvedServiceId(undefined)
+            form.setFieldsValue({ issue: undefined })
+            return
+        }
+        setIssuesLoading(true)
+        setResolvedServiceId(serviceId)
+        try {
+            const res = await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.REPORT_FAULTS}/issueOptions`,
+                'GET',
+                { serviceId },
+            )
+            const list = Array.isArray(res?.data) ? res.data : []
+            setServiceIssueOptions(list)
+            const currentIssue = form.getFieldValue('issue')
+            if (currentIssue && !list.some((opt: IssueOption) => opt.id === currentIssue)) {
+                form.setFieldsValue({ issue: undefined })
+            }
+        } catch {
+            setServiceIssueOptions([])
+            form.setFieldsValue({ issue: undefined })
+        } finally {
+            setIssuesLoading(false)
+        }
+    }, [form])
+
     const loadServices = useCallback(async (siteId: number) => {
         const res = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getServicesBySite`, 'GET', { siteId });
-        if (res?.data) setServices(res.data);
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setServices(list);
+        return list;
     }, []);
 
     const loadCustomers = useCallback(async (siteId: number, serviceId: string | number) => {
@@ -180,6 +245,7 @@ const ReportFaultModal = (props: IProps) => {
         if (!assignment?.customerId || !assignment?.serviceId) {
             setStaffAssignment(null);
             form.setFieldsValue({ serviceId: undefined, customerId: undefined });
+            await loadIssueOptionsForService(undefined);
             notificationComponent(
                 'warning',
                 3,
@@ -193,20 +259,26 @@ const ReportFaultModal = (props: IProps) => {
             serviceId: String(assignment.serviceId),
             customerId: +assignment.customerId,
         });
+        await loadIssueOptionsForService(assignment.serviceId);
         return true;
-    }, [form]);
+    }, [form, loadIssueOptionsForService]);
 
-    const applyStaffSiteAssignment = useCallback(async (siteId: number) => {
+    const applyStaffSiteAssignment = useCallback(async (siteId: number, serviceId?: number) => {
+        const params: Record<string, number> = { siteId };
+        if (serviceId != null && Number.isFinite(+serviceId) && +serviceId > 0) {
+            params.serviceId = +serviceId;
+        }
         const res = await callAPIAsync(
             serviceType.COMMON,
             `${endPoint.JOB_SITES}/getStaffReportAssignmentBySite`,
             'GET',
-            { siteId },
+            params,
         );
         const assignment = res?.data;
         if (!assignment?.customerId || !assignment?.serviceId) {
             setStaffAssignment(null);
             form.setFieldsValue({ serviceId: undefined, customerId: undefined });
+            await loadIssueOptionsForService(undefined);
             notificationComponent(
                 'warning',
                 3,
@@ -220,8 +292,9 @@ const ReportFaultModal = (props: IProps) => {
             serviceId: String(assignment.serviceId),
             customerId: +assignment.customerId,
         });
+        await loadIssueOptionsForService(assignment.serviceId);
         return true;
-    }, [form]);
+    }, [form, loadIssueOptionsForService]);
 
     const handleSiteChange = useCallback(async (option: any) => {
         const rawId = option?.id;
@@ -232,10 +305,12 @@ const ReportFaultModal = (props: IProps) => {
                 serviceId: undefined,
                 customerId: undefined,
                 otherSiteName: undefined,
+                toiletArea: undefined,
             });
             setServices([]);
             setCustomers([]);
             setStaffAssignment(null);
+            await loadIssueOptionsForService(undefined);
             return;
         }
 
@@ -247,10 +322,12 @@ const ReportFaultModal = (props: IProps) => {
                 serviceId: undefined,
                 customerId: undefined,
                 otherSiteName: undefined,
+                toiletArea: undefined,
             });
             setServices([]);
             setCustomers([]);
             setStaffAssignment(null);
+            await loadIssueOptionsForService(undefined);
             if (hideDeptCustomerForStaff) {
                 try {
                     await applyStaffDefaultAssignment();
@@ -274,14 +351,28 @@ const ReportFaultModal = (props: IProps) => {
             serviceId: undefined,
             customerId: undefined,
             otherSiteName: undefined,
+            toiletArea: undefined,
         });
         setServices([]);
         setCustomers([]);
         setStaffAssignment(null);
+        await loadIssueOptionsForService(undefined);
         if (!siteId) return;
         if (hideDeptCustomerForStaff) {
             try {
-                await applyStaffSiteAssignment(siteId);
+                const siteServices = await loadServices(siteId);
+                if (!siteServices.length) {
+                    notificationComponent(
+                        'warning',
+                        3,
+                        'No Service is linked to your assignment for this job site.',
+                        '',
+                    );
+                    return;
+                }
+                if (siteServices.length === 1) {
+                    await applyStaffSiteAssignment(siteId, siteServices[0].id);
+                }
             } catch {
                 // ignore load errors so the modal stays usable
             }
@@ -292,12 +383,30 @@ const ReportFaultModal = (props: IProps) => {
         } catch {
             // ignore load errors so the modal stays usable
         }
-    }, [form, loadServices, loadAllServices, hideDeptCustomerForStaff, applyStaffSiteAssignment, applyStaffDefaultAssignment]);
+    }, [form, loadServices, loadAllServices, hideDeptCustomerForStaff, applyStaffSiteAssignment, applyStaffDefaultAssignment, loadIssueOptionsForService]);
+
+    const handleStaffServiceChange = useCallback(async (option: any) => {
+        form.setFieldsValue({ issue: undefined, toiletArea: undefined });
+        if (!selectedSiteId || option?.id == null) {
+            setStaffAssignment(null);
+            await loadIssueOptionsForService(undefined);
+            return;
+        }
+        try {
+            await applyStaffSiteAssignment(selectedSiteId, option.id);
+        } catch {
+            // ignore load errors so the modal stays usable
+        }
+    }, [selectedSiteId, applyStaffSiteAssignment, form, loadIssueOptionsForService]);
 
     const handleServiceChange = useCallback(async (option: any) => {
-        form.setFieldsValue({ customerId: undefined });
+        form.setFieldsValue({ customerId: undefined, issue: undefined, toiletArea: undefined });
         setCustomers([]);
-        if (option?.id == null) return;
+        if (option?.id == null) {
+            await loadIssueOptionsForService(undefined);
+            return;
+        }
+        await loadIssueOptionsForService(option.id);
         const siteId = form.getFieldValue('siteId');
         try {
             if (isOtherSiteId(siteId)) {
@@ -308,7 +417,7 @@ const ReportFaultModal = (props: IProps) => {
         } catch {
             // ignore load errors so the modal stays usable
         }
-    }, [form, loadCustomers, loadCustomersForService]);
+    }, [form, loadCustomers, loadCustomersForService, loadIssueOptionsForService]);
 
     useEffect(() => {
         if (!data) return;
@@ -323,11 +432,15 @@ const ReportFaultModal = (props: IProps) => {
                 if (siteId && data.serviceId) {
                     await loadCustomers(siteId, data.serviceId);
                 }
+                if (data.serviceId) {
+                    await loadIssueOptionsForService(data.serviceId);
+                }
                 form.setFieldsValue({
                     ...data,
                     siteId,
                     customerId,
                     serviceId: data.serviceId ?? undefined,
+                    toiletArea: data.toiletArea ?? undefined,
                     priority: +data.priority === 1,
                 });
             } catch {
@@ -335,7 +448,7 @@ const ReportFaultModal = (props: IProps) => {
             }
         };
         initForm();
-    }, [data, form, loadServices, loadCustomers])
+    }, [data, form, loadServices, loadCustomers, loadIssueOptionsForService])
 
     const validateMessages = {
         required: intl.formatMessage({ id: 'form.error.Required' }),
@@ -352,6 +465,8 @@ const ReportFaultModal = (props: IProps) => {
         setServices([]);
         setCustomers([]);
         setStaffAssignment(null);
+        setServiceIssueOptions([]);
+        setResolvedServiceId(undefined);
         dispatch(actions.closeModal());
     };
 
@@ -381,7 +496,9 @@ const ReportFaultModal = (props: IProps) => {
                     3,
                     otherSite
                         ? 'Unable to resolve customer and Service for this report. Contact your administrator.'
-                        : 'Select a job site with a valid customer assignment.',
+                        : services.length > 1 && selectedSiteId
+                            ? 'Select a service for this job site.'
+                            : 'Select a job site with a valid customer assignment.',
                     '',
                 );
                 return;
@@ -424,6 +541,7 @@ const ReportFaultModal = (props: IProps) => {
             companyName,
             priority: values.priority === true ? 1 : 2,
             attachFiles: JSON.stringify(files),
+            ...(showToiletArea ? { toiletArea: values.toiletArea } : {}),
         };
 
         if (!data) {
@@ -464,10 +582,10 @@ const ReportFaultModal = (props: IProps) => {
         companyName: c.companyName || c.customerInfo?.companyName || c.fullName || `#${c.id}`,
     }));
 
-    const issueSelectOptions = useMemo(
-        () => (issueOptions?.length ? issueOptions : [...REPORT_FAULT_ISSUE_OPTIONS]),
-        [issueOptions],
-    );
+    const issueSelectOptions = serviceIssueOptions;
+    const issuesReady = Boolean(resolvedServiceId) && !issuesLoading;
+    const showStaffServiceSelect =
+        hideDeptCustomerForStaff && Boolean(selectedSiteId) && !isOtherSite && services.length > 1;
 
     const siteOptionsWithOther = useMemo(() => {
         let base = sites;
@@ -533,7 +651,7 @@ const ReportFaultModal = (props: IProps) => {
                                 ) : null}
                             </Fieldset>
                         </Col>
-                        {!hideDeptCustomerForStaff && (selectedSiteId || isOtherSite) ? (
+                        {((!hideDeptCustomerForStaff && (selectedSiteId || isOtherSite)) || showStaffServiceSelect) ? (
                             <Col md={12} sm={12} xs={24} className="padding-media-max-576">
                                 <Fieldset>
                                     <FormSelect
@@ -545,7 +663,7 @@ const ReportFaultModal = (props: IProps) => {
                                         optionValue="id"
                                         optionLabel="name"
                                         isRequired={true}
-                                        onChange={handleServiceChange}
+                                        onChange={showStaffServiceSelect ? handleStaffServiceChange : handleServiceChange}
                                     />
                                 </Fieldset>
                             </Col>
@@ -565,6 +683,10 @@ const ReportFaultModal = (props: IProps) => {
                                     />
                                 </Fieldset>
                             </Col>
+                        ) : showStaffServiceSelect ? (
+                            <Form.Item name="customerId" hidden>
+                                <Input type="hidden" />
+                            </Form.Item>
                         ) : (
                             <>
                                 <Form.Item name="serviceId" hidden>
@@ -586,9 +708,37 @@ const ReportFaultModal = (props: IProps) => {
                                     optionValue="id"
                                     optionLabel="name"
                                     isRequired={true}
+                                    disable={!issuesReady}
                                 />
+                                {!issuesReady ? (
+                                    <p style={{ fontSize: 12, color: uiDark ? '#8c8c8c' : '#595959', marginTop: 4 }}>
+                                        {issuesLoading
+                                            ? 'Loading issues…'
+                                            : hideDeptCustomerForStaff
+                                                ? showStaffServiceSelect
+                                                    ? 'Select a service to load issues.'
+                                                    : 'Select a site to load issues for your assigned service.'
+                                                : 'Select a service to load issues.'}
+                                    </p>
+                                ) : null}
                             </Fieldset>
                         </Col>
+                        {showToiletArea ? (
+                            <Col md={12} sm={12} xs={24} className="padding-media-max-576">
+                                <Fieldset>
+                                    <FormSelect
+                                        name="toiletArea"
+                                        allowClear={false}
+                                        label="Toilet"
+                                        options={REPORT_FAULT_TOILET_AREA_OPTIONS}
+                                        className="break-line"
+                                        optionValue="id"
+                                        optionLabel="name"
+                                        isRequired={true}
+                                    />
+                                </Fieldset>
+                            </Col>
+                        ) : null}
                     </Row>
                     <Row>
                         <Col md={24} sm={24} xs={24} className="padding-media-max-576">

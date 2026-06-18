@@ -35,8 +35,8 @@ export class ReportFaultsController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('issueOptions')
-  async getIssueOptions(@Res() res) {
-    return customHttpCode(res, this.reportFaultsService.getIssueOptions());
+  async getIssueOptions(@Res() res, @Query('serviceId') serviceId?: string) {
+    return customHttpCode(res, await this.reportFaultsService.getIssueOptions(serviceId));
   }
 
   @UseGuards(JwtAuthGuard)
