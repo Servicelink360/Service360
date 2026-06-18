@@ -6,7 +6,6 @@ import {
   InfoCircleOutlined,
   MailOutlined,
   PaperClipOutlined,
-  PlusOutlined,
   SearchOutlined,
   SendOutlined,
   UndoOutlined,
@@ -142,6 +141,22 @@ const customerOrgLabel = (companyName?: string | null) => {
 };
 
 const SERVICELINK_SUPPORT_LABEL = 'ServiceLink';
+const NEW_MESSAGE_TO_LABEL = 'New message to';
+
+const NewMessageToHeading: React.FC<{ color?: string }> = ({ color }) => (
+  <span
+    style={{
+      fontWeight: 600,
+      fontSize: 16,
+      display: 'inline-flex',
+      alignItems: 'center',
+      color,
+    }}
+  >
+    <MailOutlined style={{ marginRight: 8 }} />
+    {NEW_MESSAGE_TO_LABEL}
+  </span>
+);
 
 const senderRoleLabel = (senderType: number, companyName?: string | null) => {
   if (+senderType === userType.ADMIN) return SERVICELINK_SUPPORT_LABEL;
@@ -1433,8 +1448,9 @@ const MessagesPage: React.FC = () => {
                 <MailOutlined style={{ marginRight: 8 }} />
                 Conversations
               </Title>
-              <Button type="primary" block icon={<PlusOutlined />} onClick={openNewMessage}>
-                New message
+              <Button type="primary" block onClick={openNewMessage} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <MailOutlined style={{ marginRight: 8 }} />
+                {NEW_MESSAGE_TO_LABEL}
               </Button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -1581,7 +1597,7 @@ const MessagesPage: React.FC = () => {
                       </Tag>
                     </>
                   )
-                  : 'Select a conversation or click New message'}
+                  : `Select a conversation or click ${NEW_MESSAGE_TO_LABEL}`}
             </Title>
             {canUseMessageTabs ? (
               <Input
@@ -1691,7 +1707,7 @@ const MessagesPage: React.FC = () => {
               />
             ) : isAdmin && !canCompose ? (
               <Empty
-                description="Select a customer or staff member, or click New message to start"
+                description={`Select a customer or staff member, or click ${NEW_MESSAGE_TO_LABEL} to start`}
                 style={{ marginTop: 48 }}
               />
             ) : loadingMessages ? (
@@ -1879,7 +1895,7 @@ const MessagesPage: React.FC = () => {
       </div>
 
       <Modal
-        title="New message"
+        title={<NewMessageToHeading />}
         open={newMessageOpen}
         onCancel={() => setNewMessageOpen(false)}
         onOk={startNewConversation}
@@ -1891,17 +1907,18 @@ const MessagesPage: React.FC = () => {
         {isCustomer || isStaff ? (
           <>
             <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              Choose a Service Provider or one of My Colleagues. You can attach files after opening
-              the conversation.{' '}
+              Pick <strong>one</strong> person — a service provider or a colleague. You can attach
+              files after the conversation opens.{' '}
               <Tooltip
                 title={
                   <>
-                    Pick <strong>one</strong> person to message — either a Service Provider
-                    (Servicelink) or a colleague from My Colleagues, not both.
+                    Use <strong>To Service Provider</strong> for support from Servicelink, or{' '}
+                    <strong>To My Colleagues</strong> to message someone at your organisation. Fill in
+                    only one of the two fields.
                     <br />
                     <br />
-                    After you click <strong>Start conversation</strong>, type your message in the
-                    chat panel. Use the attach button there to attach photos or documents.
+                    Click <strong>Start conversation</strong>, then type your message. Use the
+                    attach button in the chat to add photos or documents.
                   </>
                 }
               >
@@ -1911,13 +1928,16 @@ const MessagesPage: React.FC = () => {
                 />
               </Tooltip>
             </Text>
-            <Text strong style={{ display: 'block', marginBottom: 8 }}>
-              Service Provider
+            <Text strong style={{ display: 'block', marginBottom: 4 }}>
+              To Service Provider
+            </Text>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+              For help from your service provider.
             </Text>
             <Select
               showSearch
               allowClear
-              placeholder="Select service provider"
+              placeholder="Choose a service provider"
               style={{ width: '100%' }}
               loading={loadingRecipients}
               value={newMessageAdminId ?? undefined}
@@ -1931,14 +1951,19 @@ const MessagesPage: React.FC = () => {
                 label: a.name,
               }))}
             />
-            <Divider style={{ margin: '16px 0' }} />
-            <Text strong style={{ display: 'block', marginBottom: 8 }}>
-              My Colleagues
+            <Divider plain style={{ margin: '16px 0', fontSize: 12 }}>
+              or
+            </Divider>
+            <Text strong style={{ display: 'block', marginBottom: 4 }}>
+              To My Colleagues
+            </Text>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+              Another staff member or contact at your organisation.
             </Text>
             <Select
               showSearch
               allowClear
-              placeholder="Select a colleague"
+              placeholder="Choose a colleague"
               style={{ width: '100%' }}
               loading={loadingRecipients}
               value={newMessageColleagueId ?? undefined}
