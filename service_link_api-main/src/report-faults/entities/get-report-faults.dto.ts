@@ -21,4 +21,14 @@ export class GetReportFaultsDto extends BaseRequest {
     @Type(() => Number)
     @IsInt()
     faultId?: number
+
+    @ApiProperty({ required: false, description: '1 = urgent, 2 = normal' })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    priority?: number
+
+    @ApiProperty({ required: false, description: 'Exclude completed faults from the list' })
+    @IsOptional()
+    incompleteOnly?: boolean | string
 }

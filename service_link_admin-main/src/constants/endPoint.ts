@@ -1,4 +1,4 @@
-﻿const authEndPoint = {
+const authEndPoint = {
     GET_USER_BY_ID: 'v1/users/',
 
     REGISTER: 'v1/register',
@@ -34,7 +34,9 @@ const crmEndPoint = {
     USER_TASKS: 'v1/user-tasks',
     USER_DAILY_JOBS: 'v1/user-daily-jobs',
     REPORT_FAULTS: 'v1/report-faults',
-    FAULT_ISSUES: 'v1/fault-issues',
+    CUSTOMER_PERSONNEL: 'v1/customer-personnel',
+    ADMIN_PERSONNEL: 'v1/admin-personnel',
+    PERSONNEL_FAULT_ACCESS: 'v1/personnel-fault-access',
     MESSAGES: 'v1/messages',
     /** Multipart upload (must match API UploadController version prefix). */
     UPLOAD_FILE: 'v1/uploadFile',

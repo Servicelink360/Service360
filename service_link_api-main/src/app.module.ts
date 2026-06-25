@@ -1,4 +1,4 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AppService } from './app.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
@@ -33,6 +33,8 @@ import { CompaniesModule } from './companies/companies.module';
 import { DeployStatusController } from './deploy-status.controller';
 import { ContactModule } from './contact/contact.module';
 import { FaultIssuesModule } from './fault-issues/fault-issues.module';
+import { CustomerPersonnelModule } from './customer-personnel/customer-personnel.module';
+import { AdminPersonnelModule } from './admin-personnel/admin-personnel.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -97,6 +99,8 @@ import { FaultIssuesModule } from './fault-issues/fault-issues.module';
     CompaniesModule,
     ContactModule,
     FaultIssuesModule,
+    CustomerPersonnelModule,
+    AdminPersonnelModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

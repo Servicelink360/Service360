@@ -1,4 +1,4 @@
-﻿import React, { Suspense } from 'react';
+import React, { Suspense } from 'react';
 import asyncComponent from '@app/lib/helpers/AsyncFunc';
 import { Route, Switch } from 'react-router-dom';
 import Loader from '../components/utility/loader';
@@ -38,6 +38,10 @@ const routes = [
 	{ path: 'site-check-in', component: asyncComponent(() => import('@app/containers/site-check-in')) },
 
 
+	{ path: 'my-tasks', component: asyncComponent(() => import('@app/containers/staff-my-tasks')) },
+	{ path: 'customer-personnel', component: asyncComponent(() => import('@app/containers/customer-personnel')) },
+	{ path: 'admin-personnel', component: asyncComponent(() => import('@app/containers/admin-personnel')) },
+	{ path: 'tasks-faults', component: asyncComponent(() => import('@app/containers/tasks-faults')) },
 	{ path: 'new-reports', component: asyncComponent(() => import('@app/containers/reports/new-reports')) },
 	{ path: 'custom-reports', component: asyncComponent(() => import('@app/containers/reports/new-reports')) },
 	{ path: 'report-faults', component: asyncComponent(() => import('@app/containers/reports/report-faults')) },

@@ -1,0 +1,85 @@
+.staff-my-tasks-mobile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.staff-my-tasks-card {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d9d9d9;
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+
+.staff-my-tasks-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.staff-my-tasks-card__title-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.staff-my-tasks-card__issue {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #262626;
+  word-break: break-word;
+}
+
+.staff-my-tasks-card__site {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #595959;
+  word-break: break-word;
+}
+
+.staff-my-tasks-card__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.staff-my-tasks-card__meta-item dt {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8c8c8c;
+}
+
+.staff-my-tasks-card__meta-item dd {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #262626;
+  word-break: break-word;
+}
+
+.staff-my-tasks-card__action {
+  margin-top: 12px;
+}
+
+.staff-my-tasks-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.staff-my-tasks-table-wrap .ant-table {
+  min-width: 720px;
+}

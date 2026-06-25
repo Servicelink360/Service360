@@ -1,4 +1,4 @@
-﻿{
+{
   "sidebar.forms": "Forms",
   "sidebar.input": "Input",
   "signin.forget_password": "Password is required",
@@ -76,6 +76,10 @@
   "sidebar.auditReport": "Audit Report",
   "sidebar.newReports": "New Reports",
   "sidebar.reportFaults": "Report Faults",
+  "sidebar.customerPersonnel": "My personnel",
+  "sidebar.adminPersonnel": "My personnel",
+  "sidebar.myTasks": "My tasks",
+  "sidebar.tasksFaults": "Urgent reports",
   "sidebar.incidentReport": "Incident Report",
   "sidebar.actionPlans": "Action Plans",
   "sidebar.ppeReport": "PPE Plans",

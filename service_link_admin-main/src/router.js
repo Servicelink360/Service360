@@ -64,6 +64,10 @@ const publicRoutes = [
     ),
   },
   {
+    path: PUBLIC_ROUTE.PERSONNEL_FAULT,
+    component: lazy(() => import('@app/containers/personnel-fault/PersonnelFaultViewPage')),
+  },
+  {
     path: PUBLIC_ROUTE.CHECK_COOKIE,
     component: lazy(() =>
       import('@app/containers/auth/SignInCookie/CheckCookie')

@@ -16,6 +16,8 @@ export const emailTaskTodayUrl = (status = 'p'): string =>
 export const emailUserTaskTodayUrl = (): string =>
   `${appBaseUrl()}/user-task-today`;
 
+export const emailMyTasksUrl = (): string => `${appBaseUrl()}/my-tasks`;
+
 export const emailLinkHtml = (href: string, label?: string): string => {
   const text = label || href;
   return `<a target="_blank" href="${href}">${text}</a>`;

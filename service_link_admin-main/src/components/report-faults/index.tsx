@@ -109,7 +109,7 @@ const ReportFaultModal = (props: IProps) => {
         watchedServiceId,
         resolvedServiceId,
         services,
-        data?.serviceName,
+        data,
         form,
     ])
 

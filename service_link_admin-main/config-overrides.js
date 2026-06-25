@@ -58,6 +58,12 @@ function addProcessBrowserPolyfill(config) {
     }),
   );
 
+  // Webpack 4 (react-scripts 3): ensure `process` exists in dev error-overlay chunks too.
+  config.node = {
+    ...(config.node || {}),
+    process: true,
+  };
+
   return config;
 }
 

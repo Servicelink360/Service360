@@ -21,6 +21,11 @@ export const optionsStaff: option[] = [
 		leftIcon: 'icon-site',
 	},
 	{
+		key: 'my-tasks',
+		label: 'sidebar.myTasks',
+		leftIcon: 'icon-site',
+	},
+	{
 		key: 'site-check-in',
 		label: 'sidebar.siteCheckIn',
 		leftIcon: 'icon-site',
@@ -114,6 +119,11 @@ export const optionsCustomer: option[] = [
 		]
 	},
 	{
+		key: 'customer-personnel',
+		label: 'sidebar.customerPersonnel',
+		leftIcon: 'icon-staff',
+	},
+	{
 		key: 'report',
 		label: 'sidebar.report',
 		leftIcon: 'icon-package',
@@ -160,6 +170,10 @@ const options: option[] = [
 			{
 				key: 'staff',
 				label: 'sidebar.staff',
+			},
+			{
+				key: 'admin-personnel',
+				label: 'sidebar.adminPersonnel',
 			},
 			{
 				key: 'customers',
@@ -426,6 +440,10 @@ const hashOptions: hashOption[] = [
 	{
 		key: 'staff-attendance',
 		label: 'sidebar.staffAttendance',
+	},
+	{
+		key: 'admin-personnel',
+		label: 'sidebar.adminPersonnel',
 	},
 	{
 		key: 'schedule-tasks',

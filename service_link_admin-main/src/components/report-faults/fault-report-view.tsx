@@ -1,11 +1,19 @@
-import { CloseOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseOutlined, UserSwitchOutlined } from "@ant-design/icons";
 import { dateTimeFormat } from "@app/config/data.config";
-import { Button, Image, Modal, Typography } from "antd";
+import { Button, Image, Modal, Popconfirm, Tag, Typography, message } from "antd";
 import moment from "moment";
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { userType } from "../../constants/statusUser";
 import { isPublicAmenitiesCleaningService } from "../../constants/reportFaultToiletArea";
+import endPoint from "../../constants/endPoint";
+import serviceType from "../../constants/serviceType";
+import { callAPIAsync } from "../../library/helpers/api";
+import FaultDelegationModal from "./fault-delegation-modal";
+import FaultDelegationSummary from "./fault-delegation-summary";
+import { canManageFaultDelegation } from "./fault-delegation-cell";
+import { delegationOutcomeOf, faultListStatusOf } from "./delegation-outcome";
+import { FaultPriorityCell } from "./fault-priority-cell";
 
 const valueStyle: React.CSSProperties = {
   fontSize: 14,
@@ -52,8 +60,13 @@ type Props = {
   onClose: () => void;
   record: any | null;
   viewerType: number;
-  renderPriority: (priority: number | undefined) => React.ReactNode;
+  renderPriority?: (priority: number | undefined) => React.ReactNode;
+  onPriorityUpdated?: (payload?: { id?: number; priority?: number }) => void;
+  isDeletedTab?: boolean;
+  staffUserId?: number;
   readStatusNode?: React.ReactNode;
+  onDelegationSaved?: (delegation?: Record<string, unknown>) => void;
+  onFaultCompleted?: (payload?: Record<string, unknown>) => void;
 };
 
 const parseAttachFiles = (attachFiles: unknown): string[] => {
@@ -153,8 +166,18 @@ const FaultReportViewModal: React.FC<Props> = ({
   record,
   viewerType,
   renderPriority,
+  onPriorityUpdated,
+  isDeletedTab = false,
+  staffUserId,
   readStatusNode,
+  onDelegationSaved,
+  onFaultCompleted,
 }) => {
+  const [delegationOpen, setDelegationOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [markingStaffActed, setMarkingStaffActed] = useState(false);
+
   if (!open || !record) return null;
 
   const mediaUrls = parseAttachFiles(record.attachFiles);
@@ -168,10 +191,102 @@ const FaultReportViewModal: React.FC<Props> = ({
     Boolean(toiletArea) || isPublicAmenitiesCleaningService(record.serviceName);
   const canMessage =
     (viewerType === userType.ADMIN || viewerType === userType.CUSTOMER) && Boolean(faultId);
+  const canDelegate =
+    canManageFaultDelegation(record, viewerType) && Boolean(faultId);
+  const hasDelegation = Boolean(String(record?.delegatedToType ?? '').trim());
+  const isCompleted = faultListStatusOf(record) === 'completed';
+  const delegationOutcome = delegationOutcomeOf(record);
+  const canManageFaultStatus =
+    viewerType === userType.CUSTOMER || viewerType === userType.ADMIN;
+  const canMarkCompleted =
+    canManageFaultStatus && Boolean(faultId) && !isCompleted;
+  const canReopen =
+    canManageFaultStatus &&
+    Boolean(faultId) &&
+    (isCompleted ||
+      delegationOutcome === "done_on_time" ||
+      delegationOutcome === "done_late");
+
+  const staffProfileRaw = localStorage.getItem("profile");
+  const profileStaffUserId = staffProfileRaw ? +JSON.parse(staffProfileRaw).id : 0;
+  const resolvedStaffUserId = staffUserId ?? profileStaffUserId;
+  const isStaffAssignee =
+    viewerType === userType.STAFF &&
+    record?.delegatedToType === "staff" &&
+    +record?.delegatedToStaffId === resolvedStaffUserId;
+  const canMarkStaffActed = isStaffAssignee && Boolean(faultId) && !record?.delegatedActedAt;
+
+  const markCompleted = async () => {
+    if (!faultId) return;
+    setCompleting(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.REPORT_FAULTS}/${faultId}/complete`,
+        "PATCH",
+        {},
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || "Could not mark as completed");
+        return;
+      }
+      message.success("Fault report marked as completed");
+      onFaultCompleted?.(res.data);
+    } catch {
+      message.error("Could not mark as completed");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const markStaffActed = async () => {
+    if (!faultId) return;
+    setMarkingStaffActed(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.REPORT_FAULTS}/${faultId}/staff-acted`,
+        "PATCH",
+        {},
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || "Could not confirm action");
+        return;
+      }
+      message.success("Thank you — assignment marked as acted on.");
+      onFaultCompleted?.(res.data);
+    } catch {
+      message.error("Could not confirm action");
+    } finally {
+      setMarkingStaffActed(false);
+    }
+  };
+
+  const markReopened = async () => {
+    if (!faultId) return;
+    setReopening(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.REPORT_FAULTS}/${faultId}/reopen`,
+        "PATCH",
+        {},
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || "Could not reopen fault");
+        return;
+      }
+      message.success("Fault report set back to pending");
+      onFaultCompleted?.(res.data);
+    } catch {
+      message.error("Could not reopen fault");
+    } finally {
+      setReopening(false);
+    }
+  };
 
   return (
     <Modal
-      visible
       open
       title={<span style={{ fontWeight: 600, fontSize: 9.6 }}>Fault Report</span>}
       onCancel={onClose}
@@ -187,6 +302,59 @@ const FaultReportViewModal: React.FC<Props> = ({
             flexWrap: "wrap",
           }}
         >
+          {canReopen ? (
+            <Popconfirm
+              title={
+                <span>
+                  Set back to pending?
+                  <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
+                    The fault will show as pending again if it was marked completed by mistake.
+                  </div>
+                </span>
+              }
+              okText="Back to pending"
+              cancelText="Cancel"
+              onConfirm={() => void markReopened()}
+            >
+              <Button loading={reopening}>Back to pending</Button>
+            </Popconfirm>
+          ) : null}
+          {canMarkCompleted ? (
+            <Popconfirm
+              title={
+                <span>
+                  Mark this fault report as completed?
+                  <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
+                    Use when the issue is resolved. Delegation status will update if applicable.
+                  </div>
+                </span>
+              }
+              okText="Mark completed"
+              cancelText="Cancel"
+              onConfirm={() => void markCompleted()}
+            >
+              <Button icon={<CheckCircleOutlined />} loading={completing}>
+                Mark as completed
+              </Button>
+            </Popconfirm>
+          ) : null}
+          {canMarkStaffActed ? (
+            <Popconfirm
+              title="Confirm you have acted on this assignment?"
+              okText="Confirm acted"
+              cancelText="Cancel"
+              onConfirm={() => void markStaffActed()}
+            >
+              <Button icon={<CheckCircleOutlined />} loading={markingStaffActed}>
+                Confirm acted
+              </Button>
+            </Popconfirm>
+          ) : null}
+          {canDelegate ? (
+            <Button icon={<UserSwitchOutlined />} onClick={() => setDelegationOpen(true)}>
+              {hasDelegation ? 'Change assignment' : 'Assign to'}
+            </Button>
+          ) : null}
           {canMessage && faultId ? (
             <Link to={`/messages?reportFaultId=${faultId}`}>
               <Button onClick={onClose}>Message about this report</Button>
@@ -232,8 +400,28 @@ const FaultReportViewModal: React.FC<Props> = ({
           <InlineLabelValue label="Status">{readStatusNode}</InlineLabelValue>
         ) : null}
         <InlineLabelValue label="Priority">
-          {renderPriority(record.priority)}
+          {renderPriority ? (
+            renderPriority(record.priority)
+          ) : (
+            <FaultPriorityCell
+              record={record}
+              profileType={viewerType}
+              staffUserId={resolvedStaffUserId}
+              isDeletedTab={isDeletedTab}
+              onUpdated={onPriorityUpdated}
+              small
+            />
+          )}
         </InlineLabelValue>
+        {isCompleted ? (
+          <Tag color="success" style={{ marginLeft: 4 }}>
+            Completed
+          </Tag>
+        ) : delegationOutcome === "done_on_time" || delegationOutcome === "done_late" ? (
+          <Tag color="success" style={{ marginLeft: 4 }}>
+            Delegation done
+          </Tag>
+        ) : null}
       </div>
 
       <div style={{ marginTop: 16 }}>
@@ -247,6 +435,8 @@ const FaultReportViewModal: React.FC<Props> = ({
           <MetaInline label="Toilet">{toiletArea || "—"}</MetaInline>
         </div>
       ) : null}
+
+      <FaultDelegationSummary record={record} viewerType={viewerType} />
 
       <div style={{ marginTop: 16 }}>
         <Field label="Message" compactValue>
@@ -288,6 +478,17 @@ const FaultReportViewModal: React.FC<Props> = ({
             </div>
           </Image.PreviewGroup>
         </div>
+      ) : null}
+
+      {canDelegate && faultId ? (
+        <FaultDelegationModal
+          open={delegationOpen}
+          onClose={() => setDelegationOpen(false)}
+          faultId={faultId}
+          record={record}
+          viewerType={viewerType}
+          onSaved={onDelegationSaved}
+        />
       ) : null}
     </Modal>
   );

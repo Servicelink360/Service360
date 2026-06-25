@@ -1,4 +1,4 @@
-﻿import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { errorCode } from 'src/constants/errorCode';
 import { Logger } from 'winston';
 import { GetInitDataDto } from './dto/get-init-data';
@@ -146,10 +146,16 @@ export class CommonService {
       messagesUnreadCount = resMessages?.data ?? 0;
     }
 
+    let myTasksCount = 0;
+    if (+userInfo.type === 2) {
+      const resMyTasks = await this.reportFaultsService.countStaffMyTasks(userInfo);
+      myTasksCount = resMyTasks?.data ?? 0;
+    }
+
     return {
       ...errorCode.SUCCESS, data: {
         siteCount, taskCount, pendingTaskCount, inprogressTaskCount, successTaskCount, currentTask, ticketData: ticketData.data, submittedReportCount, newReportsCount, reportFaultsCount
-        , auditReportCount, newTicketCount, newTicketsCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount
+        , auditReportCount, newTicketCount, newTicketsCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount, myTasksCount
       }
     };
   }

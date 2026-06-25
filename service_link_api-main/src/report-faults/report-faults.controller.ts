@@ -5,6 +5,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { customHttpCode } from '../helpers/util';
 import { IUserInfo } from '../interfaces/IUserInfo';
+import { SetFaultDelegationDto } from './dto/set-fault-delegation.dto';
 import { ChangeStatusDto } from './dto/change-status.dto';
 import { ReportFaultsService } from './report-faults.service';
 import { CreateReportFaultDto } from './dto/create-report-fault.dto';
@@ -45,6 +46,14 @@ export class ReportFaultsController {
   async findAllGroupByDate(@Res() res, @Query() body: GetReportFaultsDto, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.reportFaultsService.findAllGroupByDate(user, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('my-tasks')
+  async findMyTasks(@Res() res, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.findMyTasksForStaff(user));
   }
 
   @UseGuards(JwtAuthGuard)
@@ -129,6 +138,72 @@ export class ReportFaultsController {
   async restoreFault(@Res() res, @Param('id') id: string, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.reportFaultsService.restoreFault(user, id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/staff-view')
+  async markStaffAssignmentViewed(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.markStaffAssignmentViewed(user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/staff-acted')
+  async markStaffAssignmentActed(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.markStaffAssignmentActed(user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/delegation')
+  async setDelegation(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: SetFaultDelegationDto,
+    @Request() req,
+  ) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.setDelegation(user, +id, body));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/complete')
+  async completeFault(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.completeFault(user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/nudge-assignee')
+  async nudgeDelegationAssignee(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.nudgeDelegationAssignee(user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/reopen')
+  async reopenFault(@Res() res, @Param('id') id: string, @Request() req) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.reopenFault(user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch(':id/priority')
+  async setFaultPriority(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: { priority?: number },
+    @Request() req,
+  ) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(res, await this.reportFaultsService.setFaultPriority(user, +id, body?.priority));
   }
 
   @UseGuards(JwtAuthGuard)

@@ -94,4 +94,33 @@ export class ReportFault  extends BaseEntity{
     @Column({ name: 'customer_dashboard_dismissed_at', nullable: true })
     customerDashboardDismissedAt?: Date
 
+    @Column({ name: 'delegated_to_type', length: 32, nullable: true })
+    delegatedToType?: string | null
+
+    @Column({ name: 'delegated_to_personnel_id', nullable: true })
+    delegatedToPersonnelId?: number | null
+
+    @Column({ name: 'delegated_to_staff_id', nullable: true })
+    delegatedToStaffId?: number | null
+
+    @Column({ name: 'delegated_until', type: 'timestamptz', nullable: true })
+    delegatedUntil?: Date | null
+
+    @Column({ name: 'delegated_by', nullable: true })
+    delegatedBy?: number | null
+
+    @Column({ name: 'delegated_at', type: 'timestamptz', nullable: true })
+    delegatedAt?: Date | null
+
+    @Column({ name: 'delegation_note', type: 'text', nullable: true })
+    delegationNote?: string | null
+
+    /** Set when delegatee confirms action (personnel link or service provider acknowledgement). */
+    @Column({ name: 'delegated_acted_at', type: 'timestamptz', nullable: true })
+    delegatedActedAt?: Date | null
+
+    /** First time personnel opened the magic link. */
+    @Column({ name: 'delegation_viewed_at', type: 'timestamptz', nullable: true })
+    delegationViewedAt?: Date | null
+
 }

@@ -9,7 +9,6 @@ import serviceType from "@app/constants/serviceType";
 import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync } from "../../library/helpers/api";
-import { dateFormat } from "@app/config/data.config";
 import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1341,7 +1340,7 @@ const NewReports: React.FC = () => {
       });
       form.setFieldsValue(patch);
     },
-    [form, editing, profile, isStaffUser, isHiddenFromStaffCreate],
+    [form, editing, profile, isStaffUser],
   );
 
   const refreshAutoMergeTemplateFields = useCallback(() => {
@@ -2344,8 +2343,8 @@ const NewReports: React.FC = () => {
     }
     if (+profileType === userType.ADMIN || +profileType === userType.CUSTOMER) {
       opts.push(
-        { value: "readStatus:ASC", label: "Status (unread first)" },
-        { value: "readStatus:DESC", label: "Status (read first)" },
+        { value: "readStatus:ASC", label: "Read (unread first)" },
+        { value: "readStatus:DESC", label: "Read (read first)" },
       );
     }
     return opts;
@@ -2676,7 +2675,6 @@ const NewReports: React.FC = () => {
       renderReportActions,
       markingUnreadId,
       markReportUnread,
-      markReportOpenedForViewer,
       mobileUiDark,
       mobileDarkBtnDefaultStyle,
       handleOpenReportPdf,
@@ -2771,8 +2769,9 @@ const NewReports: React.FC = () => {
     ...(Number(profileType) === userType.ADMIN || Number(profileType) === userType.CUSTOMER
       ? [
           {
-            title: "Status",
+            title: "Read",
             key: "readStatus",
+            columnKey: "readStatus",
             dataIndex: "readStatus",
             width: 72,
             align: "center" as const,

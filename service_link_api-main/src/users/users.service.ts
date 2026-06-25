@@ -1634,4 +1634,45 @@ export class UsersService {
     return { ...errorCode.VALIDATION_ERROR, message: 'Unknown user type' };
   }
 
+  async findActiveStaffById(id: number): Promise<User | null> {
+    if (!id) return null;
+    const row = await this.userRepository.findOne({
+      where: { id, type: userType.STAFF, status: userStatus.ACTIVE },
+    });
+    return row ?? null;
+  }
+
+  /** Directory staff eligible for fault assignment (matches users list, not only ACTIVE). */
+  async findStaffByIdForDelegation(id: number): Promise<User | null> {
+    if (!id) return null;
+    const row = await this.userRepository.findOne({
+      where: { id, type: userType.STAFF },
+    });
+    if (!row || +row.status === userStatus.DELETE) return null;
+    return row;
+  }
+
+  async findStaffMapForDelegation(
+    ids: number[],
+  ): Promise<Map<number, { name: string; role: string }>> {
+    const unique = [...new Set(ids.filter((id) => id > 0))];
+    const map = new Map<number, { name: string; role: string }>();
+    if (!unique.length) return map;
+    const rows = await this.userRepository.find({
+      where: { id: In(unique), type: userType.STAFF },
+    });
+    for (const row of rows) {
+      if (+row.status === userStatus.DELETE) continue;
+      const name =
+        String(row.fullName ?? '').trim() ||
+        `${String(row.firstName ?? '').trim()} ${String(row.lastName ?? '').trim()}`.trim();
+      if (!name) continue;
+      map.set(+row.id, {
+        name,
+        role: String(row.position ?? '').trim(),
+      });
+    }
+    return map;
+  }
+
 }

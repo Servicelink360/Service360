@@ -252,6 +252,49 @@ export class CustomerNotificationsService {
     }
   }
 
+  async notifyAdminsFaultDelegatedToProvider(opts: {
+    faultId: number;
+    issue: string;
+    siteName: string;
+    serviceName: string;
+    priority: number;
+    delegatedUntil: Date;
+    delegationNote?: string;
+    assignerName?: string;
+    customerName?: string;
+  }): Promise<void> {
+    try {
+      const link = this.buildEmailDeepLink(`/report-faults?faultId=${opts.faultId}`);
+      const urgent = +opts.priority === 1;
+      const priorityLabel = this.faultPriorityLabel(opts.priority);
+      const until = opts.delegatedUntil.toLocaleString('en-AU', {
+        timeZone: 'Australia/Sydney',
+        dateStyle: 'short',
+        timeStyle: 'short',
+      });
+      const subject = `Service360 — Customer assigned fault to Servicelink: ${opts.issue || opts.siteName || 'Fault'}`;
+      await this.sendToAdminRecipients('faultReports', {
+        subject,
+        html: (r) => `
+        <p>${this.customerGreeting(r.fullName)}</p>
+        <p>A customer has assigned a fault report to <strong>Servicelink</strong> for action.</p>
+        ${opts.customerName ? `<p><strong>Customer:</strong> ${this.escapeHtml(opts.customerName)}</p>` : ''}
+        ${opts.assignerName ? `<p><strong>Assigned by:</strong> ${this.escapeHtml(opts.assignerName)}</p>` : ''}
+        <p><strong>Priority:</strong> ${priorityLabel}</p>
+        <p><strong>Issue:</strong> ${this.escapeHtml(opts.issue || '—')}</p>
+        <p><strong>Site:</strong> ${this.escapeHtml(opts.siteName || '—')}</p>
+        <p><strong>Service:</strong> ${this.escapeHtml(opts.serviceName || '—')}</p>
+        <p><strong>Act by:</strong> ${this.escapeHtml(until)}</p>
+        ${opts.delegationNote ? `<p><strong>Note:</strong> ${this.escapeHtml(opts.delegationNote)}</p>` : ''}
+        <p>${emailLinkHtml(link, 'View fault in Service360')}</p>
+        ${emailSupportFooterHtml()}`,
+        urgentFault: urgent,
+      });
+    } catch (e) {
+      this.logger.warn(`notifyAdminsFaultDelegatedToProvider: ${(e as Error).message}`);
+    }
+  }
+
   async notifyNewReportAvailable(opts: {
     userTaskId: number;
     customerId: number;

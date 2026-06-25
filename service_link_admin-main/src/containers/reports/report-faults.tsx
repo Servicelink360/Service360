@@ -1,17 +1,16 @@
-﻿import {
+﻿/* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
+import {
     CheckCircleFilled,
     DeleteOutlined,
     EditOutlined,
     EyeOutlined,
     FileAddOutlined,
-    FlagOutlined,
     MailOutlined,
     MessageOutlined,
     SearchOutlined,
     FilterOutlined,
     DownOutlined,
     UpOutlined,
-    ThunderboltFilled,
     UndoOutlined,
 } from "@ant-design/icons";
 import {
@@ -37,6 +36,9 @@ import { ButtonDiv, ButtonMR, InformationDiv, StatusRow, UsernameRow, UsersDiv, 
 import ReportFaultModal from "@app/components/report-faults";
 import ReportFaultAnswerModal from "@app/components/report-faults/answer";
 import FaultReportViewModal from "@app/components/report-faults/fault-report-view";
+import TasksFaultsPanel from "@app/components/report-faults/tasks-faults-panel";
+import { FaultListStatusBadge } from "@app/components/report-faults/delegation-outcome";
+import { FaultPriorityCell } from "@app/components/report-faults/fault-priority-cell";
 import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 import { checkRole } from "../../library/helpers/utility";
@@ -52,53 +54,6 @@ const { RangePicker } = DatePicker;
 
 const staffPrimaryGreen = { background: "#389e0d", borderColor: "#389e0d" };
 
-type PillTone = { bg: string; border: string; color: string };
-
-/** Semantic colors aligned with Ant Design tokens (warning / processing / success / danger / geekblue) */
-const BADGE_PALETTE = {
-    urgent: { bg: "#fff1f0", border: "#ff4d4f", color: "#cf1322" } satisfies PillTone,
-    normal: { bg: "#f0f5ff", border: "#adc6ff", color: "#1d39c4" } satisfies PillTone,
-} as const;
-
-const pillBadge = (
-    icon: React.ReactNode,
-    label: string,
-    tone: PillTone,
-    title?: string,
-    large?: boolean,
-    small?: boolean,
-) => {
-    const textSize = small ? 9.6 : large ? 14.4 : 12;
-    const iconSize = small ? 11.2 : large ? 16.8 : 14;
-    const pad = small ? "3px 8px" : large ? "5px 12px" : "4px 10px";
-    const gap = small ? 4 : 6;
-    return (
-        <Tooltip title={title ?? label}>
-            <span
-                style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap,
-                    padding: pad,
-                    borderRadius: 16,
-                    border: `1px solid ${tone.border}`,
-                    background: tone.bg,
-                    color: tone.color,
-                    fontSize: textSize,
-                    fontWeight: 600,
-                    lineHeight: 1,
-                    whiteSpace: "nowrap",
-                }}
-            >
-                <span style={{ display: "inline-flex", fontSize: iconSize, color: tone.color }}>
-                    {icon}
-                </span>
-                {label}
-            </span>
-        </Tooltip>
-    );
-};
-
 const canDeleteReportFault = (profile: any, record: any) => {
     if (!profile?.id || !record) return false;
     const userId = +profile.id;
@@ -112,16 +67,6 @@ const canDeleteReportFault = (profile: any, record: any) => {
         return Boolean(reportFaultIdOf(record));
     }
     return false;
-};
-
-const renderFaultPriority = (priority: number | undefined, large?: boolean, small?: boolean) => {
-    if (priority && +priority === 1) {
-        return pillBadge(<ThunderboltFilled />, "Urgent", BADGE_PALETTE.urgent, undefined, large, small);
-    }
-    if (priority && +priority === 2) {
-        return pillBadge(<FlagOutlined />, "Normal", BADGE_PALETTE.normal, undefined, large, small);
-    }
-    return "—";
 };
 
 function isFaultReadForViewer(row: any, viewerType: number): boolean {
@@ -320,7 +265,44 @@ const FaultReadStatusCell: React.FC<{
 
 const reportFaultIdOf = (record: any) => record?.reportFaultId ?? record?.id;
 
-type FaultListTab = "active" | "deleted";
+type ReportFaultMainTab = "list" | "urgent" | "deleted";
+
+const faultTabFromUrl = (tab: string | null): ReportFaultMainTab => {
+    if (tab === "urgent" || tab === "tasks-faults") return "urgent";
+    if (tab === "deleted") return "deleted";
+    return "list";
+};
+
+const NARROW_VIEWPORT_QUERY = "(max-width: 768px)";
+
+function useNarrowViewport() {
+    const [narrow, setNarrow] = useState(() => {
+        if (typeof window === "undefined") return false;
+        return window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
+    });
+    useEffect(() => {
+        const mq = window.matchMedia(NARROW_VIEWPORT_QUERY);
+        const update = () => setNarrow(mq.matches);
+        update();
+        if (mq.addEventListener) {
+            mq.addEventListener("change", update);
+            return () => mq.removeEventListener("change", update);
+        }
+        mq.addListener(update);
+        return () => mq.removeListener(update);
+    }, []);
+    return narrow;
+}
+
+type FaultListSort = { orderBy: string; orderValue: string };
+
+const faultColumnSortOrder = (
+    listSort: FaultListSort,
+    field: string,
+): "ascend" | "descend" | undefined => {
+    if (listSort.orderBy !== field) return undefined;
+    return listSort.orderValue === "ASC" ? "ascend" : "descend";
+};
 
 const MESSAGE_PREVIEW_LINES = 3;
 
@@ -370,7 +352,8 @@ const ReportFaults: React.FC = () => {
                 });
         }, 150);
     }, []);
-    const { loading, rows: reduxRows, row, success, modalType, count, loadingAction } = useSelector((state: any) => state?.reportFaults);
+    const { loading, rows: reduxRows, row, success, modalType, count, loadingAction, lastQuery } =
+        useSelector((state: any) => state?.reportFaults);
     const dispatch = useDispatch();
     const [sites, setSites] = useState<any[]>([]);
     const [viewFaultOpen, setViewFaultOpen] = useState(false);
@@ -379,12 +362,18 @@ const ReportFaults: React.FC = () => {
     const [markingUnreadFaultId, setMarkingUnreadFaultId] = useState<number | null>(null);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [bulkDeleting, setBulkDeleting] = useState(false);
-    const [faultListTab, setFaultListTab] = useState<FaultListTab>("active");
+    const [mainFaultTab, setMainFaultTab] = useState<ReportFaultMainTab>(() => {
+        if (typeof window === "undefined") return "list";
+        const tab = new URLSearchParams(window.location.search).get("tab");
+        return faultTabFromUrl(tab);
+    });
     const [deletedFaultCount, setDeletedFaultCount] = useState(0);
     const [clearingDeleted, setClearingDeleted] = useState(false);
+    const [listSort, setListSort] = useState({ orderBy: "createdAt", orderValue: "DESC" });
     const isMobilePortrait = useMobilePortrait();
+    const showMobileFaultCards = isMobilePortrait || useNarrowViewport();
     const { isDark } = useColorModeOptional();
-    const faultsPageDark = isDark && isMobilePortrait;
+    const faultsPageDark = isDark && showMobileFaultCards;
     const modalUiDark = faultsPageDark;
     const mobileUiDark = faultsPageDark;
     const [listFiltersOpen, setListFiltersOpen] = useState(() => {
@@ -438,6 +427,13 @@ const ReportFaults: React.FC = () => {
     const refreshDashboard = useCallback(() => {
         dispatch(dashboardActions.getData({ startDate: '', endDate: '' }));
     }, [dispatch]);
+
+    const loadSitesFilter = useCallback(async () => {
+        const sitesRes = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getSites`, 'GET');
+        if (sitesRes?.data) {
+            setSites(sitesRes.data);
+        }
+    }, []);
 
     const patchFaultReadState = useCallback(
         (faultId: number) => {
@@ -557,6 +553,7 @@ const ReportFaults: React.FC = () => {
                 const res = await callAPIAsync(serviceType.COMMON, markPath, 'PATCH', {});
                 if (res?.code === 1) {
                     markFaultOpenedDoneRef.current.add(faultId);
+                    refreshDashboard();
                     return true;
                 }
                 return false;
@@ -564,7 +561,7 @@ const ReportFaults: React.FC = () => {
                 markFaultOpenedInFlightRef.current.delete(faultId);
             }
         },
-        [profile, patchFaultReadState],
+        [profile, patchFaultReadState, refreshDashboard],
     );
 
     const linkedFaultAutoOpenedRef = useRef<number | null>(null);
@@ -581,21 +578,47 @@ const ReportFaults: React.FC = () => {
     const closeFaultView = useCallback(() => {
         setViewFaultOpen(false);
         setViewFaultRow(null);
-        if (new URLSearchParams(location.search).get('faultId')) {
-            history.replace({ pathname: '/report-faults', search: '' });
+        const params = new URLSearchParams(location.search);
+        if (params.get('faultId')) {
+            const returnTo = params.get('returnTo');
+            if (returnTo === 'urgent' || returnTo === 'tasks-faults') {
+                setMainFaultTab('urgent');
+                history.replace({ pathname: '/report-faults', search: 'tab=urgent' });
+            } else {
+                history.replace({ pathname: '/report-faults', search: '' });
+            }
         }
     }, [history, location.search]);
 
-    const getFilter = async () => {
-        const sitesRes = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getSites`, 'GET');
-        if (sitesRes?.data) {
-            setSites(sitesRes.data);
-        }
-    }
-
     const profileType = profile ? +profile.type : 0;
     const isAdminUser = profileType === userType.ADMIN;
-    const isDeletedFaultTab = isAdminUser && faultListTab === "deleted";
+    const hasSearchFilters = useMemo(() => {
+        if (!lastQuery || lastQuery.faultId) return false;
+        const keyword = String(lastQuery.keyword ?? "").trim();
+        const hasDates = Boolean(
+            String(lastQuery.startDate ?? "").trim() && String(lastQuery.endDate ?? "").trim(),
+        );
+        return Boolean(keyword || hasDates);
+    }, [lastQuery]);
+    const searchResultsSummary =
+        hasSearchFilters && !loading ? (
+            <p
+                style={{
+                    margin: "0 0 12px",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: mobileUiDark ? "rgba(255,255,255,0.72)" : "#595959",
+                }}
+            >
+                {count === 0
+                    ? "No faults match your search"
+                    : `${count.toLocaleString()} fault${count === 1 ? "" : "s"} found`}
+            </p>
+        ) : null;
+    const showReportFaultMainTabs =
+        profileType === userType.CUSTOMER || profileType === userType.ADMIN;
+    const isUrgentReportsTab = showReportFaultMainTabs && mainFaultTab === "urgent";
+    const isDeletedFaultTab = isAdminUser && mainFaultTab === "deleted";
     const showFaultDeletedTabs = isAdminUser;
 
     useEffect(() => {
@@ -647,6 +670,17 @@ const ReportFaults: React.FC = () => {
         );
     }, []);
 
+    const onPriorityUpdated = useCallback((payload?: { id?: number; priority?: number }) => {
+        if (payload?.id == null || payload.priority == null) return;
+        const faultId = +payload.id;
+        setListRows((prev) =>
+            prev.map((r) => (reportFaultIdOf(r) === faultId ? { ...r, priority: payload.priority } : r)),
+        );
+        setViewFaultRow((prev) =>
+            prev && reportFaultIdOf(prev) === faultId ? { ...prev, priority: payload.priority } : prev,
+        );
+    }, []);
+
     const renderMobileFaultCard = useCallback(
         (record: any) => {
             const faultId = reportFaultIdOf(record);
@@ -670,7 +704,7 @@ const ReportFaults: React.FC = () => {
                         const el = e.target as HTMLElement;
                         if (
                             el.closest(
-                                ".report-fault-read-status, .ant-checkbox-wrapper, .report-faults-row-actions, .ant-btn, .btnLink, button",
+                                        ".report-fault-read-status, .report-fault-priority-cell, .ant-checkbox-wrapper, .report-faults-row-actions, .ant-btn, .btnLink, button",
                             )
                         ) {
                             return;
@@ -694,8 +728,18 @@ const ReportFaults: React.FC = () => {
                             <MobileFaultCardTitle $dark={mobileUiDark}>{title}</MobileFaultCardTitle>
                             <MobileFaultCardMeta $dark={mobileUiDark}>{siteLine}</MobileFaultCardMeta>
                             <MobileFaultCardMeta $dark={mobileUiDark}>{timeLabel}</MobileFaultCardMeta>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                                {renderFaultPriority(record.priority, false, true)}
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8, alignItems: "center" }}>
+                                <div className="report-fault-priority-cell" onClick={stopRowOpen} onMouseDown={stopRowOpen}>
+                                    <FaultPriorityCell
+                                        record={record}
+                                        profileType={profileType}
+                                        staffUserId={profile?.id}
+                                        isDeletedTab={isDeletedFaultTab}
+                                        onUpdated={onPriorityUpdated}
+                                        small
+                                    />
+                                </div>
+                                <FaultListStatusBadge record={record} />
                             </div>
                         </div>
                         {showReadUnread ? (
@@ -734,6 +778,9 @@ const ReportFaults: React.FC = () => {
             canBulkDeleteRow,
             selectedRowKeys,
             toggleFaultRowSelected,
+            isDeletedFaultTab,
+            onPriorityUpdated,
+            profile?.id,
         ],
     );
 
@@ -829,11 +876,15 @@ const ReportFaults: React.FC = () => {
     );
 
     const readStatusColumn = {
-        title: "Status",
+        title: isMobilePortrait ? "" : "Read",
         key: "readStatus",
+        columnKey: "readStatus",
         dataIndex: "readStatus",
         width: isMobilePortrait ? 44 : 72,
         align: "center" as const,
+        sorter: true,
+        sortDirections: ["ascend", "descend"] as ("ascend" | "descend")[],
+        sortOrder: faultColumnSortOrder(listSort, "readStatus"),
         onCell: () => ({
             className: "report-fault-read-status-cell",
             onClick: stopRowOpen,
@@ -847,6 +898,18 @@ const ReportFaults: React.FC = () => {
                 onMarkUnread={markFaultUnread}
             />
         ),
+    };
+
+    const statusColumn = {
+        title: "Status",
+        key: "listStatus",
+        columnKey: "listStatus",
+        dataIndex: "listStatus",
+        width: isMobilePortrait ? 88 : 120,
+        sorter: true,
+        sortDirections: ["ascend", "descend"] as ("ascend" | "descend")[],
+        sortOrder: faultColumnSortOrder(listSort, "listStatus"),
+        render: (_: unknown, r: any) => <FaultListStatusBadge record={r} />,
     };
 
     const columns: ColDef[] | any = useMemo(() => {
@@ -936,6 +999,32 @@ const ReportFaults: React.FC = () => {
                     },
                 },
                 ...(showReadUnread ? [readStatusColumn] : []),
+                {
+                    title: "Priority",
+                    key: "priority",
+                    columnKey: "priority",
+                    dataIndex: "priority",
+                    width: 88,
+                    sorter: true,
+                    sortDirections: ["ascend", "descend"] as ("ascend" | "descend")[],
+                    sortOrder: faultColumnSortOrder(listSort, "priority"),
+                    onCell: () => ({
+                        className: "report-fault-priority-cell",
+                        onClick: stopRowOpen,
+                        onMouseDown: stopRowOpen,
+                    }),
+                    render: (_: string, r: any) => (
+                        <FaultPriorityCell
+                            record={r}
+                            profileType={profileType}
+                            staffUserId={profile?.id}
+                            isDeletedTab={isDeletedFaultTab}
+                            onUpdated={onPriorityUpdated}
+                            small
+                        />
+                    ),
+                },
+                statusColumn,
                 actionColumn,
             ];
         }
@@ -943,25 +1032,40 @@ const ReportFaults: React.FC = () => {
         return [
             {
                 title: "Date",
+                key: "createdAt",
+                columnKey: "createdAt",
                 dataIndex: "createdAt",
                 width: 155,
                 sorter: true,
+                sortOrder: faultColumnSortOrder(listSort, "createdAt"),
                 render: (_: string, r: any) => {
                     const t = r?.createdAt;
                     return t ? moment(t).utcOffset(600).format(dateTimeFormat) : "—";
                 },
             },
-            ...(Number(profile?.type) !== userType.STAFF
+            { title: "Site name", key: "siteName", columnKey: "siteName", dataIndex: "siteName", sorter: true, sortOrder: faultColumnSortOrder(listSort, "siteName") },
+            ...(profileType === userType.ADMIN
                 ? [
                     {
                         title: "Customer name",
+                        key: "companyName",
+                        columnKey: "companyName",
                         dataIndex: "companyName",
                         sorter: true,
+                        sortOrder: faultColumnSortOrder(listSort, "companyName"),
                         render: (_: string, r: any) => r.companyName || r.customerName || "",
                     },
                 ]
                 : []),
-            { title: "Issue", dataIndex: "issue", sorter: true, render: (_: string, r: any) => r.issue || r.subject || "—" },
+            {
+                title: "Issue",
+                key: "issue",
+                columnKey: "issue",
+                dataIndex: "issue",
+                sorter: true,
+                sortOrder: faultColumnSortOrder(listSort, "issue"),
+                render: (_: string, r: any) => r.issue || r.subject || "—",
+            },
             {
                 title: "Message",
                 dataIndex: "message",
@@ -990,18 +1094,43 @@ const ReportFaults: React.FC = () => {
                     }
                 },
             },
-            { title: "Site name", dataIndex: "siteName", sorter: true },
             ...(+profile?.type !== userType.STAFF
-                ? [{ title: "Service name", dataIndex: "serviceName", sorter: true }]
+                ? [{
+                    title: "Service name",
+                    key: "serviceName",
+                    columnKey: "serviceName",
+                    dataIndex: "serviceName",
+                    sorter: true,
+                    sortDirections: ["ascend", "descend"] as ("ascend" | "descend")[],
+                    sortOrder: faultColumnSortOrder(listSort, "serviceName"),
+                }]
                 : []),
             ...(showReadUnread ? [readStatusColumn] : []),
             {
                 title: "Priority",
+                key: "priority",
+                columnKey: "priority",
                 dataIndex: "priority",
                 width: 120,
                 sorter: true,
-                render: (_: string, r: any) => renderFaultPriority(r.priority),
+                sortDirections: ["ascend", "descend"] as ("ascend" | "descend")[],
+                sortOrder: faultColumnSortOrder(listSort, "priority"),
+                onCell: () => ({
+                    className: "report-fault-priority-cell",
+                    onClick: stopRowOpen,
+                    onMouseDown: stopRowOpen,
+                }),
+                render: (_: string, r: any) => (
+                    <FaultPriorityCell
+                        record={r}
+                        profileType={profileType}
+                        staffUserId={profile?.id}
+                        isDeletedTab={isDeletedFaultTab}
+                        onUpdated={onPriorityUpdated}
+                    />
+                ),
             },
+            statusColumn,
             actionColumn,
         ];
     }, [
@@ -1013,12 +1142,16 @@ const ReportFaults: React.FC = () => {
         markFaultUnread,
         openFaultView,
         isMobilePortrait,
-        dispatch,
+        listSort,
+        readStatusColumn,
+        statusColumn,
+        isDeletedFaultTab,
+        onPriorityUpdated,
     ]);
 
     const handleOnClick = (action: string, rowData?: any): void => {
         if (action === actionType.SEARCH) {
-            handleResetSearch(page, limit);
+            handleResetSearch(1, limit);
         } else {
             if (
                 rowData &&
@@ -1038,19 +1171,20 @@ const ReportFaults: React.FC = () => {
         orderBy: string = 'createdAt',
         orderValue: string = 'DESC',
         options?: { clearDateFilter?: boolean; faultId?: number },
-        tab: FaultListTab = faultListTab,
+        tab: ReportFaultMainTab = mainFaultTab,
     ) => {
         const formData = form.getFieldsValue();
         const useDateRange = !options?.clearDateFilter && !options?.faultId && formData.rangeDate?.length > 1;
         const startDate = useDateRange ? moment(formData.rangeDate[0]).format('YYYY-MM-DD') : '';
         const endDate = useDateRange ? moment(formData.rangeDate[1]).format('YYYY-MM-DD') : '';
+        const listTab = tab === "urgent" ? "list" : tab;
         return {
             keyword: formData?.keyword ? formData.keyword.trim() : '',
             page: pageNum,
             limit: limitNum,
             orderBy,
             orderValue,
-            status: tab === "deleted" ? reportFaultStatus.DELETED : 0,
+            status: listTab === "deleted" ? reportFaultStatus.DELETED : 0,
             startDate,
             endDate,
             ...(options?.faultId ? { faultId: options.faultId } : {}),
@@ -1084,8 +1218,8 @@ const ReportFaults: React.FC = () => {
     const fetchList = (
         pageNum: any = 1,
         limitNum: any = 100,
-        orderBy: string = 'createdAt',
-        orderValue: string = 'DESC',
+        orderBy: string = listSort.orderBy,
+        orderValue: string = listSort.orderValue,
         options?: { clearDateFilter?: boolean; faultId?: number },
     ) => {
         dispatch(actions.getData(buildListQuery(pageNum, limitNum, orderBy, orderValue, options)));
@@ -1114,18 +1248,6 @@ const ReportFaults: React.FC = () => {
         void loadDeletedFaultCount();
     }, [showFaultDeletedTabs, loadDeletedFaultCount]);
 
-    useEffect(() => {
-        if (new URLSearchParams(location.search).get("faultId")) return;
-        setPage(1);
-        setSelectedRowKeys([]);
-        handleResetSearch(1, limit);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [faultListTab]);
-
-    useEffect(() => {
-        if (!loading && showFaultDeletedTabs) void loadDeletedFaultCount();
-    }, [loading, showFaultDeletedTabs, loadDeletedFaultCount]);
-
     const linkedFetchOptions = useCallback(() => {
         const faultIdParam = new URLSearchParams(location.search).get("faultId");
         return faultIdParam
@@ -1136,26 +1258,110 @@ const ReportFaults: React.FC = () => {
     const handleResetSearch = async (
         pageNum: any = 1,
         limitNum: any = 100,
-        orderBy: string = 'createdAt',
-        orderValue: string = 'DESC',
+        orderBy: string = listSort.orderBy,
+        orderValue: string = listSort.orderValue,
+        options?: { clearDateFilter?: boolean; faultId?: number },
     ) => {
         try {
             await form.validateFields();
         } catch {
             // Allow search/refresh even when optional filter fields are empty
         }
-        fetchList(pageNum, limitNum, orderBy, orderValue, linkedFetchOptions());
+        setPage(pageNum);
+        setLimit(limitNum);
+        fetchList(
+            pageNum,
+            limitNum,
+            orderBy,
+            orderValue,
+            options ?? linkedFetchOptions(),
+        );
     };
 
-    const onTableChange = (pagination: any, _filters: any, sorter: any): void => {
-        setPage(pagination.current);
-        setLimit(pagination.pageSize);
-        handleResetSearch(
-            pagination.current,
-            pagination.pageSize,
-            sorter?.field ?? 'createdAt',
-            sorter?.order ? (sorter.order === 'ascend' ? "ASC" : "DESC") : 'DESC',
+    useEffect(() => {
+        if (new URLSearchParams(location.search).get("faultId")) return;
+        setPage(1);
+        setSelectedRowKeys([]);
+        void handleResetSearch(1, limit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [mainFaultTab]);
+
+    const onTableChange = (pagination: any, _filters: any, sorter: any, extra?: { action?: string }): void => {
+        const nextPage = pagination?.current ?? page;
+        const nextLimit = pagination?.pageSize ?? limit;
+
+        if (extra?.action === "paginate") {
+            setPage(nextPage);
+            setLimit(nextLimit);
+            fetchList(
+                nextPage,
+                nextLimit,
+                listSort.orderBy,
+                listSort.orderValue,
+                { clearDateFilter: true },
+            );
+            return;
+        }
+
+        const colSorter = Array.isArray(sorter)
+            ? [...sorter].reverse().find((s: { order?: string }) => s?.order) ?? sorter[sorter.length - 1]
+            : sorter;
+        const rawField =
+            colSorter?.columnKey ??
+            colSorter?.field ??
+            (colSorter?.column as { dataIndex?: string | string[] } | undefined)?.dataIndex;
+        if (rawField == null) return;
+
+        const field = String(
+            Array.isArray(rawField) ? rawField.join(".") : rawField,
         );
+        const allowed = new Set([
+            "createdAt",
+            "issue",
+            "siteName",
+            "serviceName",
+            "companyName",
+            "customerName",
+            "message",
+            "priority",
+            "readStatus",
+            "listStatus",
+        ]);
+        if (!allowed.has(field)) return;
+
+        let orderBy = field;
+        let orderValue = "DESC";
+
+        if (colSorter.order === "ascend") {
+            orderValue = "ASC";
+        } else if (colSorter.order === "descend") {
+            orderValue = "DESC";
+        } else if (field === "readStatus") {
+            orderBy = "readStatus";
+            orderValue =
+                listSort.orderBy === "readStatus" && listSort.orderValue === "ASC"
+                    ? "DESC"
+                    : "ASC";
+        } else if (field === "listStatus") {
+            orderBy = "listStatus";
+            orderValue =
+                listSort.orderBy === "listStatus" && listSort.orderValue === "ASC"
+                    ? "DESC"
+                    : "ASC";
+        } else if (colSorter.order == null || colSorter.order === false) {
+            if (field === listSort.orderBy) {
+                orderBy = "createdAt";
+                orderValue = "DESC";
+            } else {
+                orderBy = field;
+                orderValue = "ASC";
+            }
+        }
+
+        const nextSort = { orderBy, orderValue };
+        setListSort(nextSort);
+        setPage(1);
+        setLimit(nextLimit);
     };
 
     const deleteSelectedFaults = useCallback(async () => {
@@ -1360,7 +1566,7 @@ const ReportFaults: React.FC = () => {
         : undefined;
 
     useEffect(() => {
-        getFilter();
+        void loadSitesFilter();
         const userTypeNum = profile ? +profile.type : 0;
         if (userTypeNum === userType.ADMIN || userTypeNum === userType.CUSTOMER) {
             void (async () => {
@@ -1396,6 +1602,12 @@ const ReportFaults: React.FC = () => {
     }, [modalType, row, markFaultOpenedForViewer]);
 
     useEffect(() => {
+        if (!showReportFaultMainTabs) return;
+        setMainFaultTab(faultTabFromUrl(new URLSearchParams(location.search).get("tab")));
+    }, [location.search, showReportFaultMainTabs]);
+
+    useEffect(() => {
+        if (isUrgentReportsTab) return;
         window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
         const faultIdParam = new URLSearchParams(location.search).get("faultId");
         if (faultIdParam) {
@@ -1404,16 +1616,17 @@ const ReportFaults: React.FC = () => {
         fetchList(
             faultIdParam ? 1 : page,
             limit,
-            "createdAt",
-            "DESC",
+            listSort.orderBy,
+            listSort.orderValue,
             faultIdParam
                 ? { clearDateFilter: true, faultId: +faultIdParam }
                 : { clearDateFilter: true },
         );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [location.search]);
+    }, [location.search, isUrgentReportsTab]);
 
     useEffect(() => {
+        if (isUrgentReportsTab) return;
         if (!linkedFaultId || loading) return;
         if (linkedFaultAutoOpenedRef.current === linkedFaultId) return;
         const match = listRows.find((r: any) => reportFaultIdOf(r) === linkedFaultId);
@@ -1422,7 +1635,7 @@ const ReportFaults: React.FC = () => {
             scrollToHighlightedRow();
             void openFaultView(match);
         }
-    }, [linkedFaultId, loading, listRows, scrollToHighlightedRow, openFaultView]);
+    }, [linkedFaultId, loading, listRows, scrollToHighlightedRow, openFaultView, isUrgentReportsTab]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -1487,6 +1700,88 @@ const ReportFaults: React.FC = () => {
           }
         : { paddingTop: 8 };
 
+    const reportFaultMainTabsEl = showReportFaultMainTabs ? (
+        <Tabs
+            className={
+                isMobilePortrait
+                    ? `new-reports-mobile-tabs${mobileUiDark ? " new-reports-mobile-tabs--dark" : ""}`
+                    : undefined
+            }
+            activeKey={mainFaultTab}
+            onChange={(k) => {
+                const next = k as ReportFaultMainTab;
+                setMainFaultTab(next);
+                setPage(1);
+                setSelectedRowKeys([]);
+                const params = new URLSearchParams(location.search);
+                if (next === "urgent") {
+                    params.set("tab", "urgent");
+                    params.delete("faultId");
+                } else if (next === "deleted") {
+                    params.set("tab", "deleted");
+                    params.delete("faultId");
+                } else {
+                    params.delete("tab");
+                }
+                const search = params.toString();
+                history.replace({
+                    pathname: "/report-faults",
+                    search: search ? `?${search}` : "",
+                });
+            }}
+            style={{ marginBottom: 12 }}
+            items={[
+                { key: "list", label: "Report faults" },
+                { key: "urgent", label: "Urgent reports" },
+                ...(isAdminUser
+                    ? [{ key: "deleted", label: `Deleted (${deletedFaultCount})` }]
+                    : []),
+            ]}
+        />
+    ) : null;
+
+    const onDelegationSaved = (delegation?: Record<string, unknown>) => {
+        if (delegation?.id == null) return;
+        const faultId = +delegation.id;
+        const patch = {
+            delegatedToType: delegation.delegatedToType,
+            delegatedToPersonnelId: delegation.delegatedToPersonnelId,
+            delegatedToStaffId: delegation.delegatedToStaffId,
+            delegatedUntil: delegation.delegatedUntil,
+            delegationNote: delegation.delegationNote,
+            delegatedAt: delegation.delegatedAt,
+            delegatedBy: delegation.delegatedBy,
+            delegatedActedAt: delegation.delegatedActedAt,
+            delegationViewedAt: delegation.delegationViewedAt,
+            delegationOutcome: delegation.delegationOutcome,
+            delegatedAssigneeName: delegation.delegatedAssigneeName,
+            delegatedAssigneeRole: delegation.delegatedAssigneeRole,
+        };
+        setListRows((prev) =>
+            prev.map((r) => (reportFaultIdOf(r) === faultId ? { ...r, ...patch } : r)),
+        );
+        setViewFaultRow((prev) =>
+            prev && reportFaultIdOf(prev) === faultId ? { ...prev, ...patch } : prev,
+        );
+    };
+
+    const onFaultCompleted = (payload?: Record<string, unknown>) => {
+        if (payload?.id == null) return;
+        const faultId = +payload.id;
+        const patch = {
+            status: payload.status,
+            delegatedActedAt: payload.delegatedActedAt,
+            delegationViewedAt: payload.delegationViewedAt,
+            delegationOutcome: payload.delegationOutcome,
+        };
+        setListRows((prev) =>
+            prev.map((r) => (reportFaultIdOf(r) === faultId ? { ...r, ...patch } : r)),
+        );
+        setViewFaultRow((prev) =>
+            prev && reportFaultIdOf(prev) === faultId ? { ...prev, ...patch } : prev,
+        );
+    };
+
     return (
         <Layout title="sidebar.reportFaults">
             {faultsPageDark ? <ReportsMobileDarkPageStyles /> : null}
@@ -1503,29 +1798,13 @@ const ReportFaults: React.FC = () => {
             <UsersDiv
                 style={mobilePortraitBleed}
                 className={`report-faults-list-wrap${
-                    isMobilePortrait ? " report-faults-list-wrap--mobile-portrait" : ""
+                    showMobileFaultCards ? " report-faults-list-wrap--mobile-portrait" : ""
                 }${faultsPageDark ? " new-reports-page-dark new-reports-theme-dark" : ""}`}
             >
-                {showFaultDeletedTabs ? (
-                    <Tabs
-                        className={
-                            isMobilePortrait
-                                ? `new-reports-mobile-tabs${mobileUiDark ? " new-reports-mobile-tabs--dark" : ""}`
-                                : undefined
-                        }
-                        activeKey={faultListTab}
-                        onChange={(k) => {
-                            setFaultListTab(k as FaultListTab);
-                            setPage(1);
-                            setSelectedRowKeys([]);
-                        }}
-                        style={{ marginBottom: 12 }}
-                        items={[
-                            { key: "active", label: "Report faults" },
-                            { key: "deleted", label: `Deleted (${deletedFaultCount})` },
-                        ]}
-                    />
-                ) : null}
+                {isUrgentReportsTab ? (
+                    <TasksFaultsPanel tabsAboveTable={reportFaultMainTabsEl} />
+                ) : (
+                <>
                 <div
                     className={`new-reports-list-filters${
                         mobileUiDark ? " new-reports-list-filters--dark" : ""
@@ -1717,6 +1996,7 @@ const ReportFaults: React.FC = () => {
                 </div>
                 {!isMobilePortrait ? <UsernameRow /> : null}
                 <InformationDiv style={isMobilePortrait ? { overflow: "visible" } : undefined}>
+                    {searchResultsSummary}
                     {canUseBulkDelete ? (
                         <div
                             className={
@@ -1880,14 +2160,17 @@ const ReportFaults: React.FC = () => {
                             </Popconfirm>
                         </div>
                     ) : null}
-                    {isMobilePortrait ? (
+                    {showReportFaultMainTabs ? reportFaultMainTabsEl : null}
+                    {showMobileFaultCards ? (
                         <Spin spinning={loading}>
                             {!loading && listRows.length === 0 ? (
                                 <Empty
                                     description={
-                                        isDeletedFaultTab
-                                            ? "No deleted faults"
-                                            : intl.formatMessage({ id: "sidebar.users.no_data" })
+                                        hasSearchFilters
+                                            ? "No faults match your search"
+                                            : isDeletedFaultTab
+                                              ? "No deleted faults"
+                                              : intl.formatMessage({ id: "sidebar.users.no_data" })
                                     }
                                     style={{ margin: "32px 0" }}
                                 />
@@ -1905,7 +2188,12 @@ const ReportFaults: React.FC = () => {
                                     size="small"
                                     showSizeChanger={false}
                                     showTotal={(t) => `${t} faults`}
-                                    onChange={(p) => handleResetSearch(p, limit)}
+                                    onChange={(p) => {
+                                        window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+                                        void handleResetSearch(p, limit, listSort.orderBy, listSort.orderValue, {
+                                            clearDateFilter: true,
+                                        });
+                                    }}
                                     style={{ marginTop: 16, textAlign: "center" }}
                                 />
                             ) : null}
@@ -1929,6 +2217,7 @@ const ReportFaults: React.FC = () => {
                         limit={limit}
                         data={listRows}
                         loading={loading}
+                        totalUnit="faults"
                         rowSelection={rowSelection}
                         onRow={(record) => ({
                             onClick: (e: React.MouseEvent) => {
@@ -1952,6 +2241,8 @@ const ReportFaults: React.FC = () => {
                     />
                     )}
                 </InformationDiv>
+                </>
+                )}
             </UsersDiv>
 
             {modalType && (modalType === actionType.ADD || modalType === actionType.UPDATE) ? (
@@ -1983,7 +2274,9 @@ const ReportFaults: React.FC = () => {
                 onClose={closeFaultView}
                 record={viewFaultRow}
                 viewerType={profile ? +profile.type : 0}
-                renderPriority={(p) => renderFaultPriority(p, false, true)}
+                onPriorityUpdated={onPriorityUpdated}
+                isDeletedTab={isDeletedFaultTab}
+                staffUserId={profile?.id}
                 readStatusNode={
                     showReadUnread && viewFaultRow ? (
                         <FaultReadStatusCell
@@ -1994,6 +2287,8 @@ const ReportFaults: React.FC = () => {
                         />
                     ) : null
                 }
+                onDelegationSaved={onDelegationSaved}
+                onFaultCompleted={onFaultCompleted}
             />
         </Layout>
     );

@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -99,6 +99,8 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureRoofGutterFaultIssues();
     await this.ensureGroundMaintenanceFaultIssues();
     await this.ensureReportFaultToiletAreaColumn();
+    await this.ensureCustomerPersonnelAndFaultDelegation();
+    await this.ensureAdminPersonnelAndStaffDelegation();
     await this.applyRenameDepartmentsToServices();
 
     try {
@@ -1827,6 +1829,146 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('report_faults.toilet_area ensured');
     } catch (e) {
       this.logger.warn(`report_faults toilet_area patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureCustomerPersonnelAndFaultDelegation(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.customer_personnel (
+          id SERIAL PRIMARY KEY,
+          company_id INT NOT NULL,
+          name VARCHAR(200) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          phone VARCHAR(64) NULL,
+          role VARCHAR(32) NOT NULL DEFAULT 'personnel',
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          created_by INT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_customer_personnel_company
+          ON public.customer_personnel (company_id);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.personnel_fault_access_tokens (
+          id SERIAL PRIMARY KEY,
+          report_fault_id INT NOT NULL REFERENCES public.report_faults(id) ON DELETE CASCADE,
+          personnel_id INT NOT NULL REFERENCES public.customer_personnel(id) ON DELETE CASCADE,
+          token_hash VARCHAR(64) NOT NULL UNIQUE,
+          expires_at TIMESTAMPTZ NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          last_accessed_at TIMESTAMPTZ NULL
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_pfat_fault_id
+          ON public.personnel_fault_access_tokens (report_fault_id);
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_to_type VARCHAR(32) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_to_personnel_id INT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_until TIMESTAMPTZ NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_by INT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_at TIMESTAMPTZ NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegation_note TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_acted_at TIMESTAMPTZ NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegation_viewed_at TIMESTAMPTZ NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.customer_personnel_role_types (
+          id SERIAL PRIMARY KEY,
+          company_id INT NOT NULL,
+          label VARCHAR(100) NOT NULL,
+          normalized_label VARCHAR(100) NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (company_id, normalized_label)
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_cprt_company_id
+          ON public.customer_personnel_role_types (company_id);
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customer_personnel
+        ALTER COLUMN role TYPE VARCHAR(100);
+      `);
+      this.logger.log('customer_personnel and fault delegation ensured');
+    } catch (e) {
+      this.logger.warn(`customer personnel delegation patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureAdminPersonnelAndStaffDelegation(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.admin_personnel (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(200) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          phone VARCHAR(64) NULL,
+          role VARCHAR(100) NOT NULL DEFAULT 'Staff',
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          created_by INT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.admin_personnel_role_types (
+          id SERIAL PRIMARY KEY,
+          label VARCHAR(100) NOT NULL,
+          normalized_label VARCHAR(100) NOT NULL UNIQUE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.report_faults
+        ADD COLUMN IF NOT EXISTS delegated_to_staff_id INT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.personnel_fault_access_tokens
+        ADD COLUMN IF NOT EXISTS admin_personnel_id INT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.personnel_fault_access_tokens
+        ALTER COLUMN personnel_id DROP NOT NULL;
+      `);
+      await this.dataSource.query(`
+        UPDATE public.report_faults rf
+        SET delegated_to_type = 'admin_personnel'
+        WHERE rf.delegated_to_type = 'staff'
+          AND rf.delegated_to_staff_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM public.admin_personnel ap
+            WHERE ap.id = rf.delegated_to_staff_id
+          );
+      `);
+      this.logger.log('admin_personnel and staff delegation ensured');
+    } catch (e) {
+      this.logger.warn(`admin personnel delegation patch: ${(e as Error).message}`);
     }
   }
 }

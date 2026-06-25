@@ -1,5 +1,5 @@
 import Layout from '@app/components/layout/Layout';
-import { CustomerServiceOutlined, FileTextOutlined, LoginOutlined, MailOutlined } from '@ant-design/icons';
+import { CustomerServiceOutlined, FileTextOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
 import React, { useCallback, useEffect } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
@@ -53,6 +53,7 @@ const Dashboard: React.FC = () => {
   const newReportsCount = data?.newReportsCount ?? 0;
   const newTicketsCount = data?.newTicketsCount ?? 0;
   const messagesUnreadCount = data?.messagesUnreadCount ?? 0;
+  const myTasksCount = data?.myTasksCount ?? 0;
   const canShowMessages =
     profile &&
     (+profile.type === userType.ADMIN ||
@@ -126,6 +127,24 @@ const Dashboard: React.FC = () => {
     </Link>
   ) : null;
 
+  const myTasksBadge = isStaff ? (
+    <Link to="/my-tasks" className="dashboard-report-badge">
+      <span className="dashboard-report-badge__icon-wrap">
+        <div className="dashboard-report-badge__circle dashboard-report-badge__circle--tickets dashboard-report-badge__circle--action">
+          <UnorderedListOutlined />
+        </div>
+        {myTasksCount > 0 ? (
+          <span className="dashboard-messages-badge__count" aria-label={`${myTasksCount} open tasks`}>
+            {myTasksCount > 99 ? '99+' : myTasksCount}
+          </span>
+        ) : null}
+      </span>
+      <div className="dashboard-report-badge__label">
+        {intl.formatMessage({ id: 'sidebar.myTasks' })}
+      </div>
+    </Link>
+  ) : null;
+
   const messagesEnvelopeBadge = canShowMessages ? (
     <Link to="/messages" className="dashboard-messages-badge">
       <span className="dashboard-messages-badge__icon-wrap">
@@ -141,6 +160,7 @@ const Dashboard: React.FC = () => {
   const dashboardReportBadges = (
     <div className="dashboard-report-badges">
       {checkInBadge}
+      {myTasksBadge}
       {newReportBadge(
         isStaff ? '/new-reports?create=1' : '/new-reports',
         isAdmin || isCustomer,
