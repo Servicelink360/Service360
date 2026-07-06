@@ -21,6 +21,8 @@ import { GeneratePresignedUrlDto, UploadImageDto } from './dto/upload-image.dto'
 import { ReportFaultsService } from '../report-faults/report-faults.service';
 import { MessagesService } from '../messages/messages.service';
 import { CompaniesService } from '../companies/companies.service';
+import { InvoicesService } from '../invoices/invoices.service';
+import { userType } from '../constants/user';
 @Injectable()
 export class CommonService {
   constructor(
@@ -40,6 +42,7 @@ export class CommonService {
     @Inject(forwardRef(() => ReportFaultsService)) private readonly reportFaultsService: ReportFaultsService,
     @Inject(forwardRef(() => MessagesService)) private readonly messagesService: MessagesService,
     @Inject(forwardRef(() => CompaniesService)) private readonly companiesService: CompaniesService,
+    @Inject(forwardRef(() => InvoicesService)) private readonly invoicesService: InvoicesService,
   ) { }
 
   async uploadImage(body: UploadImageDto) {
@@ -152,10 +155,15 @@ export class CommonService {
       myTasksCount = resMyTasks?.data ?? 0;
     }
 
+    let invoicesCount = 0;
+    if (+userInfo.type === userType.CUSTOMER || +userInfo.type === userType.ADMIN) {
+      invoicesCount = await this.invoicesService.countForDashboard(userInfo);
+    }
+
     return {
       ...errorCode.SUCCESS, data: {
         siteCount, taskCount, pendingTaskCount, inprogressTaskCount, successTaskCount, currentTask, ticketData: ticketData.data, submittedReportCount, newReportsCount, reportFaultsCount
-        , auditReportCount, newTicketCount, newTicketsCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount, myTasksCount
+        , auditReportCount, newTicketCount, newTicketsCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount, myTasksCount, invoicesCount
       }
     };
   }

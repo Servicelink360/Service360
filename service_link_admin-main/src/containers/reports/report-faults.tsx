@@ -926,9 +926,12 @@ const ReportFaults: React.FC = () => {
             return [
                 {
                     title: "Date",
+                    key: "createdAt",
+                    columnKey: "createdAt",
                     dataIndex: "createdAt",
                     width: 84,
                     sorter: true,
+                    sortOrder: faultColumnSortOrder(listSort, "createdAt"),
                     render: (_: string, r: any) => {
                         const t = r?.createdAt;
                         if (!t) return "—";
@@ -944,16 +947,23 @@ const ReportFaults: React.FC = () => {
                 },
                 {
                     title: "Issue",
+                    key: "issue",
+                    columnKey: "issue",
                     dataIndex: "issue",
                     width: 88,
                     ellipsis: true,
                     sorter: true,
+                    sortOrder: faultColumnSortOrder(listSort, "issue"),
                     render: (_: string, r: any) => r.issue || r.subject || "—",
                 },
                 {
                     title: "Message",
+                    key: "message",
+                    columnKey: "message",
                     dataIndex: "message",
                     ellipsis: true,
+                    sorter: true,
+                    sortOrder: faultColumnSortOrder(listSort, "message"),
                     render: (_: string, r: any) => {
                         const full = r.message == null ? "" : String(r.message).trim();
                         if (!full) return "—";
@@ -1068,8 +1078,12 @@ const ReportFaults: React.FC = () => {
             },
             {
                 title: "Message",
+                key: "message",
+                columnKey: "message",
                 dataIndex: "message",
                 width: 320,
+                sorter: true,
+                sortOrder: faultColumnSortOrder(listSort, "message"),
                 onCell: () => ({
                     style: {
                         verticalAlign: "top",
@@ -1362,6 +1376,7 @@ const ReportFaults: React.FC = () => {
         setListSort(nextSort);
         setPage(1);
         setLimit(nextLimit);
+        fetchList(1, nextLimit, orderBy, orderValue, { clearDateFilter: true });
     };
 
     const deleteSelectedFaults = useCallback(async () => {

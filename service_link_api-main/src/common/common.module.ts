@@ -15,6 +15,7 @@ import { UserDailyJobsModule } from '../user-daily-job/user-daily-jobs.module';
 import { ReportFaultsModule } from '../report-faults/report-faults.module';
 import { MessagesModule } from '../messages/messages.module';
 import { CompaniesModule } from '../companies/companies.module';
+import { InvoicesModule } from '../invoices/invoices.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CompaniesModule } from '../companies/companies.module';
     forwardRef(() => ReportFaultsModule),
     forwardRef(() => MessagesModule),
     forwardRef(() => CompaniesModule),
+    forwardRef(() => InvoicesModule),
   ],
   controllers: [CommonController],
   providers: [CommonService],

@@ -532,12 +532,37 @@ export class ReportFaultsService {
     rows: Array<ReturnType<ReportFaultsService['mapAnswerToListRow']>>,
   ) {
     if (+userInfo.type !== userType.ADMIN) return rows;
+    return this.appendOrphanFaultsForViewer(userInfo, body, rows, 'admin');
+  }
 
+  /** Orphan faults (no answer rows) visible to customers in the same org scope. */
+  private async appendOrphanFaultsForCustomer(
+    userInfo: IUserInfo,
+    body: GetReportFaultsDto,
+    rows: Array<ReturnType<ReportFaultsService['mapAnswerToListRow']>>,
+  ) {
+    if (+userInfo.type !== userType.CUSTOMER) return rows;
+    return this.appendOrphanFaultsForViewer(userInfo, body, rows, 'customer');
+  }
+
+  private async appendOrphanFaultsForViewer(
+    userInfo: IUserInfo,
+    body: GetReportFaultsDto,
+    rows: Array<ReturnType<ReportFaultsService['mapAnswerToListRow']>>,
+    viewer: 'admin' | 'customer',
+  ) {
     const existingIds = new Set(rows.map((r) => r.reportFaultId ?? r.id));
     const q = this.reportFaultsRepository
       .createQueryBuilder('f')
       .leftJoin('f.answers', 'a')
       .where('a.id IS NULL');
+
+    if (viewer === 'customer') {
+      applyCustomerScopeToQuery(q, userInfo, 'f.customer_id');
+      q.andWhere(this.notHiddenForCustomerSql('f.id'), {
+        customerViewerId: +userInfo.userId,
+      });
+    }
 
     if (body.keyword) {
       q.andWhere(
@@ -567,6 +592,25 @@ export class ReportFaultsService {
       this.sortFaultListRows(rows, body, userInfo);
     }
     return rows;
+  }
+
+  /** Accept fault id or legacy answer-row id (deep links / old list rows). */
+  private async resolveReportFaultByIdOrAnswerId(
+    id: number,
+  ): Promise<ReportFault | null> {
+    if (!+id) return null;
+    const byFaultId = await this.reportFaultsRepository.findOne({
+      where: { id: +id },
+    });
+    if (byFaultId) return byFaultId;
+
+    const answer = await this.reportFaultAnswersRepository.findOne({
+      where: { id: +id },
+    });
+    if (!answer?.reportFaultId) return null;
+    return this.reportFaultsRepository.findOne({
+      where: { id: +answer.reportFaultId },
+    });
   }
 
   /** One list row per answer so different dates are not grouped under one fault row. */
@@ -762,7 +806,7 @@ export class ReportFaultsService {
   private async assertDelegationReassignmentAllowed(
     userInfo: IUserInfo,
     fault: { delegatedBy?: number | null; delegatedToType?: string | null },
-  ): Promise<Record<string, unknown> | null> {
+  ): Promise<IErrorData | null> {
     const delegatedType = String(fault.delegatedToType ?? '').trim().toLowerCase();
     if (!delegatedType) return null;
 
@@ -816,7 +860,7 @@ export class ReportFaultsService {
       delegationViewedAt?: Date | null;
       status?: number;
     },
-  ): Record<string, unknown> | null {
+  ): IErrorData | null {
     const delegatedType = String(fault.delegatedToType ?? '').trim().toLowerCase();
     if (!delegatedType) {
       return { ...errorCode.VALIDATION_ERROR, message: 'Fault is not assigned' };
@@ -961,12 +1005,16 @@ export class ReportFaultsService {
 
     if (scalarFields.has(orderBy)) {
       rows.sort((a, b) => {
-        const av = String((a as Record<string, unknown>)[orderBy] ?? '')
-          .trim()
-          .toLowerCase();
-        const bv = String((b as Record<string, unknown>)[orderBy] ?? '')
-          .trim()
-          .toLowerCase();
+        const pick = (row: (typeof rows)[number]) => {
+          if (orderBy === 'issue') {
+            return String(row.issue || row.subject || '').trim().toLowerCase();
+          }
+          return String((row as Record<string, unknown>)[orderBy] ?? '')
+            .trim()
+            .toLowerCase();
+        };
+        const av = pick(a);
+        const bv = pick(b);
         const cmp = dir * av.localeCompare(bv);
         return cmp !== 0 ? cmp : tieBreak(a, b);
       });
@@ -1061,6 +1109,21 @@ export class ReportFaultsService {
 
     if (orderBy === 'createdAt' && answerAlias) {
       query.orderBy(`${answerAlias}.createdAt`, orderDir);
+      return;
+    }
+
+    if (orderBy === 'message' && answerAlias) {
+      query.orderBy(`${answerAlias}.message`, orderDir);
+      query.addOrderBy(`${answerAlias}.id`, 'DESC');
+      return;
+    }
+
+    if (orderBy === 'issue') {
+      query.orderBy(
+        `COALESCE(NULLIF(TRIM(${f}.issue), ''), ${f}.subject)`,
+        orderDir,
+      );
+      if (answerAlias) query.addOrderBy(`${answerAlias}.id`, 'DESC');
       return;
     }
 
@@ -1210,7 +1273,6 @@ export class ReportFaultsService {
           return this.mapAnswerToListRow(fault, answer);
         });
 
-      rows = await this.appendOrphanFaultsForAdmin(userInfo, body, rows);
       if (+body.status) {
         rows = rows.filter((r) => +r.status === +body.status);
       } else {
@@ -1224,6 +1286,32 @@ export class ReportFaultsService {
       }
 
       await this.enrichListRowsDelegationFromDb(rows, userInfo);
+
+      // Orphan faults (no answer rows) are merged only for unpaginated fetches (e.g. urgent tab).
+      // Appending after SQL take/skip would exceed pageSize and break Ant Design server pagination.
+      if (!+body.limit) {
+        rows = await this.appendOrphanFaultsForAdmin(userInfo, body, rows);
+        rows = await this.appendOrphanFaultsForCustomer(userInfo, body, rows);
+        if (+body.status) {
+          rows = rows.filter((r) => +r.status === +body.status);
+        } else {
+          rows = rows.filter(
+            (r) => !this.listExcludedStatuses.includes(+r.status),
+          );
+        }
+        if (+userInfo.type === userType.CUSTOMER) {
+          await this.applyCustomerOpenedStateToListRows(rows, +userInfo.userId);
+        }
+        await this.enrichListRowsDelegationFromDb(rows, userInfo);
+        return {
+          ...errorCode.SUCCESS,
+          data: { count: rows.length, rows },
+        };
+      }
+
+      if (+body.limit && rows.length > +body.limit) {
+        rows = rows.slice(0, +body.limit);
+      }
 
       return {
         ...errorCode.SUCCESS,
@@ -1643,7 +1731,7 @@ export class ReportFaultsService {
     }
   }
 
-  async setDelegation(userInfo: IUserInfo, faultId: number, body: SetFaultDelegationDto) {
+  async setDelegation(userInfo: IUserInfo, faultId: number, body: SetFaultDelegationDto): Promise<IErrorData> {
     try {
       if (+userInfo.type !== userType.ADMIN && +userInfo.type !== userType.CUSTOMER) {
         return { ...errorCode.EXCEPTION, message: 'Admin or customer only' };
@@ -1864,7 +1952,7 @@ export class ReportFaultsService {
           payload.delegatedAssigneeRole = enrichedRow.delegatedAssigneeRole;
           return payload;
         })(),
-      };
+      } as IErrorData;
     } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;
@@ -1921,7 +2009,7 @@ export class ReportFaultsService {
     }
   }
 
-  async nudgeDelegationAssignee(userInfo: IUserInfo, faultId: number) {
+  async nudgeDelegationAssignee(userInfo: IUserInfo, faultId: number): Promise<IErrorData> {
     try {
       if (+userInfo.type !== userType.ADMIN && +userInfo.type !== userType.CUSTOMER) {
         return { ...errorCode.EXCEPTION, message: 'Admin or customer only' };
@@ -2014,7 +2102,7 @@ export class ReportFaultsService {
         return { ...errorCode.VALIDATION_ERROR, message: 'This assignment cannot be reminded by email' };
       }
 
-      return { ...errorCode.SUCCESS, data: { id: fault.id, reminded: true } };
+      return { ...errorCode.SUCCESS, data: { id: fault.id, reminded: true } } as IErrorData;
     } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;
@@ -2237,10 +2325,11 @@ export class ReportFaultsService {
       if (+userInfo.type !== userType.ADMIN) {
         return errorCode.CAN_NOT_DELETE;
       }
-      const data = await this.reportFaultsRepository.findOne({ where: { id } });
+      const data = await this.resolveReportFaultByIdOrAnswerId(id);
       if (!data || +data.status === reportFaultStatus.DELETED) {
         return errorCode.NOT_FOUND;
       }
+      const faultId = +data.id;
       if (!data.adminOpenedAt) {
         data.adminOpenedAt = new Date();
         data.updatedAt = new Date();
@@ -2263,7 +2352,7 @@ export class ReportFaultsService {
           EXCLUDED.badge_dismissed_at
         )
         `,
-        [+id, +userInfo.userId],
+        [faultId, +userInfo.userId],
       );
       return errorCode.SUCCESS;
     } catch (error) {
@@ -2277,14 +2366,14 @@ export class ReportFaultsService {
       if (+userInfo.type !== userType.CUSTOMER) {
         return errorCode.CAN_NOT_DELETE;
       }
-      const data = await this.reportFaultsRepository.findOne({ where: { id } });
+      const data = await this.resolveReportFaultByIdOrAnswerId(id);
       if (!data || +data.status === reportFaultStatus.DELETED) {
         return errorCode.NOT_FOUND;
       }
       if (!(await this.customerCanAccessFault(userInfo, data.customerId))) {
         return errorCode.NOT_FOUND;
       }
-      await this.setCustomerFaultOpened(+userInfo.userId, +id);
+      await this.setCustomerFaultOpened(+userInfo.userId, +data.id);
       return errorCode.SUCCESS;
     } catch (error) {
       this.logger.error(error);
@@ -2297,11 +2386,11 @@ export class ReportFaultsService {
       if (+userInfo.type !== userType.ADMIN) {
         return errorCode.CAN_NOT_DELETE;
       }
-      const data = await this.reportFaultsRepository.findOne({ where: { id } });
+      const data = await this.resolveReportFaultByIdOrAnswerId(id);
       if (!data || +data.status === reportFaultStatus.DELETED) {
         return errorCode.NOT_FOUND;
       }
-      await this.reportFaultsRepository.update(+id, {
+      await this.reportFaultsRepository.update(+data.id, {
         adminOpenedAt: null,
         updatedAt: new Date(),
       });
@@ -2317,14 +2406,14 @@ export class ReportFaultsService {
       if (+userInfo.type !== userType.CUSTOMER) {
         return errorCode.CAN_NOT_DELETE;
       }
-      const data = await this.reportFaultsRepository.findOne({ where: { id } });
+      const data = await this.resolveReportFaultByIdOrAnswerId(id);
       if (!data || +data.status === reportFaultStatus.DELETED) {
         return errorCode.NOT_FOUND;
       }
       if (!(await this.customerCanAccessFault(userInfo, data.customerId))) {
         return errorCode.NOT_FOUND;
       }
-      await this.clearCustomerFaultOpened(+userInfo.userId, +id);
+      await this.clearCustomerFaultOpened(+userInfo.userId, +data.id);
       return errorCode.SUCCESS;
     } catch (error) {
       this.logger.error(error);

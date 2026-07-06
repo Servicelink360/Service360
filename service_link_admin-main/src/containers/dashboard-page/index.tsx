@@ -1,5 +1,5 @@
 import Layout from '@app/components/layout/Layout';
-import { CustomerServiceOutlined, FileTextOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { CustomerServiceOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
 import React, { useCallback, useEffect } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
@@ -54,6 +54,7 @@ const Dashboard: React.FC = () => {
   const newTicketsCount = data?.newTicketsCount ?? 0;
   const messagesUnreadCount = data?.messagesUnreadCount ?? 0;
   const myTasksCount = data?.myTasksCount ?? 0;
+  const invoicesCount = data?.invoicesCount ?? 0;
   const canShowMessages =
     profile &&
     (+profile.type === userType.ADMIN ||
@@ -157,6 +158,27 @@ const Dashboard: React.FC = () => {
     </Link>
   ) : null;
 
+  const invoicesBadge = (isAdmin || isCustomer) ? (
+    <Link to="/invoices" className="dashboard-report-badge">
+      <span className="dashboard-report-badge__icon-wrap">
+        <div className="dashboard-report-badge__circle dashboard-report-badge__circle--reports dashboard-report-badge__circle--action">
+          <FolderOpenOutlined />
+        </div>
+        {isCustomer && invoicesCount > 0 ? (
+          <span
+            className="dashboard-messages-badge__count"
+            aria-label={`${invoicesCount} new invoices`}
+          >
+            {invoicesCount > 99 ? '99+' : invoicesCount}
+          </span>
+        ) : null}
+      </span>
+      <div className="dashboard-report-badge__label">
+        {intl.formatMessage({ id: 'sidebar.invoices' })}
+      </div>
+    </Link>
+  ) : null;
+
   const dashboardReportBadges = (
     <div className="dashboard-report-badges">
       {checkInBadge}
@@ -182,6 +204,12 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-item dashboard-item--flush">
             <h1 className="dashboard-section-heading">Reports</h1>
             {dashboardReportBadges}
+          </div>
+        ) : null}
+        {(isAdmin || isCustomer) ? (
+          <div className="dashboard-item dashboard-item--flush" style={{ marginTop: 24 }}>
+            <h1 className="dashboard-section-heading">Invoices</h1>
+            <div className="dashboard-report-badges">{invoicesBadge}</div>
           </div>
         ) : null}
       </DashboardWarp>

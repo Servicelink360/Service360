@@ -6,7 +6,7 @@ import {
 import FaultReportViewModal from '@app/components/report-faults/fault-report-view';
 import FaultDelegationModal from '@app/components/report-faults/fault-delegation-modal';
 import { dateTimeFormat } from '@app/config/data.config';
-import { Alert, Button, Spin, Table, Tag, Tooltip } from 'antd';
+import { Alert, Button, Spin, Table, Tag, Tooltip, message } from 'antd';
 import { EyeOutlined, ThunderboltFilled } from '@ant-design/icons';
 import moment from 'moment';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -20,8 +20,7 @@ import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { reportFaultStatus, userType } from '../../constants/statusUser';
 import { callAPIAsync } from '../../library/helpers/api';
-
-const reportFaultIdOf = (record: any) => record?.reportFaultId ?? record?.id;
+import { reportFaultIdOf } from './report-fault-id';
 
 const formatFaultDate = (value: string | Date | null | undefined) =>
   value ? moment(value).utcOffset(600).format(dateTimeFormat) : '—';
@@ -86,6 +85,12 @@ const TasksFaultsPanel: React.FC<{ tabsAboveTable?: React.ReactNode }> = ({ tabs
           endDate: '',
         },
       );
+      if (faultsRes?.code !== 1) {
+        message.error(faultsRes?.message || 'Could not load urgent fault reports');
+        setRows([]);
+        setRowByFaultId({});
+        return;
+      }
       const list = Array.isArray(faultsRes?.data?.rows) ? faultsRes.data.rows : [];
       setRows(list);
       const map: Record<number, any> = {};
@@ -209,22 +214,20 @@ const TasksFaultsPanel: React.FC<{ tabsAboveTable?: React.ReactNode }> = ({ tabs
     setViewFaultRow(record);
     setViewFaultOpen(true);
     const faultId = reportFaultIdOf(record);
-    if (faultId) {
-      const markPath =
-        profileType === userType.ADMIN
-          ? `${endPoint.REPORT_FAULTS}/markAdminOpened/${faultId}`
-          : profileType === userType.CUSTOMER
-            ? `${endPoint.REPORT_FAULTS}/markCustomerOpened/${faultId}`
-            : null;
-      if (markPath) {
-        void (async () => {
-          const res = await callAPIAsync(serviceType.COMMON, markPath, 'PATCH', {});
-          if (res?.code === 1) {
-            dispatch(dashboardActions.getData({ startDate: '', endDate: '' }));
-          }
-        })();
+    if (!faultId) return;
+    const markPath =
+      profileType === userType.ADMIN
+        ? `${endPoint.REPORT_FAULTS}/markAdminOpened/${faultId}`
+        : profileType === userType.CUSTOMER
+          ? `${endPoint.REPORT_FAULTS}/markCustomerOpened/${faultId}`
+          : null;
+    if (!markPath) return;
+    void (async () => {
+      const res = await callAPIAsync(serviceType.COMMON, markPath, 'PATCH', {});
+      if (res?.code === 1) {
+        dispatch(dashboardActions.getData({ startDate: '', endDate: '' }));
       }
-    }
+    })();
   }, [profileType, dispatch]);
 
   const closeFaultView = useCallback(() => {

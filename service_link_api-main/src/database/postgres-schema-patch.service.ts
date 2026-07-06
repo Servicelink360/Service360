@@ -101,6 +101,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureReportFaultToiletAreaColumn();
     await this.ensureCustomerPersonnelAndFaultDelegation();
     await this.ensureAdminPersonnelAndStaffDelegation();
+    await this.ensureInvoicesTable();
     await this.applyRenameDepartmentsToServices();
 
     try {
@@ -1969,6 +1970,59 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('admin_personnel and staff delegation ensured');
     } catch (e) {
       this.logger.warn(`admin personnel delegation patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureInvoicesTable(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.invoices (
+          id SERIAL PRIMARY KEY,
+          customer_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+          customer_name VARCHAR(255) NOT NULL DEFAULT '',
+          company_name VARCHAR(255) NOT NULL DEFAULT '',
+          title VARCHAR(500) NOT NULL,
+          notes TEXT NULL,
+          attach_files VARCHAR(8000) NOT NULL DEFAULT '[]',
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_by INTEGER NULL,
+          updated_by INTEGER NULL
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON public.invoices(customer_id);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON public.invoices(created_at DESC);
+      `);
+      this.logger.log('invoices table ensured');
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.invoice_customer_visibility (
+          invoice_id INTEGER NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+          opened_at TIMESTAMP NULL,
+          PRIMARY KEY (invoice_id, user_id)
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_invoice_customer_visibility_user
+        ON public.invoice_customer_visibility(user_id);
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.invoices
+        ADD COLUMN IF NOT EXISTS admin_deleted_at TIMESTAMP NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.invoice_customer_visibility
+        ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMP NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.invoice_customer_visibility
+        ADD COLUMN IF NOT EXISTS cleared_at TIMESTAMP NULL;
+      `);
+    } catch (e) {
+      this.logger.warn(`invoices table patch: ${(e as Error).message}`);
     }
   }
 }

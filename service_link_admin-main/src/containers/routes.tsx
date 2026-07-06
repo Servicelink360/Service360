@@ -57,6 +57,7 @@ const routes = [
 
 
 	{ path: 'tickets', component: asyncComponent(() => import('@app/containers/tickets')) },
+	{ path: 'invoices', component: asyncComponent(() => import('@app/containers/invoices')) },
 
 ];
 

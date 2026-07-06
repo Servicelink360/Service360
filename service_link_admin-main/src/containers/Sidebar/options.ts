@@ -124,6 +124,11 @@ export const optionsCustomer: option[] = [
 		leftIcon: 'icon-staff',
 	},
 	{
+		key: 'invoices',
+		label: 'sidebar.invoices',
+		leftIcon: 'icon-package',
+	},
+	{
 		key: 'report',
 		label: 'sidebar.report',
 		leftIcon: 'icon-package',
@@ -153,6 +158,11 @@ const options: option[] = [
 		key: 'messages',
 		label: 'sidebar.messages',
 		leftIcon: 'icon-site',
+	},
+	{
+		key: 'invoices',
+		label: 'sidebar.invoices',
+		leftIcon: 'icon-package',
 	},
 	{
 		key: 'directory',
@@ -480,6 +490,10 @@ const hashOptions: hashOption[] = [
 	{
 		key: 'tickets',
 		label: 'sidebar.tickets',
+	},
+	{
+		key: 'invoices',
+		label: 'sidebar.invoices',
 	},
 	{
 		key: 'task-today',

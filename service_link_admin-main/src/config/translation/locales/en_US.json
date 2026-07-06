@@ -149,6 +149,7 @@
   "sidebar.companies": "Companies",
 
   "sidebar.tickets": "Tickets",
+  "sidebar.invoices": "Invoices",
   "sidebar.ticket-pending": "Ticket New",
   "sidebar.ticket-inprogress": "Ticket Inprogress",
   "sidebar.ticket-completed": "Ticket Completed",
