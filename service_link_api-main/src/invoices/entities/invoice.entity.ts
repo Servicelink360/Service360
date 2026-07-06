@@ -22,6 +22,7 @@ export class Invoice extends BaseEntity {
   adminDeletedAt?: Date | null;
 
   @Column()
+  title: string;
 
   @Column({ type: 'text', nullable: true })
   notes: string | null;
