@@ -386,8 +386,8 @@ const imageFileFilter = (
     file: any,
     callback
 ) => {
-    if (!file.originalname.toLowerCase().match(/\.(webp|jpg|jpeg|png|gif|txt|log|doc|docx|pdf|dmp|erl|dat|evtx|dll|ini|mp4|avif)$/)) {
-        return callback(new Error('Only image files are allowed!'), false);
+    if (!file.originalname.toLowerCase().match(/\.(webp|jpg|jpeg|png|gif|avif|txt|log|doc|docx|pdf|dmp|erl|dat|evtx|dll|ini|mp4|mov|m4v|webm|avi|3gp|mpeg|mpg|heic|heif)$/)) {
+        return callback(new Error('Only image/video/document files are allowed!'), false);
     }
     callback(null, true);
 };
