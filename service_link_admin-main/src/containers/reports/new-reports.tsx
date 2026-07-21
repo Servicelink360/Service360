@@ -35,6 +35,7 @@ import {
   isJsonMediaFieldType,
   isTimeLikeLabel,
   isTimeLikeTemplateItem,
+  isVideoMediaUrl,
   legacyFieldKey,
   matchReportItemForTemplate,
   mergeReportMediaRowsForForm,
@@ -554,12 +555,23 @@ function renderSubmittedReportValue(report: any): React.ReactNode {
   if (t === "VIDEOS" || t === "VIDEO") {
     const urls = parseMediaListValue(v);
     return (
-      <Space direction="vertical" size={4}>
-        {urls.map((u) => (
-          <a key={u} href={u} target="_blank" rel="noopener noreferrer">
-            {(u.split("/").pop() || u).slice(0, 80)}
-          </a>
-        ))}
+      <Space direction="vertical" size={8} style={{ width: "100%" }}>
+        {urls.map((u) =>
+          isVideoMediaUrl(u) ? (
+            <video
+              key={u}
+              src={u}
+              controls
+              playsInline
+              preload="metadata"
+              style={{ width: "100%", maxWidth: 480, maxHeight: 320, background: "#000", borderRadius: 4 }}
+            />
+          ) : (
+            <a key={u} href={u} target="_blank" rel="noopener noreferrer">
+              {(u.split("/").pop() || u).slice(0, 80)}
+            </a>
+          ),
+        )}
       </Space>
     );
   }
@@ -3637,29 +3649,45 @@ const NewReports: React.FC = () => {
                                   height: "100%",
                                 }}
                               >
-                                <Image
-                                  src={url}
-                                  alt=""
-                                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                                  wrapperStyle={{ width: "100%", height: "100%", display: "block" }}
-                                  preview={{
-                                    mask: (
-                                      <span
-                                        style={{
-                                          color: "#fff",
-                                          fontWeight: 700,
-                                          fontSize: 14,
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: 8,
-                                        }}
-                                      >
-                                        <EyeOutlined style={{ fontSize: 18 }} />
-                                        Preview
-                                      </span>
-                                    ),
-                                  }}
-                                />
+                                {isVideoMediaUrl(url) ? (
+                                  <video
+                                    src={url}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    style={{
+                                      width: "100%",
+                                      height: "100%",
+                                      objectFit: "cover",
+                                      display: "block",
+                                      background: "#000",
+                                    }}
+                                  />
+                                ) : (
+                                  <Image
+                                    src={url}
+                                    alt=""
+                                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                                    wrapperStyle={{ width: "100%", height: "100%", display: "block" }}
+                                    preview={{
+                                      mask: (
+                                        <span
+                                          style={{
+                                            color: "#fff",
+                                            fontWeight: 700,
+                                            fontSize: 14,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: 8,
+                                          }}
+                                        >
+                                          <EyeOutlined style={{ fontSize: 18 }} />
+                                          Preview
+                                        </span>
+                                      ),
+                                    }}
+                                  />
+                                )}
                               </div>
                             </div>
                           ))}

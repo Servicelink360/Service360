@@ -110,6 +110,20 @@ export const parseMediaListValue = (v: unknown): string[] => {
 export const isJsonMediaFieldType = (fieldType: string) =>
   ["IMAGES", "PHOTOS", "PHOTO", "IMAGE", "VIDEOS", "VIDEO"].includes(fieldType);
 
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|avi|3gp|mpeg|mpg)(\?|#|$)/i;
+
+/** True when a stored media URL points at a video file (not a still image). */
+export function isVideoMediaUrl(url: string | null | undefined): boolean {
+  const s = String(url || "").trim();
+  if (!s) return false;
+  try {
+    const path = new URL(s, "https://example.invalid").pathname;
+    return VIDEO_EXT_RE.test(path);
+  } catch {
+    return VIDEO_EXT_RE.test(s);
+  }
+}
+
 const reportItemPartRe = /^(.+?)__part(\d+)$/;
 
 const normalizeReportFieldName = (name: string): string =>
