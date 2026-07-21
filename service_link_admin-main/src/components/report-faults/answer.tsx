@@ -20,6 +20,7 @@ import { useDispatch } from 'react-redux'
 import endPoint from '../../constants/endPoint'
 import serviceType from '../../constants/serviceType'
 import { callAPIAsync } from '../../library/helpers/api'
+import { isFaultVideoUrl } from './fault-media'
 
 type IProps = {
     loadingAction: boolean
@@ -62,6 +63,12 @@ const ReportFaultAnswerModal = (props: IProps) => {
     })() : [])
 
     const handlePreview = async (file: any) => {
+        const mediaUrl = file.url || file.response?.data;
+        if (isFaultVideoUrl(mediaUrl || file.name)) {
+            const videoUrl = mediaUrl || (file.originFileObj ? URL.createObjectURL(file.originFileObj) : '');
+            if (videoUrl) window.open(videoUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
         if (!file.url && !file.preview) {
             file.preview = await getBase64(file.originFileObj);
         }

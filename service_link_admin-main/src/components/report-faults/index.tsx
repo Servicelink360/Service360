@@ -21,6 +21,7 @@ import endPoint from '../../constants/endPoint'
 import serviceType from '../../constants/serviceType'
 import { callAPIAsync } from '../../library/helpers/api'
 import { notificationComponent } from '@app/components/common/Notification/index'
+import { isFaultVideoUrl } from './fault-media'
 import FormSelect from "@app/components/common/FormItem/Select";
 import SvCheckBox from '../common/FormItem/Checkbox'
 import { userType } from '../../constants/statusUser'
@@ -122,6 +123,12 @@ const ReportFaultModal = (props: IProps) => {
     }, [showToiletArea, form])
 
     const handlePreview = async (file: any) => {
+        const mediaUrl = file.url || file.response?.data;
+        if (isFaultVideoUrl(mediaUrl || file.name)) {
+            const videoUrl = mediaUrl || (file.originFileObj ? URL.createObjectURL(file.originFileObj) : '');
+            if (videoUrl) window.open(videoUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
         if (!file.url && !file.preview) {
             file.preview = await getBase64(file.originFileObj);
         }

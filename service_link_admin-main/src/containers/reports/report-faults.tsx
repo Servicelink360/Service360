@@ -39,6 +39,7 @@ import FaultReportViewModal from "@app/components/report-faults/fault-report-vie
 import TasksFaultsPanel from "@app/components/report-faults/tasks-faults-panel";
 import { FaultListStatusBadge } from "@app/components/report-faults/delegation-outcome";
 import { FaultPriorityCell } from "@app/components/report-faults/fault-priority-cell";
+import { FaultMedia, isFaultVideoUrl } from "@app/components/report-faults/fault-media";
 import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 import { checkRole } from "../../library/helpers/utility";
@@ -995,7 +996,9 @@ const ReportFaults: React.FC = () => {
                         try {
                             const urls = JSON.parse(r.attachFiles);
                             if (!Array.isArray(urls) || !urls.length) return null;
-                            return (
+                            return isFaultVideoUrl(urls[0]) ? (
+                                <FaultMedia url={urls[0]} width={48} height={32} controls={false} />
+                            ) : (
                                 <Image
                                     src={urls[0]}
                                     width={28}
@@ -1100,9 +1103,13 @@ const ReportFaults: React.FC = () => {
                 render: (_: string, r: any) => {
                     if (!r.attachFiles) return null;
                     try {
-                        return JSON.parse(r.attachFiles).map((url: string, i: number) => (
-                            <Image key={i} src={url} width={50} height={50} />
-                        ));
+                        return JSON.parse(r.attachFiles).map((url: string, i: number) =>
+                            isFaultVideoUrl(url) ? (
+                                <FaultMedia key={i} url={url} width={90} height={50} />
+                            ) : (
+                                <Image key={i} src={url} width={50} height={50} />
+                            ),
+                        );
                     } catch {
                         return null;
                     }

@@ -14,6 +14,7 @@ import FaultDelegationSummary from "./fault-delegation-summary";
 import { canManageFaultDelegation } from "./fault-delegation-cell";
 import { delegationOutcomeOf, faultListStatusOf } from "./delegation-outcome";
 import { FaultPriorityCell } from "./fault-priority-cell";
+import { FaultMedia, isFaultVideoUrl } from "./fault-media";
 
 const valueStyle: React.CSSProperties = {
   fontSize: 14,
@@ -466,15 +467,19 @@ const FaultReportViewModal: React.FC<Props> = ({
           </div>
           <Image.PreviewGroup>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {mediaUrls.map((url) => (
-                <Image
-                  key={url}
-                  src={url}
-                  width={88}
-                  height={88}
-                  style={{ objectFit: "cover", borderRadius: 4 }}
-                />
-              ))}
+              {mediaUrls.map((url) =>
+                isFaultVideoUrl(url) ? (
+                  <FaultMedia key={url} url={url} width={320} height={180} />
+                ) : (
+                  <Image
+                    key={url}
+                    src={url}
+                    width={88}
+                    height={88}
+                    style={{ objectFit: "cover", borderRadius: 4 }}
+                  />
+                ),
+              )}
             </div>
           </Image.PreviewGroup>
         </div>
