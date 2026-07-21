@@ -60,21 +60,12 @@ export async function uploadBufferToS3(
     ? objectKey.trim().replace(/^\/+/, '')
     : `admin-uploads/${day}/${Date.now()}-${safeBase}`;
 
-  const endpointHost = String(config.S3_URL || '').replace(/^https?:\/\//, '');
-  const regionMatch = endpointHost.match(/s3[.-]([a-z0-9-]+)\.amazonaws\.com/i);
-  const region =
-    String(process.env.AWS_REGION || process.env.S3_REGION || '').trim() ||
-    regionMatch?.[1] ||
-    'ap-southeast-2';
-
-  const endpoint = new Endpoint(endpointHost);
+  const endpoint = new Endpoint(config.S3_URL);
   const s3 = new S3({
     endpoint,
-    region,
     accessKeyId: config.S3_ACCESS_KEY,
     secretAccessKey: config.S3_SECRET_ACCCESS,
     s3ForcePathStyle: false,
-    signatureVersion: 'v4',
   });
 
   // aws-sdk@1.x (this repo) has no `s3.upload()`; use putObject + send().
