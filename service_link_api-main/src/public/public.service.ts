@@ -7,9 +7,9 @@ export type OpsStats = {
   sitesCount: number;
   liveSitesCount: number;
   newReportsCount: number;
-  /** Unused — kept for API compatibility (always 0) */
+  /** All non-deleted faults created this calendar week (= new this week) */
   openFaultsCount: number;
-  /** All non-deleted faults created this calendar month (= in progress) */
+  /** PENDING + INPROGRESS created this calendar month (= in progress) */
   pendingFaultsCount: number;
   /** All non-deleted faults from previous months (= fixed) */
   fixedFaultsCount: number;
@@ -102,9 +102,10 @@ export class PublicService {
   }
 
   /**
-   * pending ("in progress") = all non-deleted faults created this calendar month
+   * new/open = all non-deleted faults created this calendar week (Mon–Sun, Australia/Sydney)
+   *   (Service360 creates faults as PENDING, not NEW — so we key off created_at)
+   * in progress/pending = PENDING + INPROGRESS created this month
    * fixed = all non-deleted faults from previous months
-   * open kept at 0 for backward-compatible API shape
    */
   private async countFaultsByStatus(): Promise<{
     open: number;
@@ -115,6 +116,11 @@ export class PublicService {
       `SELECT
          COUNT(*) FILTER (
            WHERE (created_at AT TIME ZONE 'Australia/Sydney')
+                 >= date_trunc('week', NOW() AT TIME ZONE 'Australia/Sydney')
+         )::int AS open_count,
+         COUNT(*) FILTER (
+           WHERE status IN ($1, $2)
+             AND (created_at AT TIME ZONE 'Australia/Sydney')
                  >= date_trunc('month', NOW() AT TIME ZONE 'Australia/Sydney')
          )::int AS pending_count,
          COUNT(*) FILTER (
@@ -122,11 +128,15 @@ export class PublicService {
                  < date_trunc('month', NOW() AT TIME ZONE 'Australia/Sydney')
          )::int AS fixed_count
        FROM report_faults
-       WHERE status != $1`,
-      [reportFaultStatus.DELETED],
+       WHERE status != $3`,
+      [
+        reportFaultStatus.PENDING,
+        reportFaultStatus.INPROGRESS,
+        reportFaultStatus.DELETED,
+      ],
     );
     return {
-      open: 0,
+      open: Number(rows?.[0]?.open_count ?? 0),
       pending: Number(rows?.[0]?.pending_count ?? 0),
       fixed: Number(rows?.[0]?.fixed_count ?? 0),
     };
