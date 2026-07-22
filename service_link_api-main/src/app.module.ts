@@ -32,6 +32,7 @@ import { MessagesModule } from './messages/messages.module';
 import { CompaniesModule } from './companies/companies.module';
 import { DeployStatusController } from './deploy-status.controller';
 import { ContactModule } from './contact/contact.module';
+import { PublicModule } from './public/public.module';
 import { FaultIssuesModule } from './fault-issues/fault-issues.module';
 import { CustomerPersonnelModule } from './customer-personnel/customer-personnel.module';
 import { AdminPersonnelModule } from './admin-personnel/admin-personnel.module';
@@ -99,6 +100,7 @@ import { InvoicesModule } from './invoices/invoices.module';
     MessagesModule,
     CompaniesModule,
     ContactModule,
+    PublicModule,
     FaultIssuesModule,
     CustomerPersonnelModule,
     AdminPersonnelModule,
