@@ -6,7 +6,6 @@ import { dJobStatus, reportFaultStatus, ticketStatus } from '../constants/status
 export type OpsStats = {
   sitesCount: number;
   liveSitesCount: number;
-  servicesCount: number;
   newReportsCount: number;
   /** All non-deleted faults created in the last 7 days (= new) */
   openFaultsCount: number;
@@ -31,7 +30,6 @@ export class PublicService {
       const [
         sitesCount,
         liveSitesCount,
-        servicesCount,
         completedReportsLast30Days,
         faultBreakdown,
         openTicketsCount,
@@ -39,7 +37,6 @@ export class PublicService {
       ] = await Promise.all([
         this.countSites(),
         this.countLiveSites(),
-        this.countServices(),
         this.countCompletedReportsLastDays(30),
         this.countFaultsByStatus(),
         this.countOpenTickets(),
@@ -49,7 +46,6 @@ export class PublicService {
       const data: OpsStats = {
         sitesCount,
         liveSitesCount,
-        servicesCount,
         /** Marketing “new reports” = completed custom reports in last 30 days */
         newReportsCount: completedReportsLast30Days,
         openFaultsCount: faultBreakdown.open,
@@ -73,13 +69,6 @@ export class PublicService {
       `SELECT COUNT(DISTINCT s.id)::int AS count
        FROM sites s
        INNER JOIN site_items si ON si.site_id = s.id`,
-    );
-    return Number(rows?.[0]?.count ?? 0);
-  }
-
-  private async countServices(): Promise<number> {
-    const rows = await this.dataSource.query(
-      `SELECT COUNT(*)::int AS count FROM services`,
     );
     return Number(rows?.[0]?.count ?? 0);
   }
