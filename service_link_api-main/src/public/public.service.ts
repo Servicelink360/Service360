@@ -7,7 +7,7 @@ export type OpsStats = {
   sitesCount: number;
   liveSitesCount: number;
   newReportsCount: number;
-  /** All non-deleted faults created this calendar week (= new this week) */
+  /** All non-deleted faults created in the last 7 days (= new) */
   openFaultsCount: number;
   /** PENDING + INPROGRESS created this calendar month (= in progress) */
   pendingFaultsCount: number;
@@ -102,7 +102,7 @@ export class PublicService {
   }
 
   /**
-   * new/open = all non-deleted faults created this calendar week (Mon–Sun, Australia/Sydney)
+   * new/open = all non-deleted faults created in the last 7 days
    *   (Service360 creates faults as PENDING, not NEW — so we key off created_at)
    * in progress/pending = PENDING + INPROGRESS created this month
    * fixed = all non-deleted faults from previous months
@@ -115,8 +115,7 @@ export class PublicService {
     const rows = await this.dataSource.query(
       `SELECT
          COUNT(*) FILTER (
-           WHERE (created_at AT TIME ZONE 'Australia/Sydney')
-                 >= date_trunc('week', NOW() AT TIME ZONE 'Australia/Sydney')
+           WHERE created_at >= NOW() - INTERVAL '7 days'
          )::int AS open_count,
          COUNT(*) FILTER (
            WHERE status IN ($1, $2)
