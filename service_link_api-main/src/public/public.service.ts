@@ -46,7 +46,7 @@ export class PublicService {
       const data: OpsStats = {
         sitesCount,
         liveSitesCount,
-        /** Marketing “new reports” = completed custom reports in last 30 days */
+        /** Total completed custom reports (all time) */
         newReportsCount: completedReportsLast30Days,
         openFaultsCount: faultBreakdown.open,
         pendingFaultsCount: faultBreakdown.pending,
@@ -94,9 +94,8 @@ export class PublicService {
        WHERE type = 'CUSTOM'
          AND status = $1
          AND staff_id > 0
-         AND staff_id <> customer_id
-         AND created_at >= NOW() - ($2::text || ' days')::interval`,
-      [dJobStatus.COMPLETED, String(days)],
+         AND staff_id <> customer_id`,
+      [dJobStatus.COMPLETED],
     );
     return Number(rows?.[0]?.count ?? 0);
   }
