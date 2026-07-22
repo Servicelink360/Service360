@@ -7,11 +7,11 @@ export type OpsStats = {
   sitesCount: number;
   liveSitesCount: number;
   newReportsCount: number;
-  /** NEW status faults */
+  /** Unused — kept for API compatibility (always 0) */
   openFaultsCount: number;
-  /** PENDING + INPROGRESS */
+  /** All non-deleted faults created this calendar month (= in progress) */
   pendingFaultsCount: number;
-  /** COMPLETED */
+  /** All non-deleted faults from previous months (= fixed) */
   fixedFaultsCount: number;
   openTicketsCount: number;
   completedReportsLast30Days: number;
@@ -102,9 +102,9 @@ export class PublicService {
   }
 
   /**
-   * open = NEW
-   * pending = PENDING + INPROGRESS
-   * fixed = COMPLETED
+   * pending ("in progress") = all non-deleted faults created this calendar month
+   * fixed = all non-deleted faults from previous months
+   * open kept at 0 for backward-compatible API shape
    */
   private async countFaultsByStatus(): Promise<{
     open: number;
@@ -113,21 +113,20 @@ export class PublicService {
   }> {
     const rows = await this.dataSource.query(
       `SELECT
-         COUNT(*) FILTER (WHERE status = $1)::int AS open_count,
-         COUNT(*) FILTER (WHERE status IN ($2, $3))::int AS pending_count,
-         COUNT(*) FILTER (WHERE status = $4)::int AS fixed_count
+         COUNT(*) FILTER (
+           WHERE (created_at AT TIME ZONE 'Australia/Sydney')
+                 >= date_trunc('month', NOW() AT TIME ZONE 'Australia/Sydney')
+         )::int AS pending_count,
+         COUNT(*) FILTER (
+           WHERE (created_at AT TIME ZONE 'Australia/Sydney')
+                 < date_trunc('month', NOW() AT TIME ZONE 'Australia/Sydney')
+         )::int AS fixed_count
        FROM report_faults
-       WHERE status != $5`,
-      [
-        reportFaultStatus.NEW,
-        reportFaultStatus.PENDING,
-        reportFaultStatus.INPROGRESS,
-        reportFaultStatus.COMPLETED,
-        reportFaultStatus.DELETED,
-      ],
+       WHERE status != $1`,
+      [reportFaultStatus.DELETED],
     );
     return {
-      open: Number(rows?.[0]?.open_count ?? 0),
+      open: 0,
       pending: Number(rows?.[0]?.pending_count ?? 0),
       fixed: Number(rows?.[0]?.fixed_count ?? 0),
     };
