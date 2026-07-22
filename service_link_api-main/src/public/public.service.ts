@@ -7,7 +7,12 @@ export type OpsStats = {
   sitesCount: number;
   liveSitesCount: number;
   newReportsCount: number;
+  /** NEW status faults */
   openFaultsCount: number;
+  /** PENDING + INPROGRESS */
+  pendingFaultsCount: number;
+  /** COMPLETED */
+  fixedFaultsCount: number;
   openTicketsCount: number;
   completedReportsLast30Days: number;
   faultsLast30Days: number;
@@ -26,14 +31,14 @@ export class PublicService {
         sitesCount,
         liveSitesCount,
         completedReportsLast30Days,
-        openFaultsCount,
+        faultBreakdown,
         openTicketsCount,
         faultsLast30Days,
       ] = await Promise.all([
         this.countSites(),
         this.countLiveSites(),
         this.countCompletedReportsLastDays(30),
-        this.countOpenFaults(),
+        this.countFaultsByStatus(),
         this.countOpenTickets(),
         this.countFaultsLastDays(30),
       ]);
@@ -43,7 +48,9 @@ export class PublicService {
         liveSitesCount,
         /** Marketing “new reports” = completed custom reports in last 30 days */
         newReportsCount: completedReportsLast30Days,
-        openFaultsCount,
+        openFaultsCount: faultBreakdown.open,
+        pendingFaultsCount: faultBreakdown.pending,
+        fixedFaultsCount: faultBreakdown.fixed,
         openTicketsCount,
         completedReportsLast30Days,
         faultsLast30Days,
@@ -94,14 +101,36 @@ export class PublicService {
     return Number(rows?.[0]?.count ?? 0);
   }
 
-  private async countOpenFaults(): Promise<number> {
+  /**
+   * open = NEW
+   * pending = PENDING + INPROGRESS
+   * fixed = COMPLETED
+   */
+  private async countFaultsByStatus(): Promise<{
+    open: number;
+    pending: number;
+    fixed: number;
+  }> {
     const rows = await this.dataSource.query(
-      `SELECT COUNT(*)::int AS count
+      `SELECT
+         COUNT(*) FILTER (WHERE status = $1)::int AS open_count,
+         COUNT(*) FILTER (WHERE status IN ($2, $3))::int AS pending_count,
+         COUNT(*) FILTER (WHERE status = $4)::int AS fixed_count
        FROM report_faults
-       WHERE status IN ($1, $2, $3)`,
-      [reportFaultStatus.NEW, reportFaultStatus.PENDING, reportFaultStatus.INPROGRESS],
+       WHERE status != $5`,
+      [
+        reportFaultStatus.NEW,
+        reportFaultStatus.PENDING,
+        reportFaultStatus.INPROGRESS,
+        reportFaultStatus.COMPLETED,
+        reportFaultStatus.DELETED,
+      ],
     );
-    return Number(rows?.[0]?.count ?? 0);
+    return {
+      open: Number(rows?.[0]?.open_count ?? 0),
+      pending: Number(rows?.[0]?.pending_count ?? 0),
+      fixed: Number(rows?.[0]?.fixed_count ?? 0),
+    };
   }
 
   private async countOpenTickets(): Promise<number> {
