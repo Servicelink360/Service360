@@ -292,14 +292,20 @@ const options: option[] = [
 	},
 
 	{
-		key: 'assets',
-		label: 'sidebar.assets',
-		leftIcon: 'icon-assets',
+		key: 'asset',
+		label: 'sidebar.asset',
+		leftIcon: 'icon-asset',
+		children: [
+			{
+				key: 'asset-register',
+				label: 'sidebar.assetRegister',
+			},
+		],
 	},
 	{
 		key: 'manageme-PPE',
 		label: 'sidebar.managemePPE',
-		leftIcon: 'icon-assets',
+		leftIcon: 'icon-asset',
 	},
 	{
 		key: 'master',
@@ -524,8 +530,8 @@ const hashOptions: hashOption[] = [
 		label: 'sidebar.ticket-completed',
 	},
 	{
-		key: 'assets',
-		label: 'sidebar.assets',
+		key: 'asset-register',
+		label: 'sidebar.assetRegister',
 	},
 	{
 		key: 'manageme-PPE',

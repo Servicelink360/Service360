@@ -52,7 +52,8 @@ const routes = [
 	{ path: 'incident-report', component: asyncComponent(() => import('@app/containers/blank')) },
 	{ path: 'training', component: asyncComponent(() => import('@app/containers/blank')) },
 	{ path: 'induction', component: asyncComponent(() => import('@app/containers/blank')) },
-	{ path: 'assets', component: asyncComponent(() => import('@app/containers/blank')) },
+	{ path: 'asset-register', component: asyncComponent(() => import('@app/containers/assets')) },
+	{ path: 'assets', component: asyncComponent(() => import('@app/containers/assets')) },
 	{ path: 'manageme-PPE', component: asyncComponent(() => import('@app/containers/blank')) },
 
 

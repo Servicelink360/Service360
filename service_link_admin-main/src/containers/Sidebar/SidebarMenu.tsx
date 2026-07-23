@@ -13,7 +13,7 @@ import {
   ScheduleOutlined,
   PicLeftOutlined,
   TeamOutlined,
-  TableOutlined,
+  DatabaseOutlined,
   QuestionCircleOutlined,
 } from "@ant-design/icons";
 import type { MenuProps } from "antd";
@@ -56,8 +56,8 @@ const SubmenuTitle: React.FC<{ leftIcon: string; label: string; submenuColor: Re
       <ContactsOutlined />
     ) : leftIcon === "icon-package" ? (
       <GoldOutlined />
-    ) : leftIcon === "icon-asset" ? (
-      <TableOutlined />
+    ) : leftIcon === "icon-asset" || leftIcon === "icon-assets" ? (
+      <DatabaseOutlined />
     ) : leftIcon === "icon-system" ? (
       <SettingOutlined />
     ) : leftIcon === "icon-site" ? (

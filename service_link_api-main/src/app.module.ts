@@ -37,6 +37,7 @@ import { FaultIssuesModule } from './fault-issues/fault-issues.module';
 import { CustomerPersonnelModule } from './customer-personnel/customer-personnel.module';
 import { AdminPersonnelModule } from './admin-personnel/admin-personnel.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { AssetsModule } from './assets/assets.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -105,6 +106,7 @@ import { InvoicesModule } from './invoices/invoices.module';
     CustomerPersonnelModule,
     AdminPersonnelModule,
     InvoicesModule,
+    AssetsModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

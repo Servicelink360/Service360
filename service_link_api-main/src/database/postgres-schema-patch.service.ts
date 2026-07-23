@@ -102,6 +102,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureCustomerPersonnelAndFaultDelegation();
     await this.ensureAdminPersonnelAndStaffDelegation();
     await this.ensureInvoicesTable();
+    await this.ensureAssetsTable();
     await this.applyRenameDepartmentsToServices();
 
     try {
@@ -2023,6 +2024,50 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       `);
     } catch (e) {
       this.logger.warn(`invoices table patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureAssetsTable(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.assets (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(500) NOT NULL,
+          asset_tag VARCHAR(120) NULL,
+          category VARCHAR(255) NULL,
+          status VARCHAR(40) NOT NULL DEFAULT 'active',
+          company_id INTEGER NOT NULL REFERENCES public.customer_companies(id) ON DELETE RESTRICT,
+          company_name VARCHAR(255) NOT NULL DEFAULT '',
+          site_id INTEGER NULL,
+          site_name VARCHAR(255) NULL,
+          location_detail VARCHAR(500) NULL,
+          manufacturer VARCHAR(255) NULL,
+          model VARCHAR(255) NULL,
+          serial_number VARCHAR(255) NULL,
+          install_date DATE NULL,
+          warranty_expiry DATE NULL,
+          condition VARCHAR(40) NULL,
+          notes TEXT NULL,
+          attach_files VARCHAR(8000) NOT NULL DEFAULT '[]',
+          deleted_at TIMESTAMP NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_by INTEGER NULL,
+          updated_by INTEGER NULL
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_assets_company_id ON public.assets(company_id);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_assets_deleted_at ON public.assets(deleted_at);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_assets_created_at ON public.assets(created_at DESC);
+      `);
+      this.logger.log('assets table ensured');
+    } catch (e) {
+      this.logger.warn(`assets table patch: ${(e as Error).message}`);
     }
   }
 }

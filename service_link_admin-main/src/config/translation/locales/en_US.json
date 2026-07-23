@@ -137,6 +137,8 @@
   "sidebar.customers": "Customers",
   "sidebar.report": "Reports",
   "sidebar.assets": "Assets",
+  "sidebar.asset": "Asset management",
+  "sidebar.assetRegister": "Asset register",
   "sidebar.managemePPE": "Management PPE",
   "sidebar.staffManagement": "Staff Management",
   "sidebar.jobSites": "Job sites",
