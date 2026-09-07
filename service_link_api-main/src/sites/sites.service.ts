@@ -1608,13 +1608,34 @@ export class SitesService {
         query.andWhere('site_items.serviceId = :serviceId', { serviceId: deptFilter });
       }
 
-      const row = await query.orderBy('site_items.id', 'ASC').getOne();
+      // Prefer an assignment that already has staff (admin create needs a staffId).
+      // PG ASC puts NULLs last, so rows with staffs sort ahead of empty staff joins.
+      if (!effectiveStaffId) {
+        query.orderBy('staffs.id', 'ASC').addOrderBy('site_items.id', 'ASC');
+      } else {
+        query.orderBy('site_items.id', 'ASC');
+      }
+
+      const row = await query.getOne();
 
       if (!row?.customer?.id || !row?.service?.id) {
         return { ...errorCode.SUCCESS, data: null };
       }
 
-      const firstStaffOnItem = row.staffs?.find((s) => s?.staffId != null);
+      let firstStaffOnItem = row.staffs?.find((s) => s?.staffId != null);
+      // If this site_item has customer/service but no staffs loaded, try any staff on the same site (+ service).
+      if (!firstStaffOnItem && !effectiveStaffId) {
+        const staffFallbackQb = this.siteItemsRepository
+          .createQueryBuilder('site_items')
+          .innerJoinAndSelect('site_items.staffs', 'staffs')
+          .where('site_items.siteId = :siteId', { siteId });
+        if (deptFilter) {
+          staffFallbackQb.andWhere('site_items.serviceId = :serviceId', { serviceId: deptFilter });
+        }
+        const withStaff = await staffFallbackQb.orderBy('site_items.id', 'ASC').getOne();
+        firstStaffOnItem = withStaff?.staffs?.find((s) => s?.staffId != null);
+      }
+
       const resolvedStaffId =
         effectiveStaffId ?? (firstStaffOnItem ? +firstStaffOnItem.staffId : undefined);
 

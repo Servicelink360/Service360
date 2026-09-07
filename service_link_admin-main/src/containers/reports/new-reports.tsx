@@ -103,6 +103,79 @@ type ListQueryFilters = {
 
 type ReportListTab = "active" | "deleted";
 
+/** Job site Select value for a custom / free-text site (not a real sites.id). */
+const OTHER_JOB_SITE = "__other__";
+
+const isOtherJobSite = (siteId: unknown): boolean =>
+  siteId === OTHER_JOB_SITE || siteId === "other";
+
+function normalizeCompanyKey(name: string | undefined | null): string {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/** One customer user id per company — for Other-site company dropdown (not every worker). */
+function buildCompanyCustomerOptions(
+  companies: Array<{ id: number; name?: string; companyName?: string }>,
+  users: Array<{
+    id: number;
+    customerInfo?: {
+      companyId?: number | null;
+      companyName?: string;
+      company?: { id?: number; name?: string };
+    };
+  }>,
+): Array<{
+  id: number;
+  fullName: string;
+  customerName: string;
+  companyName: string;
+  companyId: number;
+}> {
+  const map: Record<number, number> = {};
+  const nameToCompanyId = new Map<string, number>();
+  for (const c of companies) {
+    const key = normalizeCompanyKey(c.name || c.companyName);
+    if (key) nameToCompanyId.set(key, +c.id);
+  }
+  for (const u of users) {
+    let companyId = +(u.customerInfo?.companyId ?? u.customerInfo?.company?.id ?? 0);
+    if (!companyId) {
+      const key = normalizeCompanyKey(
+        u.customerInfo?.companyName || u.customerInfo?.company?.name,
+      );
+      if (key) companyId = nameToCompanyId.get(key) || 0;
+    }
+    if (companyId && !map[companyId]) {
+      map[companyId] = +u.id;
+    }
+  }
+  return companies
+    .map((c) => {
+      const companyId = +c.id;
+      const customerUserId = map[companyId];
+      if (!customerUserId) return null;
+      const companyName = String(c.name || c.companyName || "").trim() || `Client #${companyId}`;
+      return {
+        id: customerUserId,
+        companyId,
+        fullName: companyName,
+        customerName: companyName,
+        companyName,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.companyName.localeCompare(b!.companyName)) as Array<{
+    id: number;
+    fullName: string;
+    customerName: string;
+    companyName: string;
+    companyId: number;
+  }>;
+}
+
 const staffPrimaryGreen = { background: "#389e0d", borderColor: "#389e0d" };
 /** Submitted Reports modal — reference UI */
 const submittedMetaLabel: React.CSSProperties = {
@@ -1259,9 +1332,13 @@ const NewReports: React.FC = () => {
 
   const selectedTemplateId = Form.useWatch("reportTemplateId", form);
   const watchedSiteId = Form.useWatch("siteId", form);
+  const watchedCustomerId = Form.useWatch("customerId", form);
+  const watchedServiceId = Form.useWatch("serviceId", form);
+  const isOtherSite = isOtherJobSite(watchedSiteId);
   const filteredReportTemplates = useMemo(() => {
     const staffStyleCreate = isStaffUser || (isAdminUser && !editing?.id);
     if (!staffStyleCreate || !watchedSiteId) return reportTemplates;
+    if (isOtherJobSite(watchedSiteId)) return reportTemplates;
     const siteId = +watchedSiteId;
     if (
       loadingSiteServices ||
@@ -1412,14 +1489,8 @@ const NewReports: React.FC = () => {
           ? "No customer or Service is linked to this job site assignment."
           : "No customer is linked to your assignment for this job site.",
       );
-      form.setFieldsValue({
-        serviceId: undefined,
-        serviceName: "",
-        customerId: undefined,
-        customerName: "",
-        companyName: "",
-        
-      });
+      // Do not clear existing customer/service — template probes and multi-service
+      // lookups must not wipe a site assignment that was already filled.
       return false;
     }
     const patch: Record<string, unknown> = {
@@ -1431,6 +1502,7 @@ const NewReports: React.FC = () => {
     };
     if (a.staffId != null && +a.staffId > 0) setReportStaffId(+a.staffId);
     else if (isStaffUser && profile?.id) setReportStaffId(+profile.id);
+    else if (isAdminUser && profile?.id) setReportStaffId(+profile.id);
     form.setFieldsValue(patch);
     return true;
   }, [form, isAdminUser, isStaffUser, profile, reportStaffId]);
@@ -1579,8 +1651,8 @@ const NewReports: React.FC = () => {
     profile,
   ]);
 
-  const onPickSite = async (siteId?: number) => {
-    if (siteId == null) {
+  const onPickSite = async (siteId?: number | string) => {
+    if (siteId == null || siteId === "") {
       setServices([]);
       setServicesSiteId(null);
       setLoadingSiteServices(false);
@@ -1591,10 +1663,86 @@ const NewReports: React.FC = () => {
         customerId: undefined,
         customerName: "",
         companyName: "",
+        siteName: "",
+        siteAddress: "",
+        siteLocation: "",
         reportTemplateId: undefined,
       });
       return;
     }
+
+    if (isOtherJobSite(siteId)) {
+      setServices([]);
+      setServicesSiteId(null);
+      setLoadingSiteServices(true);
+      setCustomers([]);
+      form.setFieldsValue({
+        siteName: "",
+        siteAddress: "",
+        siteLocation: "",
+        serviceId: undefined,
+        serviceName: "",
+        customerId: undefined,
+        customerName: "",
+        companyName: "",
+      });
+      try {
+        const svcRes = await callAPIAsync(serviceType.COMMON, `${endPoint.SERVICES}/getAll`, "GET");
+        setServices(Array.isArray(svcRes?.data) ? svcRes.data : svcRes?.data?.rows || []);
+
+        if (isStaffUser) {
+          // Staff already assigned to client sites — fill client from default assignment; no Client picker.
+          const assignRes = await callAPIAsync(
+            serviceType.COMMON,
+            `${endPoint.JOB_SITES}/getStaffDefaultReportAssignment`,
+            "GET",
+            {},
+          );
+          const a = assignRes?.data;
+          if (a?.customerId) {
+            form.setFieldsValue({
+              customerId: +a.customerId,
+              customerName: a.customerName || "",
+              companyName: a.companyName || "",
+              ...(a.serviceId
+                ? {
+                    serviceId: String(a.serviceId),
+                    serviceName: a.serviceName || "",
+                  }
+                : {}),
+            });
+            if (a.staffId != null && +a.staffId > 0) setReportStaffId(+a.staffId);
+            else if (profile?.id) setReportStaffId(+profile.id);
+          } else {
+            message.warning(
+              "No client is linked to your staff assignments. Contact your administrator.",
+            );
+          }
+        } else {
+          // Admin Other: still pick Client (+ Service) manually.
+          const [companiesRes, usersRes] = await Promise.all([
+            callAPIAsync(serviceType.COMMON, `${endPoint.COMPANIES}/options`, "GET"),
+            callAPIAsync(serviceType.COMMON, endPoint.USERS, "GET", {
+              type: userType.CUSTOMER,
+              limit: 500,
+              page: 1,
+              keyword: "",
+              orderBy: "fullName",
+              orderValue: "ASC",
+            }),
+          ]);
+          const companyList = Array.isArray(companiesRes?.data) ? companiesRes.data : [];
+          const userRows =
+            usersRes?.code === 1 && Array.isArray(usersRes?.data?.rows) ? usersRes.data.rows : [];
+          setCustomers(buildCompanyCustomerOptions(companyList, userRows));
+        }
+        refreshAutoMergeTemplateFields();
+      } finally {
+        setLoadingSiteServices(false);
+      }
+      return;
+    }
+
     const s = sites.find((x: any) => +x.id === +siteId);
     if (s) {
       form.setFieldsValue({
@@ -1634,7 +1782,10 @@ const NewReports: React.FC = () => {
             serviceId: String(deptRows[0].id),
             serviceName: deptRows[0].name || "",
           });
-          await applyStaffSiteAssignment(siteId, +deptRows[0].id);
+          await applyStaffSiteAssignment(+siteId, +deptRows[0].id);
+        } else if (deptRows.length > 1) {
+          // Fill customer/service from the staff site assignment even when several Services exist.
+          await applyStaffSiteAssignment(+siteId);
         }
       }
       refreshAutoMergeTemplateFields();
@@ -1648,13 +1799,7 @@ const NewReports: React.FC = () => {
       const candidates = serviceCandidatesForTemplateAtSite(tpl, services);
       if (!candidates.length) {
         message.warning("This template is not linked to a Service at this job site.");
-        form.setFieldsValue({
-          serviceId: undefined,
-          serviceName: "",
-          customerId: undefined,
-          customerName: "",
-          companyName: "",
-        });
+        // Do not clear an existing site assignment — customer/service may already be set from the job site.
         return false;
       }
       for (const deptId of candidates) {
@@ -1677,21 +1822,33 @@ const NewReports: React.FC = () => {
 
   const onPickService = async (serviceId: string) => {
     const d = services.find((x: any) => String(x.id) === String(serviceId));
+    const otherSite = isOtherJobSite(form.getFieldValue("siteId"));
     form.setFieldsValue({
-      reportTemplateId: undefined,
+      ...(otherSite ? {} : { reportTemplateId: undefined }),
       ...(d
         ? { serviceName: d.name || d.serviceName || "" }
         : { serviceName: "" }),
     });
 
     const siteId = form.getFieldValue("siteId");
-    if (!siteId) return;
+    if (!siteId || otherSite) {
+      if (otherSite) {
+        form.setFieldsValue({ serviceId: String(serviceId) });
+      }
+      refreshAutoMergeTemplateFields();
+      return;
+    }
 
     // Staff-style create: choosing a Service determines the site assignment row (customer + dept).
     if (useStaffStyleCreate) {
+      form.setFieldsValue({ serviceId: String(serviceId) });
       const ok = await applyStaffSiteAssignment(+siteId, +serviceId);
       if (!ok) {
-        // Keep the existing warning message from applyStaffSiteAssignment.
+        form.setFieldsValue({
+          customerId: undefined,
+          customerName: "",
+          companyName: "",
+        });
         refreshAutoMergeTemplateFields();
         return;
       }
@@ -1712,9 +1869,14 @@ const NewReports: React.FC = () => {
   const onPickCustomer = (customerId: number) => {
     const c = customers.find((x: any) => +x.id === +customerId);
     if (!c) return;
+    const company = String(c.companyName || c.customerInfo?.companyName || "").trim();
+    const person = String(c.fullName || c.customerName || "").trim();
     form.setFieldsValue({
-      customerName: c.fullName || c.customerName || "",
-      companyName: c.companyName || c.customerInfo?.companyName || "",
+      // Other-site options are company rows (name = company); keep company as display name.
+      customerName: isOtherJobSite(form.getFieldValue("siteId"))
+        ? company || person
+        : person || company,
+      companyName: company || person,
     });
     refreshAutoMergeTemplateFields();
   };
@@ -1971,7 +2133,13 @@ const NewReports: React.FC = () => {
 
     if (values.customerId == null || values.customerId === "") {
       if (isStaffUser || (isAdminUser && !editing)) {
-        if (!values.siteId) {
+        if (isOtherJobSite(values.siteId)) {
+          message.error(
+            isStaffUser
+              ? "Could not resolve a client from your site assignments. Contact your administrator."
+              : "Select a client and Service for this custom site.",
+          );
+        } else if (!values.siteId) {
           message.error("Select a job site so customer and Service can be filled from the site assignment.");
         } else {
           message.error(
@@ -1983,9 +2151,30 @@ const NewReports: React.FC = () => {
       }
       return;
     }
-    if (isAdminUser && !editing && (!Number.isFinite(reportStaffId) || reportStaffId <= 0)) {
-      message.error("This job site has no staff assignment. Choose another site or update the site setup.");
-      return;
+    if (isOtherJobSite(values.siteId)) {
+      if (!String(values.siteName || "").trim()) {
+        message.error("Enter the custom site name.");
+        return;
+      }
+      if (!String(values.siteAddress || "").trim()) {
+        message.error("Enter the custom site address.");
+        return;
+      }
+      if (values.serviceId == null || values.serviceId === "") {
+        message.error("Select a Service for this custom site.");
+        return;
+      }
+      values = { ...values, siteId: 0 };
+    }
+    let effectiveStaffId = reportStaffId;
+    if (
+      (!Number.isFinite(effectiveStaffId) || effectiveStaffId <= 0) &&
+      profile?.id
+    ) {
+      // Staff always has self; admin create falls back to admin profile when the
+      // site assignment has customer/service but no staff row (or Other site).
+      effectiveStaffId = +profile.id;
+      setReportStaffId(effectiveStaffId);
     }
     const customerIdNum = Number(values.customerId);
     if (!Number.isFinite(customerIdNum) || customerIdNum <= 0) {
@@ -2002,7 +2191,24 @@ const NewReports: React.FC = () => {
       return;
     }
 
+    const customerIdBeforeMedia = customerIdNum;
+    const customerNameBeforeMedia = values.customerName;
+    const companyNameBeforeMedia = values.companyName;
+    const serviceIdBeforeMedia = values.serviceId;
     values = form.getFieldsValue();
+    // Media uploads can remount fields; keep assignment fields from the validated snapshot.
+    if (values.customerId == null || values.customerId === "") {
+      values = {
+        ...values,
+        customerId: customerIdBeforeMedia,
+        customerName: customerNameBeforeMedia,
+        companyName: companyNameBeforeMedia,
+        serviceId: values.serviceId ?? serviceIdBeforeMedia,
+      };
+    }
+    if (isOtherJobSite(values.siteId)) {
+      values = { ...values, siteId: 0 };
+    }
 
     // Auto-fill hidden DATE/TIME items for staff at submit time (create) or restore on edit.
     if (isStaffUser && templateItemsForSubmit.length) {
@@ -2038,7 +2244,7 @@ const NewReports: React.FC = () => {
       values,
       items,
       profile,
-      staffId: reportStaffId,
+      staffId: effectiveStaffId,
       editing,
       templateLabel: selectedTemplateName,
     });
@@ -2847,22 +3053,29 @@ const NewReports: React.FC = () => {
   const showSiteField =
     useStaffStyleCreate || (templateChosen && (!isEditMode || hadSubmittedSite));
   const showServiceField =
-    (
-      // Admin / edit mode: keep existing behaviour.
-      !useStaffStyleCreate &&
-      templateChosen &&
-      (!isEditMode || hadSubmittedService)
-    );
+    !useStaffStyleCreate && templateChosen && (!isEditMode || hadSubmittedService);
+  /** Other site: Service picker for staff/admin; Client picker only for admin (staff uses default assignment). */
+  const showOtherClientServiceFields = useStaffStyleCreate && isOtherSite && !isEditMode;
+  const showOtherClientField = showOtherClientServiceFields && isAdminUser;
+  const showOtherServiceField = showOtherClientServiceFields;
 
   const whereWhoHint = !templateChosen && !isEditMode
     ? useStaffStyleCreate
-      ? "Select the job site, then choose a report template. Only templates linked to that site's services are shown."
+      ? isOtherSite
+            ? isStaffUser
+              ? "Other site: enter the site name and address, then choose Service and template. Client comes from your site assignments."
+              : "Other site: enter the site name and address, then choose client, Service, and template."
+        : "Select the job site, then choose a report template. Only templates linked to that site's services are shown. Choose Other for a custom site."
       : "Choose a report template first. Customer, site, and Service appear after a template is selected."
     : isEditMode && !hadSubmittedCustomer && !hadSubmittedSite && !hadSubmittedService
       ? "This report has no saved customer, site, or Service on file."
       : !isEditMode
         ? useStaffStyleCreate
-          ? "Select the job site for this report. Customer and Service are filled from the site assignment."
+          ? isOtherSite
+            ? isStaffUser
+              ? "Enter the custom site name and address. Client is filled from your assignments; choose Service if needed."
+              : "Enter the custom site name and address. Client and Service must be selected manually."
+            : "Select the job site for this report. Customer and Service are filled from the site assignment."
           : "Choose customer, site, and Service for this report."
         : isStaffUser
           ? "Only the job site is shown below; customer and Service stay on file for this report."
@@ -2873,6 +3086,11 @@ const NewReports: React.FC = () => {
     !isMobilePortrait ||
     isEditMode ||
     Boolean(watchedSiteId);
+
+  const jobSiteSelectOptions = [
+    ...sites.map((s: any) => ({ value: s.id, label: s.name || s.siteName || `#${s.id}` })),
+    { value: OTHER_JOB_SITE, label: "Other (custom site)" },
+  ];
 
   const siteFieldCol = showSiteField ? (
     <Col span={modalFieldColSpan}>
@@ -2885,13 +3103,56 @@ const NewReports: React.FC = () => {
           <Select
             {...selectProps}
             placeholder={useStaffStyleCreate ? "Select job site" : "Select site"}
-            options={sites.map((s: any) => ({ value: s.id, label: s.name || s.siteName || `#${s.id}` }))}
-            onChange={onPickSite}
+            options={jobSiteSelectOptions}
+            onChange={(id) => void onPickSite(id as number | string | undefined)}
             disabled={lockStaffEditContext}
           />
         </Form.Item>
       </Fieldset>
     </Col>
+  ) : null;
+
+  const customSiteFieldsCol = isOtherSite && !isEditMode ? (
+    <>
+      <Col span={modalFieldColSpan}>
+        <Fieldset>
+          <Form.Item
+            name="siteName"
+            label="Site name"
+            rules={[{ required: true, message: "Enter the site name" }]}
+          >
+            <Input
+              size={controlSize}
+              className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+              style={{ borderRadius: 8 }}
+              placeholder="Enter site name"
+              onChange={() => {
+                setTimeout(() => refreshAutoMergeTemplateFields(), 0);
+              }}
+            />
+          </Form.Item>
+        </Fieldset>
+      </Col>
+      <Col span={modalFieldColSpan}>
+        <Fieldset>
+          <Form.Item
+            name="siteAddress"
+            label="Site address"
+            rules={[{ required: true, message: "Enter the site address" }]}
+          >
+            <Input
+              size={controlSize}
+              className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+              style={{ borderRadius: 8 }}
+              placeholder="Enter site address"
+              onChange={() => {
+                setTimeout(() => refreshAutoMergeTemplateFields(), 0);
+              }}
+            />
+          </Form.Item>
+        </Fieldset>
+      </Col>
+    </>
   ) : null;
 
   const templateFieldCol = showTemplateField ? (
@@ -2931,8 +3192,10 @@ const NewReports: React.FC = () => {
                 applyTemplateFieldDefaults(tpl);
                 if (useStaffStyleCreate) {
                   const siteId = form.getFieldValue("siteId");
-                  if (siteId && tpl) {
+                  if (siteId && tpl && !isOtherJobSite(siteId)) {
                     void applyServiceFromTemplate(tpl, +siteId);
+                  } else if (tpl) {
+                    refreshAutoMergeTemplateFields();
                   }
                 }
               }, 0);
@@ -3831,13 +4094,17 @@ const NewReports: React.FC = () => {
             <Form.Item name="companyName" style={{ display: "none" }}>
               <Input />
             </Form.Item>
-            <Form.Item name="siteName" style={{ display: "none" }}>
-              <Input />
-            </Form.Item>
+            {!isOtherSite ? (
+              <>
+                <Form.Item name="siteName" style={{ display: "none" }}>
+                  <Input />
+                </Form.Item>
+                <Form.Item name="siteAddress" style={{ display: "none" }}>
+                  <Input />
+                </Form.Item>
+              </>
+            ) : null}
             <Form.Item name="siteLocation" style={{ display: "none" }}>
-              <Input />
-            </Form.Item>
-            <Form.Item name="siteAddress" style={{ display: "none" }}>
               <Input />
             </Form.Item>
             <Form.Item name="serviceName" style={{ display: "none" }}>
@@ -3845,6 +4112,7 @@ const NewReports: React.FC = () => {
             </Form.Item>
             {useStaffStyleCreate ? (
               <>
+                {/* Always mounted so Other ↔ real site switches do not wipe assignment values */}
                 <Form.Item name="customerId" hidden>
                   <Input />
                 </Form.Item>
@@ -3889,12 +4157,14 @@ const NewReports: React.FC = () => {
             {useStaffStyleCreate ? (
               <>
                 {siteFieldCol}
+                {customSiteFieldsCol}
                 {templateFieldCol}
               </>
             ) : (
               <>
                 {templateFieldCol}
                 {siteFieldCol}
+                {customSiteFieldsCol}
               </>
             )}
 
@@ -3908,7 +4178,9 @@ const NewReports: React.FC = () => {
                       options={customers.map((c: any) => ({
                         value: +c.id,
                         label: `${c.fullName || c.customerName || ""}${
-                          c.companyName || c.customerInfo?.companyName ? ` (${c.companyName || c.customerInfo?.companyName})` : ""
+                          c.companyName || c.customerInfo?.companyName
+                            ? ` (${c.companyName || c.customerInfo?.companyName})`
+                            : ""
                         }`.trim() || `Customer #${c.id}`,
                       }))}
                       onChange={onPickCustomer}
@@ -3930,6 +4202,56 @@ const NewReports: React.FC = () => {
                   </Form.Item>
                 </Fieldset>
               </Col>
+            ) : null}
+            {showOtherClientServiceFields ? (
+              <>
+                {showOtherClientField ? (
+                  <Col span={modalFieldColSpan}>
+                    <Fieldset>
+                      <Typography.Text style={{ display: "block", marginBottom: 8 }}>
+                        Client <span style={{ color: "#ff4d4f" }}>*</span>
+                      </Typography.Text>
+                      <Select
+                        {...selectProps}
+                        placeholder="Select client"
+                        value={watchedCustomerId != null && watchedCustomerId !== "" ? +watchedCustomerId : undefined}
+                        options={customers.map((c: any) => {
+                          const company =
+                            String(c.companyName || c.fullName || c.customerName || "").trim() ||
+                            `Client #${c.id}`;
+                          return { value: +c.id, label: company };
+                        })}
+                        onChange={(id) => {
+                          form.setFieldsValue({ customerId: id != null ? +id : undefined });
+                          if (id != null) onPickCustomer(+id);
+                        }}
+                      />
+                    </Fieldset>
+                  </Col>
+                ) : null}
+                {showOtherServiceField ? (
+                  <Col span={modalFieldColSpan}>
+                    <Fieldset>
+                      <Typography.Text style={{ display: "block", marginBottom: 8 }}>
+                        Service <span style={{ color: "#ff4d4f" }}>*</span>
+                      </Typography.Text>
+                      <Select
+                        {...selectProps}
+                        placeholder="Select Service"
+                        value={watchedServiceId != null && watchedServiceId !== "" ? String(watchedServiceId) : undefined}
+                        options={services.map((d: any) => ({
+                          value: String(d.id),
+                          label: d.name || d.serviceName || `#${d.id}`,
+                        }))}
+                        onChange={(id) => {
+                          form.setFieldsValue({ serviceId: id != null ? String(id) : undefined });
+                          if (id != null) void onPickService(String(id));
+                        }}
+                      />
+                    </Fieldset>
+                  </Col>
+                ) : null}
+              </>
             ) : null}
 
             {/* notifiesStaff is required by API but hidden from staff UI */}
@@ -3983,6 +4305,13 @@ const NewReports: React.FC = () => {
                           </Form.Item>
                         </Col>
                       );
+                    }
+                    // Custom Other site: name/address are entered under Where & who.
+                    if (
+                      isOtherSite &&
+                      (fieldType === "[SITE_NAME]" || fieldType === "[SITE_ADDRESS]")
+                    ) {
+                      return null;
                     }
                     return (
                       <Col span={templateFieldColSpan} key={key}>
@@ -4101,9 +4430,9 @@ const NewReports: React.FC = () => {
                       <Col span={templateFieldColSpan} key={key}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
                           <Input.TextArea
-                            rows={fieldType === "RICH_TEXT" ? 6 : 3}
+                            autoSize={{ minRows: fieldType === "RICH_TEXT" ? 6 : 3 }}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            style={{ borderRadius: 8 }}
+                            style={{ borderRadius: 8, overflow: "hidden" }}
                             placeholder="Enter details"
                           />
                         </Form.Item>
@@ -4380,8 +4709,8 @@ const NewReports: React.FC = () => {
                           <Input.TextArea
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            style={{ borderRadius: 8 }}
-                            autoSize={{ minRows: 3, maxRows: 8 }}
+                            style={{ borderRadius: 8, overflow: "hidden" }}
+                            autoSize={{ minRows: 3 }}
                           />
                         </Form.Item>
                       </Col>
