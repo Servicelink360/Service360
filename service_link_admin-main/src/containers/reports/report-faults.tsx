@@ -40,6 +40,7 @@ import TasksFaultsPanel from "@app/components/report-faults/tasks-faults-panel";
 import { FaultListStatusBadge } from "@app/components/report-faults/delegation-outcome";
 import { FaultPriorityCell } from "@app/components/report-faults/fault-priority-cell";
 import { FaultMedia, isFaultVideoUrl } from "@app/components/report-faults/fault-media";
+import { mediaListThumbUrl } from "@app/lib/helpers/mediaThumb";
 import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 import { checkRole } from "../../library/helpers/utility";
@@ -305,25 +306,27 @@ const faultColumnSortOrder = (
     return listSort.orderValue === "ASC" ? "ascend" : "descend";
 };
 
-const MESSAGE_PREVIEW_LINES = 3;
+const TEXT_PREVIEW_LINES = 2;
 
-const renderWrappedMessage = (text: unknown) => {
+const renderClampedText = (text: unknown, opts?: { fontSize?: number; maxWidthTip?: number }) => {
     const full = text == null ? "" : String(text).trim();
     if (!full) return "—";
+    const fontSize = opts?.fontSize ?? 13;
+    const lineHeight = 1.4;
     const cellStyle: React.CSSProperties = {
         display: "-webkit-box",
-        WebkitLineClamp: MESSAGE_PREVIEW_LINES,
+        WebkitLineClamp: TEXT_PREVIEW_LINES,
         WebkitBoxOrient: "vertical",
         overflow: "hidden",
         wordBreak: "break-word",
-        lineHeight: 1.5,
-        fontSize: 13,
-        maxHeight: MESSAGE_PREVIEW_LINES * 1.5 * 13,
+        lineHeight,
+        fontSize,
+        maxHeight: TEXT_PREVIEW_LINES * lineHeight * fontSize,
     };
     return (
         <Tooltip
             title={<span style={{ whiteSpace: "pre-wrap", display: "block" }}>{full}</span>}
-            overlayStyle={{ maxWidth: 420 }}
+            overlayStyle={{ maxWidth: opts?.maxWidthTip ?? 480 }}
         >
             <span className="report-fault-message-cell" style={cellStyle}>
                 {full}
@@ -951,40 +954,21 @@ const ReportFaults: React.FC = () => {
                     key: "issue",
                     columnKey: "issue",
                     dataIndex: "issue",
-                    width: 88,
-                    ellipsis: true,
+                    width: 160,
                     sorter: true,
                     sortOrder: faultColumnSortOrder(listSort, "issue"),
-                    render: (_: string, r: any) => r.issue || r.subject || "—",
+                    render: (_: string, r: any) =>
+                        renderClampedText(r.issue || r.subject, { fontSize: 12 }),
                 },
                 {
                     title: "Message",
                     key: "message",
                     columnKey: "message",
                     dataIndex: "message",
-                    ellipsis: true,
+                    width: 140,
                     sorter: true,
                     sortOrder: faultColumnSortOrder(listSort, "message"),
-                    render: (_: string, r: any) => {
-                        const full = r.message == null ? "" : String(r.message).trim();
-                        if (!full) return "—";
-                        return (
-                            <Tooltip title={full}>
-                                <span
-                                    className="report-fault-message-cell"
-                                    style={{
-                                        display: "block",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                        fontSize: 12,
-                                    }}
-                                >
-                                    {full}
-                                </span>
-                            </Tooltip>
-                        );
-                    },
+                    render: (_: string, r: any) => renderClampedText(r.message, { fontSize: 12 }),
                 },
                 {
                     title: "Files",
@@ -1000,7 +984,8 @@ const ReportFaults: React.FC = () => {
                                 <FaultMedia url={urls[0]} width={48} height={32} controls={false} />
                             ) : (
                                 <Image
-                                    src={urls[0]}
+                                    src={mediaListThumbUrl(urls[0], 56)}
+                                    preview={{ src: urls[0] }}
                                     width={28}
                                     height={28}
                                     style={{ objectFit: "cover", borderRadius: 4 }}
@@ -1056,7 +1041,7 @@ const ReportFaults: React.FC = () => {
                     return t ? moment(t).utcOffset(600).format(dateTimeFormat) : "—";
                 },
             },
-            { title: "Site name", key: "siteName", columnKey: "siteName", dataIndex: "siteName", sorter: true, sortOrder: faultColumnSortOrder(listSort, "siteName") },
+            { title: "Site name", key: "siteName", columnKey: "siteName", dataIndex: "siteName", width: 220, sorter: true, sortOrder: faultColumnSortOrder(listSort, "siteName"), render: (_: string, r: any) => renderClampedText(r.siteName) },
             ...(profileType === userType.ADMIN
                 ? [
                     {
@@ -1064,9 +1049,10 @@ const ReportFaults: React.FC = () => {
                         key: "companyName",
                         columnKey: "companyName",
                         dataIndex: "companyName",
+                        width: 200,
                         sorter: true,
                         sortOrder: faultColumnSortOrder(listSort, "companyName"),
-                        render: (_: string, r: any) => r.companyName || r.customerName || "",
+                        render: (_: string, r: any) => renderClampedText(r.companyName || r.customerName),
                     },
                 ]
                 : []),
@@ -1075,9 +1061,17 @@ const ReportFaults: React.FC = () => {
                 key: "issue",
                 columnKey: "issue",
                 dataIndex: "issue",
+                width: 360,
                 sorter: true,
                 sortOrder: faultColumnSortOrder(listSort, "issue"),
-                render: (_: string, r: any) => r.issue || r.subject || "—",
+                onCell: () => ({
+                    style: {
+                        verticalAlign: "middle",
+                        whiteSpace: "normal",
+                        overflow: "hidden",
+                    },
+                }),
+                render: (_: string, r: any) => renderClampedText(r.issue || r.subject),
             },
             {
                 title: "Message",
@@ -1089,26 +1083,71 @@ const ReportFaults: React.FC = () => {
                 sortOrder: faultColumnSortOrder(listSort, "message"),
                 onCell: () => ({
                     style: {
-                        verticalAlign: "top",
+                        verticalAlign: "middle",
                         whiteSpace: "normal",
                         overflow: "hidden",
                     },
                 }),
-                render: (_: string, r: any) => renderWrappedMessage(r.message),
+                render: (_: string, r: any) => renderClampedText(r.message),
             },
             {
                 title: "Media files",
                 dataIndex: "attachFiles",
-                width: 180,
+                width: 140,
                 render: (_: string, r: any) => {
                     if (!r.attachFiles) return null;
                     try {
-                        return JSON.parse(r.attachFiles).map((url: string, i: number) =>
-                            isFaultVideoUrl(url) ? (
-                                <FaultMedia key={i} url={url} width={90} height={50} />
-                            ) : (
-                                <Image key={i} src={url} width={50} height={50} />
-                            ),
+                        const urls = JSON.parse(r.attachFiles);
+                        if (!Array.isArray(urls) || !urls.length) return null;
+                        const list = urls.map(String).filter(Boolean);
+                        const imageUrls = list.filter((u) => !isFaultVideoUrl(u));
+                        const videoUrls = list.filter((u) => isFaultVideoUrl(u));
+                        const maxVisible = 2;
+                        const visibleImages = imageUrls.slice(0, maxVisible);
+                        const visibleVideos = videoUrls.slice(0, Math.max(0, maxVisible - visibleImages.length));
+                        const shown = visibleImages.length + visibleVideos.length;
+                        const extra = list.length - shown;
+
+                        return (
+                            <div
+                                style={{
+                                    display: "flex",
+                                    flexWrap: "nowrap",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    overflow: "hidden",
+                                    maxWidth: "100%",
+                                }}
+                            >
+                                <Image.PreviewGroup>
+                                    {visibleImages.map((url, i) => (
+                                        <Image
+                                            key={`vis-${i}`}
+                                            src={mediaListThumbUrl(url, 88)}
+                                            preview={{ src: url }}
+                                            width={44}
+                                            height={44}
+                                            style={{ objectFit: "cover", borderRadius: 4 }}
+                                        />
+                                    ))}
+                                </Image.PreviewGroup>
+                                {visibleVideos.map((url, i) => (
+                                    <FaultMedia key={`v-${i}`} url={url} width={44} height={44} controls={false} />
+                                ))}
+                                {extra > 0 ? (
+                                    <span
+                                        style={{
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            color: "#64748b",
+                                            whiteSpace: "nowrap",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        +{extra}
+                                    </span>
+                                ) : null}
+                            </div>
                         );
                     } catch {
                         return null;
