@@ -8,4 +8,10 @@ export class GetReportTemplatesDto extends BaseRequest {
 	@IsString()
 	@MaxLength(120)
 	category?: string
+
+	@ApiProperty({ required: false, description: 'Exclude this category (e.g. SAFETY_AUDIT from general list)' })
+	@IsOptional()
+	@IsString()
+	@MaxLength(120)
+	excludeCategory?: string
 }

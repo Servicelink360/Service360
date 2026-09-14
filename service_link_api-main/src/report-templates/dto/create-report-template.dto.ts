@@ -1,4 +1,4 @@
-﻿import { ApiProperty } from "@nestjs/swagger"
+import { ApiProperty } from "@nestjs/swagger"
 import { IsString, IsNotEmpty, IsOptional, IsArray, ValidateNested, IsEnum, MaxLength, IsInt, Min, IsBoolean, IsObject, ValidateIf } from "class-validator"
 import { Type, Transform } from "class-transformer"
 import { ASSIGNED_STAFF_ALL } from '../report-template-assignment.constants'
@@ -30,9 +30,11 @@ export enum ReportTemplateItemType {
     GPS = 'GPS',
     DATE = 'DATE',
     TIME = 'TIME',
+    DATETIME = 'DATETIME',
     VIDEOS = 'VIDEOS',
     REPORT_DATE = '[REPORT_DATE]',
     REPORT_TIME = '[REPORT_TIME]',
+    REPORT_DATETIME = '[REPORT_DATETIME]',
     SITE_NAME = '[SITE_NAME]',
     SITE_ADDRESS = '[SITE_ADDRESS]',
     CUSTOMER_NAME = '[CUSTOMER_NAME]',
@@ -140,7 +142,7 @@ export class CreateReportTemplateDto {
 
     @ApiProperty({
       required: false,
-      description: '0 = all staff; positive id = one staff; null/omit = no staff',
+      description: '0 = all staff; positive id = one staff; null/omit = no staff (legacy single)',
     })
     @Transform(({ value }) => parseAssignedStaffId(value))
     @IsOptional()
@@ -148,6 +150,24 @@ export class CreateReportTemplateDto {
     @IsInt()
     @Min(0)
     assignedStaffId?: number | null
+
+    @ApiProperty({
+      required: false,
+      type: [Number],
+      description:
+        'Staff who may use this template. Use [0] for all staff. Multiple positive ids = Adam+Abo etc. Empty = none.',
+    })
+    @IsArray()
+    @IsOptional()
+    @Transform(({ value }) => {
+      if (!Array.isArray(value)) return undefined;
+      return value
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n) && n >= 0);
+    })
+    @IsInt({ each: true })
+    @Min(0, { each: true })
+    assignedStaffIds?: number[]
 
     @ApiProperty({
       required: false,

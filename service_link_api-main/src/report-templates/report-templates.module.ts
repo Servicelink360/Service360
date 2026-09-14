@@ -6,10 +6,20 @@ import { ReportTemplateItem } from './entities/report-template-item.entity';
 import { ReportTemplate } from './entities/report-template.entity';
 import { ReportTemplateCategory } from './entities/report-template-category.entity';
 import { ReportTemplateService } from './entities/report-template-service.entity';
+import { ReportTemplateStaff } from './entities/report-template-staff.entity';
 import { UserTasksModule } from '../user-tasks/user-tasks.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ReportTemplate, ReportTemplateItem, ReportTemplateCategory, ReportTemplateService]), forwardRef(() => UserTasksModule)],
+  imports: [
+    TypeOrmModule.forFeature([
+      ReportTemplate,
+      ReportTemplateItem,
+      ReportTemplateCategory,
+      ReportTemplateService,
+      ReportTemplateStaff,
+    ]),
+    forwardRef(() => UserTasksModule),
+  ],
   controllers: [ReportTemplatesController],
   providers: [ReportTemplatesService],
   exports: [ReportTemplatesService],

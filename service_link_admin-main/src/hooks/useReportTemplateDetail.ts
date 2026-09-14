@@ -13,6 +13,8 @@ type UseReportTemplateDetailArgs = {
   ensureCategoryChoice: (value?: string, label?: string) => void;
   formatCategoryLabel: (value: string) => string;
   buildFileListFromUrl: (url: string) => any[];
+  /** Override default category when creating a new template (e.g. SAFETY_AUDIT). */
+  defaultCategory?: string;
 };
 
 /**
@@ -27,6 +29,7 @@ export function useReportTemplateDetail({
   ensureCategoryChoice,
   formatCategoryLabel,
   buildFileListFromUrl,
+  defaultCategory,
 }: UseReportTemplateDetailArgs) {
   const [items, setItems] = useState<any[]>(() => initializeItems(data?.items));
   const [file, setFile] = useState(data?.fileUrl ?? '');
@@ -36,6 +39,8 @@ export function useReportTemplateDetail({
   const hydratedSignatureRef = useRef<string | null>(null);
   const templateId = data?.id ? Number(data.id) : NaN;
   const isEdit = modalType === actionType.UPDATE || modalType === actionType.VIEW;
+  const addCategory =
+    (defaultCategory || data?.category || DEFAULT_CATEGORY).trim() || DEFAULT_CATEGORY;
 
   useEffect(() => {
     hydratedSignatureRef.current = null;
@@ -47,7 +52,8 @@ export function useReportTemplateDetail({
   useEffect(() => {
     if (!isEdit || !Number.isFinite(templateId)) {
       if (modalType === actionType.ADD) {
-        form.setFieldsValue({ category: DEFAULT_CATEGORY, assignedStaffId: null, serviceIds: [] });
+        form.setFieldsValue({ category: addCategory, assignedStaffIds: [], serviceIds: [] });
+        ensureCategoryChoice(addCategory, formatCategoryLabel(addCategory));
       }
       return;
     }
@@ -61,22 +67,40 @@ export function useReportTemplateDetail({
     }
 
     const rawDeptIds = data.serviceIds ?? data.service_ids;
+    const rawStaffIds = data.assignedStaffIds ?? data.assigned_staff_ids;
     const deptKey = Array.isArray(rawDeptIds) ? rawDeptIds.join(',') : '';
-    const hydrationSignature = `${templateId}:${data?.updatedAt ?? ''}:${deptKey}`;
+    const staffKey = Array.isArray(rawStaffIds)
+      ? rawStaffIds.join(',')
+      : String(data.assignedStaffId ?? data.assigned_staff_id ?? '');
+    const hydrationSignature = `${templateId}:${data?.updatedAt ?? ''}:${deptKey}:${staffKey}`;
     if (hydratedSignatureRef.current === hydrationSignature) {
       return;
     }
 
     const loadedCategory = (data.category ?? '').trim() || DEFAULT_CATEGORY;
-    const rawAssigned = data.assignedStaffId ?? data.assigned_staff_id;
     const serviceIds = Array.isArray(rawDeptIds)
       ? rawDeptIds.map((v: unknown) => +v).filter((n: number) => Number.isFinite(n) && n > 0)
       : [];
+
+    // Lazy import avoided — mirror assignedStaffIdsFromTemplate inline to keep hook free of cycles
+    let assignedStaffIds: number[] = [];
+    if (Array.isArray(rawStaffIds) && rawStaffIds.length) {
+      const cleaned = rawStaffIds.map((v: unknown) => +v).filter((n: number) => Number.isFinite(n) && n >= 0);
+      assignedStaffIds = cleaned.includes(0) ? [0] : [...new Set(cleaned.filter((n) => n > 0))];
+    } else {
+      const rawAssigned = data.assignedStaffId ?? data.assigned_staff_id;
+      if (rawAssigned != null && rawAssigned !== '') {
+        const n = +rawAssigned;
+        if (n === 0) assignedStaffIds = [0];
+        else if (n > 0) assignedStaffIds = [n];
+      }
+    }
+
     form.setFieldsValue({
       name: data.name ?? '',
       description: data.description ?? '',
       category: loadedCategory,
-      assignedStaffId: rawAssigned != null ? +rawAssigned : null,
+      assignedStaffIds,
       serviceIds,
     });
     ensureCategoryChoice(loadedCategory, formatCategoryLabel(loadedCategory));
@@ -102,6 +126,7 @@ export function useReportTemplateDetail({
     ensureCategoryChoice,
     formatCategoryLabel,
     buildFileListFromUrl,
+    addCategory,
   ]);
 
   const resetEditor = () => {
@@ -110,7 +135,7 @@ export function useReportTemplateDetail({
     setFile('');
     setFileList([]);
     form.resetFields();
-    form.setFieldsValue({ category: DEFAULT_CATEGORY, assignedStaffId: null, serviceIds: [] });
+    form.setFieldsValue({ category: addCategory, assignedStaffIds: [], serviceIds: [] });
   };
 
   return {

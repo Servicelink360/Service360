@@ -40,6 +40,9 @@ const getSampleValue = (item: any) => {
         case 'TIME':
         case '[REPORT_TIME]':
             return moment().format('HH:mm:ss')
+        case 'DATETIME':
+        case '[REPORT_DATETIME]':
+            return moment().format('YYYY-MM-DD HH:mm:ss')
         case 'YES_NO':
             return Math.random() > 0.5 ? 'Yes' : 'No'
         case 'SELECT':

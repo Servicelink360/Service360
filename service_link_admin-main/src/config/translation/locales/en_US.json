@@ -39,6 +39,8 @@
   "sidebar.search": "Search",
   "sidebar.shifts": "Shifts",
   "sidebar.reportTemplates": "Report Templates",
+  "sidebar.safetyAuditTemplates": "Safety Audit Templates",
+  "sidebar.safetyAudits": "Safety Audits",
   "sidebar.list": "List",
   "sidebar.signin.member": "ACCOUNT",
   "sidebar.signin.member_signin": "LOGIN",

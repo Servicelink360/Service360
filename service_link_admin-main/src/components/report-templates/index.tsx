@@ -1,4 +1,4 @@
-﻿import { CloseCircleOutlined, SaveOutlined, EditOutlined, DeleteOutlined, PlusOutlined, InboxOutlined, EyeOutlined, HolderOutlined, CopyOutlined } from '@ant-design/icons'
+import { CloseCircleOutlined, SaveOutlined, EditOutlined, DeleteOutlined, PlusOutlined, InboxOutlined, EyeOutlined, HolderOutlined, CopyOutlined } from '@ant-design/icons'
 import {
     Fieldset,
     Label
@@ -23,10 +23,10 @@ import {
     sanitizeFileUrlForSubmit,
 } from '@app/lib/report-templates/templateItemUtils'
 import {
-    REPORT_TEMPLATE_ASSIGNED_ALL,
     assignToSelectOptions,
-    formatAssignToLabel,
-    isReportTemplateAssignedToAll,
+    assignedStaffIdsFromTemplate,
+    formatAssignToLabels,
+    normalizeAssignedStaffIdsSelection,
 } from '@app/lib/report-templates/reportTemplateAssignment'
 import Dragger from 'antd/lib/upload/Dragger'
 import { reportTemplateTypes, reportTemplateCategories } from '../../constants/statusUser'
@@ -210,6 +210,7 @@ const SAMPLE_VALUE_BY_TYPE: Record<string, string> = {
     CURRENCY: '$120.00',
     DATE: '2026-01-14',
     TIME: '09:30:00',
+    DATETIME: '2026-01-14 09:30',
     YES_NO: 'Yes',
     SELECT: 'Option A',
     CHECKLIST: 'Item A, Item B',
@@ -220,6 +221,7 @@ const SAMPLE_VALUE_BY_TYPE: Record<string, string> = {
     VIDEOS: 'Video attachment',
     '[REPORT_DATE]': 'Auto: Report Date',
     '[REPORT_TIME]': 'Auto: Report Time',
+    '[REPORT_DATETIME]': 'Auto: Report Date & Time',
     '[SITE_NAME]': 'Auto: Site Name',
     '[SITE_ADDRESS]': 'Auto: Site Address',
     '[CUSTOMER_NAME]': 'Auto: Customer Name',
@@ -232,7 +234,14 @@ const YES_NO_DEFAULT_TABLE_OPTIONS = [
     { value: 'NO', label: 'No' },
 ]
 
-const STAFF_VISIBILITY_TABLE_TYPES = new Set(['DATE', 'TIME', '[REPORT_DATE]', '[REPORT_TIME]'])
+const STAFF_VISIBILITY_TABLE_TYPES = new Set([
+    'DATE',
+    'TIME',
+    'DATETIME',
+    '[REPORT_DATE]',
+    '[REPORT_TIME]',
+    '[REPORT_DATETIME]',
+])
 
 const getVisibleToStaffFlag = (item: any): boolean => {
     const v = item?.config?.visibleToStaff
@@ -322,10 +331,11 @@ type IProps = {
     staffOptions?: StaffOption[]
     ServiceOptions?: ServiceOption[]
     onCategoryAdded?: (value: string, label?: string) => void
+    defaultCategory?: string
 }
 
 const Index = (props: IProps) => {
-    const { modalType, isSuccess, loadingAction, loadingDetail = false, data, title, categoryOptions, staffOptions = [], ServiceOptions = [], onCategoryAdded } = props
+    const { modalType, isSuccess, loadingAction, loadingDetail = false, data, title, categoryOptions, staffOptions = [], ServiceOptions = [], onCategoryAdded, defaultCategory } = props
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
@@ -370,7 +380,7 @@ const Index = (props: IProps) => {
         return title
     }, [modalType, previewName, data, title])
     const previewCategory = Form.useWatch('category', form)
-    const previewAssignedStaffId = Form.useWatch('assignedStaffId', form)
+    const previewAssignedStaffIds = Form.useWatch('assignedStaffIds', form)
     const previewDescription = Form.useWatch('description', form)
 
     // Track mounted state to avoid setState on unmounted
@@ -422,6 +432,7 @@ const Index = (props: IProps) => {
         ensureCategoryChoice,
         formatCategoryLabel,
         buildFileListFromUrl,
+        defaultCategory,
     })
 
     const typeLookup = useMemo(() => {
@@ -614,38 +625,25 @@ const Index = (props: IProps) => {
     )
 
     const resolveAssignedStaffLabel = useCallback(
-        (staffId?: number | null) => {
-            if (staffId == null) {
-                return 'None (no staff)';
-            }
-            return formatAssignToLabel(staffId, staffLabelById);
+        (staffIds?: number[] | null) => {
+            return formatAssignToLabels(staffIds, staffLabelById);
         },
         [staffLabelById],
     )
 
     const buildSavePayload = () => {
-        const { name, description, category, assignedStaffId, serviceIds } = form.getFieldsValue([
+        const { name, description, category, assignedStaffIds, serviceIds } = form.getFieldsValue([
             'name',
             'description',
             'category',
-            'assignedStaffId',
+            'assignedStaffIds',
             'serviceIds',
         ])
         const trimmedCategory = getCategoryFieldValue(category)
         const normalizedItems = normalizeItemsForSubmit(items)
-        let assigned: number | null = null
-        if (
-            assignedStaffId != null &&
-            assignedStaffId !== '' &&
-            !Number.isNaN(+assignedStaffId)
-        ) {
-            const n = +assignedStaffId
-            assigned = isReportTemplateAssignedToAll(n)
-                ? REPORT_TEMPLATE_ASSIGNED_ALL
-                : n > 0
-                  ? n
-                  : null
-        }
+        const staffIds = normalizeAssignedStaffIdsSelection(
+            Array.isArray(assignedStaffIds) ? assignedStaffIds.map((v: unknown) => +v) : [],
+        )
         const deptIds = Array.isArray(serviceIds)
             ? serviceIds.map((v: unknown) => +v).filter((n: number) => Number.isFinite(n) && n > 0)
             : []
@@ -654,7 +652,7 @@ const Index = (props: IProps) => {
             description: description != null ? String(description) : '',
             category: trimmedCategory || DEFAULT_CATEGORY,
             fileUrl: sanitizeFileUrlForSubmit(file),
-            assignedStaffId: assigned,
+            assignedStaffIds: staffIds,
             serviceIds: deptIds,
         }
         if (!isEdit) {
@@ -1113,19 +1111,13 @@ const Index = (props: IProps) => {
         )
     }
 
-    const resolvePreviewAssignedStaffId = useCallback((): number | null => {
-        const fromForm = previewAssignedStaffId ?? form.getFieldValue('assignedStaffId')
-        if (fromForm != null && fromForm !== '' && !Number.isNaN(+fromForm)) {
-            const n = +fromForm
-            return isReportTemplateAssignedToAll(n) ? REPORT_TEMPLATE_ASSIGNED_ALL : n > 0 ? n : null
+    const resolvePreviewAssignedStaffIds = useCallback((): number[] => {
+        const fromForm = previewAssignedStaffIds ?? form.getFieldValue('assignedStaffIds')
+        if (Array.isArray(fromForm) && fromForm.length) {
+            return normalizeAssignedStaffIdsSelection(fromForm.map((v: unknown) => +v))
         }
-        const fromData = data?.assignedStaffId ?? data?.assigned_staff_id
-        if (fromData != null && fromData !== '' && !Number.isNaN(+fromData)) {
-            const n = +fromData
-            return isReportTemplateAssignedToAll(n) ? REPORT_TEMPLATE_ASSIGNED_ALL : n > 0 ? n : null
-        }
-        return null
-    }, [previewAssignedStaffId, form, data])
+        return assignedStaffIdsFromTemplate(data || {})
+    }, [previewAssignedStaffIds, form, data])
 
     const renderPreviewStep = () => {
         const categoryValue =
@@ -1142,7 +1134,7 @@ const Index = (props: IProps) => {
                         {resolveCategoryLabel(categoryValue)}
                     </Descriptions.Item>
                     <Descriptions.Item label="Assign to">
-                        {resolveAssignedStaffLabel(resolvePreviewAssignedStaffId())}
+                        {resolveAssignedStaffLabel(resolvePreviewAssignedStaffIds())}
                     </Descriptions.Item>
                     <Descriptions.Item label="Description" span={2}>
                         {previewDescription ?? form.getFieldValue('description') ?? '—'}
@@ -1386,18 +1378,26 @@ const Index = (props: IProps) => {
                                     <Col md={12} sm={12} xs={24}>
                                         <Fieldset>
                                             <Form.Item
-                                                name="assignedStaffId"
+                                                name="assignedStaffIds"
                                                 label="Assign to"
-                                                tooltip="All = every staff can use this template in New Report. Pick one staff = only that person. Clear = no staff."
+                                                tooltip="All = every staff. Select one or more staff (e.g. Adam + Abo). Clear = no staff."
                                             >
                                                 <Select
+                                                    mode="multiple"
                                                     allowClear
                                                     showSearch
                                                     placeholder="None (no staff can use this template)"
                                                     optionFilterProp="label"
                                                     options={assignToOptions}
                                                     disabled={isReadOnly}
-                                                    onChange={() => setChanged(true)}
+                                                    onChange={(vals) => {
+                                                        form.setFieldsValue({
+                                                            assignedStaffIds: normalizeAssignedStaffIdsSelection(
+                                                                (vals || []).map((v: unknown) => +v),
+                                                            ),
+                                                        })
+                                                        setChanged(true)
+                                                    }}
                                                 />
                                             </Form.Item>
                                         </Fieldset>

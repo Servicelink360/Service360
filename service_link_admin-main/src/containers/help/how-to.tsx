@@ -1,4 +1,4 @@
-﻿import Layout from '@app/components/layout/Layout';
+import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
 import React from 'react';
 import { Link } from 'react-router-dom';
@@ -136,6 +136,12 @@ const HowToPage: React.FC = () => (
             <li>
               <strong>Report templates</strong> —{' '}
               <NavLink to="/report-templates">Master data → Report templates</NavLink>
+              {' · '}
+              <NavLink to="/safety-audit-templates">Safety audit templates</NavLink>
+              {' · '}
+              <NavLink to="/safety-audits">Safety audits</NavLink>
+              {' · '}
+              <NavLink to="/incident-report">Incident report</NavLink>
             </li>
             <li>
               <strong>Scheduled tasks</strong> — Tasks menu: needs sites with site items, staff on

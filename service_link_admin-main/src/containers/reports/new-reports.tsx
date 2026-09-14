@@ -6,9 +6,10 @@ import { UploadImageMultilHandle } from "@app/components/common/upload-image-mul
 import { UsersDiv } from "@app/components/common/container.style";
 import endPoint from "@app/constants/endPoint";
 import serviceType from "@app/constants/serviceType";
-import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EnvironmentOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync } from "../../library/helpers/api";
+import { getStaffLocation } from "@app/library/helpers/geolocation";
 import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,7 +21,7 @@ import { useColorModeOptional } from "@app/context/ColorModeContext";
 import { useDispatch } from "react-redux";
 import { useIntl } from "react-intl";
 import dashboardActions from "@app/redux/dashboard/actions";
-import { dJobStatus, userType } from "../../constants/statusUser";
+import { dJobStatus, userType, INCIDENT_REPORT_CATEGORY, SAFETY_AUDIT_CATEGORY, NEW_REPORTS_OWN_PAGE_CATEGORIES } from "../../constants/statusUser";
 import { fixTextEncoding } from "@app/library/report-templates/templateItemUtils";
 import {
   EM_DASH,
@@ -76,6 +77,7 @@ import {
   REPORT_LIST_SEP,
   buildReportDisplayTitle,
   formatCustomerDisplayName,
+  formatIncidentType,
   formatMobileReportCardTitle,
   formatReportSubmittedAt,
   formatReportViewDate,
@@ -265,6 +267,275 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     }
   }
 `;
+
+/** Desktop list chrome — match proposed mockup (filters + table). */
+const NewReportsListChromeStyles = createGlobalStyle`
+  .nr-list-page {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .nr-list-chrome {
+    width: 100%;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 16px 14px;
+    margin-bottom: 0;
+  }
+  .nr-list-table-panel {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 14px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .nr-list-table-panel--mobile {
+    border: none;
+    background: transparent;
+    border-radius: 0;
+    overflow: visible;
+  }
+  .nr-list-table-panel .ant-table-wrapper,
+  .nr-list-table-panel .ant-spin-nested-loading,
+  .nr-list-table-panel .ant-table,
+  .nr-list-table-panel .ant-table-container,
+  .nr-list-table-panel table {
+    width: 100% !important;
+  }
+  .nr-list-table-panel .ant-table-pagination {
+    margin: 12px 16px !important;
+  }
+  .nr-list-chrome-top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .nr-list-chrome-title {
+    margin: 0 0 2px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #166534;
+    line-height: 1.2;
+  }
+  .nr-list-chrome-sub {
+    margin: 0;
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .nr-list-chrome-tabs.ant-tabs {
+    margin-bottom: 0 !important;
+  }
+  .nr-list-chrome-tabs .ant-tabs-nav {
+    margin: 0 !important;
+  }
+  .nr-list-chrome-tabs .ant-tabs-nav::before {
+    border-bottom: none !important;
+  }
+  .nr-list-chrome-tabs .ant-tabs-nav-list {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .nr-list-chrome-tabs .ant-tabs-tab {
+    margin: 0 !important;
+    padding: 6px 16px !important;
+    border-radius: 999px !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .nr-list-chrome-tabs .ant-tabs-tab + .ant-tabs-tab {
+    margin-left: 0 !important;
+  }
+  .nr-list-chrome-tabs .ant-tabs-tab .ant-tabs-tab-btn {
+    color: #6b7280;
+    font-size: 13px;
+  }
+  .nr-list-chrome-tabs .ant-tabs-tab-active {
+    background: #188038 !important;
+  }
+  .nr-list-chrome-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: #fff !important;
+    font-weight: 600;
+    text-shadow: none;
+  }
+  .nr-list-chrome-tabs .ant-tabs-ink-bar {
+    display: none !important;
+  }
+  /* Single filter strip — no nested card */
+  .nr-list-chrome .nr-toolbar-card {
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px 12px 10px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .nr-toolbar-form {
+    display: grid !important;
+    grid-template-columns: minmax(200px, 1.35fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(180px, 1.15fr) max-content;
+    gap: 12px 12px;
+    align-items: end;
+  }
+  .nr-toolbar-form.nr-toolbar-form--no-service {
+    grid-template-columns: minmax(200px, 1.35fr) minmax(150px, 1fr) minmax(180px, 1.15fr) max-content;
+  }
+  .nr-toolbar-form .ant-form-item {
+    margin: 0 !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  .nr-toolbar-form .ant-form-item-label {
+    padding-bottom: 4px !important;
+  }
+  .nr-toolbar-form .ant-form-item-label > label {
+    font-size: 11px !important;
+    font-weight: 600;
+    color: #6b7280 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    height: auto !important;
+  }
+  .nr-toolbar-form .ant-form-item-control-input {
+    min-height: 0;
+  }
+  .nr-toolbar-form .ant-picker,
+  .nr-toolbar-form .ant-select,
+  .nr-toolbar-form .ant-input-affix-wrapper,
+  .nr-toolbar-form .ant-input,
+  .nr-toolbar-form .nr-dark-select-shell,
+  .nr-toolbar-form .nr-dark-select-shell .ant-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-radius: 8px !important;
+  }
+  .nr-toolbar-form .nr-toolbar-actions.ant-form-item .ant-form-item-control-input-content {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .nr-toolbar-form .nr-btn-search.ant-btn {
+    background: #188038 !important;
+    border-color: #188038 !important;
+    color: #fff !important;
+    border-radius: 8px;
+    height: 36px;
+    padding: 0 16px;
+    font-weight: 600;
+  }
+  .nr-toolbar-form .nr-btn-new.ant-btn {
+    background: #fff !important;
+    border: 1px solid #86efac !important;
+    color: #166534 !important;
+    border-radius: 8px;
+    height: 36px;
+    padding: 0 16px;
+    font-weight: 600;
+  }
+  .nr-toolbar-form .nr-btn-new.ant-btn:hover,
+  .nr-toolbar-form .nr-btn-new.ant-btn:focus {
+    border-color: #188038 !important;
+    color: #188038 !important;
+  }
+  .nr-bulk-bar--chrome {
+    margin-top: 10px;
+    margin-bottom: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 10px !important;
+    background: #fafafa !important;
+    border: 1px dashed #d1d5db !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+  }
+  .nr-bulk-bar-hint {
+    font-size: 12px;
+    color: #6b7280;
+  }
+  .nr-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+    line-height: 1.35;
+    white-space: normal;
+  }
+  .nr-list-table-panel .ant-table-thead > tr > th {
+    background: #188038 !important;
+    color: #fff !important;
+    font-weight: 600;
+    border-bottom: none !important;
+  }
+  .nr-list-table-panel .ant-table-thead > tr > th .ant-table-column-sorter {
+    color: rgba(255, 255, 255, 0.75);
+  }
+  .nr-list-table-panel .ant-table.ant-table-bordered > .ant-table-container {
+    border: none !important;
+  }
+  .nr-list-table-panel .ant-table.ant-table-bordered > .ant-table-container > .ant-table-content > table,
+  .nr-list-table-panel .ant-table.ant-table-bordered > .ant-table-container > .ant-table-header > table {
+    border: none !important;
+  }
+  @media (max-width: 1100px) {
+    .nr-toolbar-form {
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .nr-toolbar-form .nr-toolbar-actions {
+      grid-column: 1 / -1;
+    }
+    .nr-toolbar-form .nr-keyword-row {
+      grid-column: 1 / -1;
+    }
+  }
+  .new-reports-theme-dark .nr-list-chrome,
+  .new-reports-theme-dark .nr-list-table-panel {
+    background: #0a0a0a;
+    border-color: #2e2e2e;
+  }
+  .new-reports-theme-dark .nr-list-chrome-title {
+    color: #86efac;
+  }
+  .new-reports-theme-dark .nr-list-chrome .nr-toolbar-card,
+  .new-reports-theme-dark .nr-bulk-bar--chrome {
+    background: #141414 !important;
+    border-color: #444444 !important;
+  }
+  .new-reports-theme-dark .nr-list-chrome-tabs .ant-tabs-nav-list {
+    background: #1a1a1a;
+    border-color: #444444;
+  }
+  .new-reports-theme-dark .nr-bulk-bar-hint {
+    color: #9a9a9a;
+  }
+  .new-reports-theme-dark .nr-toolbar-form .nr-btn-new.ant-btn {
+    background: #1a1a1a !important;
+    border-color: #4ade80 !important;
+    color: #86efac !important;
+  }
+`;
+
+const renderClamp2 = (text: unknown) => {
+  const full = text == null ? "" : String(text).trim();
+  if (!full) return EM_DASH;
+  return (
+    <Tooltip title={full}>
+      <span className="nr-clamp-2">{full}</span>
+    </Tooltip>
+  );
+};
 
 /** Mobile card list — $dark sets explicit colors (no CSS-variable fallbacks to white). */
 const MobileReportsList = styled.div<MobileStyledDark>`
@@ -654,7 +925,7 @@ function renderSubmittedReportValue(report: any): React.ReactNode {
   if (t === "TIME" || t === "[REPORT_TIME]") {
     return formatReportViewTime(v);
   }
-  if (t === "DATETIME") {
+  if (t === "DATETIME" || t === "[REPORT_DATETIME]") {
     const m = moment(String(v));
     return m.isValid() ? m.format(`${REPORT_DISPLAY_DATE} HH:mm`) : String(v);
   }
@@ -671,8 +942,15 @@ function filterReportRowsByKeyword(rows: any[], draft: string): any[] {
   });
 }
 
-const NewReports: React.FC = () => {
+const NewReports: React.FC<{
+  lockedTemplateCategory?: string;
+  pageTitle?: string;
+}> = ({ lockedTemplateCategory, pageTitle = "sidebar.newReports" }) => {
   const intl = useIntl();
+  const isIncidentReportMode =
+    String(lockedTemplateCategory || "").toUpperCase() === INCIDENT_REPORT_CATEGORY;
+  const isSafetyAuditMode =
+    String(lockedTemplateCategory || "").toUpperCase() === SAFETY_AUDIT_CATEGORY;
   const dispatch = useDispatch();
   const refreshDashboard = useCallback(() => {
     dispatch(dashboardActions.getData({ startDate: "", endDate: "" }));
@@ -946,7 +1224,34 @@ const NewReports: React.FC = () => {
     }, 150);
   }, []);
 
-  const reportTemplates = useMemo(() => init.reportTemplates || [], [init.reportTemplates]);
+  const reportTemplates = useMemo(() => {
+    const all = init.reportTemplates || [];
+    let filtered = all;
+    if (lockedTemplateCategory) {
+      const locked = lockedTemplateCategory.toUpperCase();
+      filtered = filtered.filter(
+        (t: any) => String(t?.category || "").toUpperCase() === locked,
+      );
+    } else {
+      // Own-page types (Incident, Monthly Safety Audit) live under their sidebar routes.
+      const excluded = new Set(
+        NEW_REPORTS_OWN_PAGE_CATEGORIES.map((c) => String(c).toUpperCase()),
+      );
+      filtered = filtered.filter(
+        (t: any) => !excluded.has(String(t?.category || "").toUpperCase()),
+      );
+    }
+    return filtered;
+  }, [init.reportTemplates, lockedTemplateCategory]);
+
+  const safetyAuditTemplateIds = useMemo(() => {
+    if (!lockedTemplateCategory) return null as Set<number> | null;
+    return new Set(
+      reportTemplates
+        .map((t: any) => +t.id)
+        .filter((n: number) => Number.isFinite(n) && n > 0),
+    );
+  }, [lockedTemplateCategory, reportTemplates]);
 
   const loadInit = useCallback(async () => {
     const res = await callAPIAsync(
@@ -979,12 +1284,15 @@ const NewReports: React.FC = () => {
     if (!showReportDeletedTabs || !profileId) return;
     try {
       const staffId = +profileType === userType.STAFF ? +profileId : undefined;
-      const n = await fetchCustomReportDeletedCount(filters, staffId);
+      const n = await fetchCustomReportDeletedCount(
+        { ...filters, templateCategory: lockedTemplateCategory || undefined },
+        staffId,
+      );
       setDeletedReportCount(n);
     } catch {
       /* ignore */
     }
-  }, [showReportDeletedTabs, profileId, profileType, listFilters]);
+  }, [showReportDeletedTabs, profileId, profileType, listFilters, lockedTemplateCategory]);
 
   const loadRows = useCallback(
     async (
@@ -1022,9 +1330,26 @@ const NewReports: React.FC = () => {
             serviceId: filters.serviceId,
             keyword: filters.keyword,
             sort: sort.orderBy ? sort : undefined,
+            templateCategory: lockedTemplateCategory || undefined,
           });
           list = listed.rows;
           total = listed.count;
+        }
+
+        if (safetyAuditTemplateIds) {
+          const allTemplatesLoaded = Array.isArray(init.reportTemplates);
+          if (!allTemplatesLoaded) {
+            list = [];
+            total = 0;
+          } else if (safetyAuditTemplateIds.size === 0) {
+            list = [];
+            total = 0;
+          } else {
+            list = list.filter((r: any) =>
+              safetyAuditTemplateIds.has(+r.reportTemplateId),
+            );
+            if (!reportIdFromUrl) total = list.length;
+          }
         }
 
         setRows(list);
@@ -1050,6 +1375,9 @@ const NewReports: React.FC = () => {
       location.search,
       showReportDeletedTabs,
       loadDeletedReportCount,
+      safetyAuditTemplateIds,
+      init.reportTemplates,
+      lockedTemplateCategory,
     ],
   );
 
@@ -1335,6 +1663,51 @@ const NewReports: React.FC = () => {
   const watchedCustomerId = Form.useWatch("customerId", form);
   const watchedServiceId = Form.useWatch("serviceId", form);
   const isOtherSite = isOtherJobSite(watchedSiteId);
+  const editingReportTemplateId = editing?.reportTemplateId;
+  const allInitReportTemplates = init.reportTemplates;
+
+  const activeFormTemplate = useMemo(() => {
+    const id =
+      selectedTemplateId != null && selectedTemplateId !== ""
+        ? selectedTemplateId
+        : editingReportTemplateId;
+    if (id == null || id === "") return null;
+    return (
+      reportTemplates.find((t: any) => +t.id === +id) ||
+      (allInitReportTemplates || []).find((t: any) => +t.id === +id) ||
+      null
+    );
+  }, [selectedTemplateId, editingReportTemplateId, reportTemplates, allInitReportTemplates]);
+
+  /** Modal/create title: "New Incident Report", "New Adhoc Report", etc. */
+  const formReportKindLabel = useMemo(() => {
+    if (isIncidentReportMode) return "Incident Report";
+    if (isSafetyAuditMode) return "Safety Audit";
+    const cat = String(activeFormTemplate?.category || "").toUpperCase();
+    if (cat === INCIDENT_REPORT_CATEGORY) return "Incident Report";
+    if (cat === SAFETY_AUDIT_CATEGORY) return "Safety Audit";
+    const name = String(activeFormTemplate?.name || "").trim();
+    return name || "";
+  }, [isIncidentReportMode, isSafetyAuditMode, activeFormTemplate]);
+
+  const formModalTitle = editing
+    ? formReportKindLabel
+      ? `Update ${formReportKindLabel}`
+      : "Update report"
+    : formReportKindLabel
+      ? `New ${formReportKindLabel}`
+      : "New report";
+
+  const newReportButtonLabel = isIncidentReportMode
+    ? "New Incident Report"
+    : isSafetyAuditMode
+      ? "New Safety Audit"
+      : "New";
+
+  /** Form copy for incident fields even when opened from New Reports. */
+  const isIncidentForm =
+    isIncidentReportMode ||
+    String(activeFormTemplate?.category || "").toUpperCase() === INCIDENT_REPORT_CATEGORY;
   const filteredReportTemplates = useMemo(() => {
     const staffStyleCreate = isStaffUser || (isAdminUser && !editing?.id);
     if (!staffStyleCreate || !watchedSiteId) return reportTemplates;
@@ -1379,7 +1752,7 @@ const NewReports: React.FC = () => {
 
   const isHiddenFromStaffCreate = useCallback((it: TemplateItem): boolean => {
     const t = String(it?.type || "").toUpperCase();
-    if (t === "DATE" || t === "DATE_PICKER" || t === "TIME" || t === "[REPORT_DATE]" || t === "[REPORT_TIME]") {
+    if (t === "DATE" || t === "DATE_PICKER" || t === "TIME" || t === "DATETIME" || t === "[REPORT_DATE]" || t === "[REPORT_TIME]" || t === "[REPORT_DATETIME]") {
       const visibleToStaff = it?.config?.visibleToStaff;
       if (typeof visibleToStaff === "boolean") return !visibleToStaff;
       return false; // default = visible
@@ -1410,7 +1783,12 @@ const NewReports: React.FC = () => {
         if (fieldType === "YES_NO") {
           const preset = getYesNoPreset(it);
           if (preset) patch[fieldKey] = preset;
-        } else if (fieldType === "DATE" || fieldType === "DATE_PICKER" || fieldType === "TIME") {
+        } else if (
+          fieldType === "DATE" ||
+          fieldType === "DATE_PICKER" ||
+          fieldType === "TIME" ||
+          fieldType === "DATETIME"
+        ) {
           // Staff wants Date/Time prefilled with "now" on new reports (but never overwrite).
           const current = baseValues[fieldKey];
           if (current === undefined || current === null || current === "") {
@@ -1470,27 +1848,50 @@ const NewReports: React.FC = () => {
   const applyStaffSiteAssignment = useCallback(async (
     siteId: number,
     serviceId?: number,
+    opts?: { silent?: boolean; ignoreStoredStaffId?: boolean },
   ): Promise<boolean> => {
-    const params: Record<string, number> = { siteId };
-    if (serviceId != null && Number.isFinite(+serviceId) && +serviceId > 0) {
-      params.serviceId = +serviceId;
-    }
-    if (isAdminUser && reportStaffId > 0) params.staffId = reportStaffId;
-    const assignRes = await callAPIAsync(
-      serviceType.COMMON,
-      `${endPoint.JOB_SITES}/getStaffReportAssignmentBySite`,
-      "GET",
-      params,
-    );
-    const a = assignRes?.data;
-    if (!a?.customerId) {
-      message.warning(
-        isAdminUser
-          ? "No customer or Service is linked to this job site assignment."
-          : "No customer is linked to your assignment for this job site.",
+    const fetchAssignment = async (staffIdParam?: number) => {
+      const params: Record<string, number> = { siteId };
+      if (serviceId != null && Number.isFinite(+serviceId) && +serviceId > 0) {
+        params.serviceId = +serviceId;
+      }
+      if (
+        isAdminUser &&
+        staffIdParam != null &&
+        Number.isFinite(+staffIdParam) &&
+        +staffIdParam > 0
+      ) {
+        params.staffId = +staffIdParam;
+      }
+      const assignRes = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.JOB_SITES}/getStaffReportAssignmentBySite`,
+        "GET",
+        params,
       );
-      // Do not clear existing customer/service — template probes and multi-service
-      // lookups must not wipe a site assignment that was already filled.
+      return assignRes?.data;
+    };
+
+    const storedStaffId =
+      !opts?.ignoreStoredStaffId && isAdminUser && reportStaffId > 0
+        ? reportStaffId
+        : undefined;
+
+    // Admin: try with current staff filter first, then any site assignment
+    // (changing Job site must not keep a previous site's staffId locked in).
+    let a = await fetchAssignment(storedStaffId);
+    if (!a?.customerId && storedStaffId) {
+      a = await fetchAssignment(undefined);
+    }
+
+    if (!a?.customerId) {
+      if (!opts?.silent) {
+        message.warning(
+          isAdminUser
+            ? "No customer or Service is linked to this job site assignment."
+            : "No customer is linked to your assignment for this job site.",
+        );
+      }
       return false;
     }
     const patch: Record<string, unknown> = {
@@ -1756,6 +2157,8 @@ const NewReports: React.FC = () => {
     setServicesSiteId(null);
     setLoadingSiteServices(true);
     setCustomers([]);
+    // Drop previous site's staff filter so the new site can resolve its own customer/Service.
+    if (isAdminUser) setReportStaffId(0);
     form.setFieldsValue({
       serviceId: undefined,
       serviceName: "",
@@ -1777,15 +2180,23 @@ const NewReports: React.FC = () => {
       setServicesSiteId(+siteId);
 
       if (isStaffUser || (isAdminUser && !editing)) {
-        if (deptRows.length === 1) {
+        if (deptRows.length === 0) {
+          message.warning(
+            "This job site has no Service on file, so customer and Service cannot be filled automatically.",
+          );
+        } else if (deptRows.length === 1) {
           form.setFieldsValue({
             serviceId: String(deptRows[0].id),
             serviceName: deptRows[0].name || "",
           });
-          await applyStaffSiteAssignment(+siteId, +deptRows[0].id);
-        } else if (deptRows.length > 1) {
+          await applyStaffSiteAssignment(+siteId, +deptRows[0].id, {
+            ignoreStoredStaffId: true,
+          });
+        } else {
           // Fill customer/service from the staff site assignment even when several Services exist.
-          await applyStaffSiteAssignment(+siteId);
+          await applyStaffSiteAssignment(+siteId, undefined, {
+            ignoreStoredStaffId: true,
+          });
         }
       }
       refreshAutoMergeTemplateFields();
@@ -1798,12 +2209,14 @@ const NewReports: React.FC = () => {
     async (tpl: any, siteId: number) => {
       const candidates = serviceCandidatesForTemplateAtSite(tpl, services);
       if (!candidates.length) {
-        message.warning("This template is not linked to a Service at this job site.");
+        if (!isIncidentReportMode) {
+          message.warning("This template is not linked to a Service at this job site.");
+        }
         // Do not clear an existing site assignment — customer/service may already be set from the job site.
         return false;
       }
       for (const deptId of candidates) {
-        const ok = await applyStaffSiteAssignment(siteId, deptId);
+        const ok = await applyStaffSiteAssignment(siteId, deptId, { silent: true });
         if (ok) {
           const d = services.find((x: any) => +x.id === +deptId);
           form.setFieldsValue({
@@ -1817,7 +2230,7 @@ const NewReports: React.FC = () => {
       message.warning("No customer assignment found for this template at this job site.");
       return false;
     },
-    [services, applyStaffSiteAssignment, form, refreshAutoMergeTemplateFields],
+    [services, applyStaffSiteAssignment, form, refreshAutoMergeTemplateFields, isIncidentReportMode],
   );
 
   const onPickService = async (serviceId: string) => {
@@ -1971,6 +2384,9 @@ const NewReports: React.FC = () => {
           if ((fieldType === "DATE" || fieldType === "DATE_PICKER") && moment.isMoment(raw)) {
             value = raw.format("YYYY-MM-DD");
           }
+          if ((fieldType === "DATETIME" || fieldType === "[REPORT_DATETIME]") && moment.isMoment(raw)) {
+            value = raw.format("YYYY-MM-DD HH:mm:ss");
+          }
           if (isJsonMediaFieldType(fieldType)) {
             const arr = parseMediaListValue(raw);
             if (!arr.length) return null;
@@ -2038,6 +2454,9 @@ const NewReports: React.FC = () => {
         if ((fieldType === "DATE" || fieldType === "DATE_PICKER") && moment.isMoment(raw)) {
           value = raw.format("YYYY-MM-DD");
         }
+        if ((fieldType === "DATETIME" || fieldType === "[REPORT_DATETIME]") && moment.isMoment(raw)) {
+          value = raw.format("YYYY-MM-DD HH:mm:ss");
+        }
         if ((fieldType === "[REPORT_DATE]" || fieldType === "[REPORT_TIME]") && moment.isMoment(raw)) {
           value = fieldType === "[REPORT_DATE]" ? raw.format("YYYY-MM-DD") : raw.format("HH:mm:ss");
         }
@@ -2072,6 +2491,9 @@ const NewReports: React.FC = () => {
             if (fieldType === "TIME" && moment.isMoment(raw)) value = raw.format("HH:mm:ss");
             if ((fieldType === "DATE" || fieldType === "DATE_PICKER") && moment.isMoment(raw)) {
               value = raw.format("YYYY-MM-DD");
+            }
+            if ((fieldType === "DATETIME" || fieldType === "[REPORT_DATETIME]") && moment.isMoment(raw)) {
+              value = raw.format("YYYY-MM-DD HH:mm:ss");
             }
             if (isJsonMediaFieldType(fieldType)) {
               const arr = parseMediaListValue(raw);
@@ -2161,8 +2583,25 @@ const NewReports: React.FC = () => {
         return;
       }
       if (values.serviceId == null || values.serviceId === "") {
-        message.error("Select a Service for this custom site.");
-        return;
+        if (isIncidentReportMode) {
+          // Service is hidden on Incident Report — take first site service or assignment silently.
+          const fallbackService =
+            services[0] ||
+            null;
+          if (fallbackService?.id) {
+            values = {
+              ...values,
+              serviceId: String(fallbackService.id),
+              serviceName: fallbackService.name || fallbackService.serviceName || "",
+            };
+          } else {
+            // Allow submit without service for incident reports when none is available.
+            values = { ...values, serviceId: 0, serviceName: "" };
+          }
+        } else {
+          message.error("Select a Service for this custom site.");
+          return;
+        }
       }
       values = { ...values, siteId: 0 };
     }
@@ -2216,7 +2655,7 @@ const NewReports: React.FC = () => {
       templateItemsForSubmit.forEach((it, idx) => {
         if (!isHiddenFromStaffCreate(it)) return;
         const t = String(it?.type || "").toUpperCase();
-        if (t !== "DATE" && t !== "DATE_PICKER" && t !== "TIME" && t !== "[REPORT_DATE]" && t !== "[REPORT_TIME]") return;
+        if (t !== "DATE" && t !== "DATE_PICKER" && t !== "TIME" && t !== "DATETIME" && t !== "[REPORT_DATE]" && t !== "[REPORT_TIME]" && t !== "[REPORT_DATETIME]") return;
         const fieldKey = getTemplateFieldKey(it, idx);
         const current = values[fieldKey];
         if (current === undefined || current === null || current === "") {
@@ -2550,13 +2989,23 @@ const NewReports: React.FC = () => {
       { value: "submittedAt:ASC", label: "Submitted (oldest first)" },
       { value: "siteName:ASC", label: "Job site (A–Z)" },
       { value: "siteName:DESC", label: "Job site (Z–A)" },
-      { value: "serviceName:ASC", label: "Service (A–Z)" },
-      { value: "serviceName:DESC", label: "Service (Z–A)" },
     ];
+    if (!isIncidentReportMode) {
+      opts.push(
+        { value: "serviceName:ASC", label: "Service (A–Z)" },
+        { value: "serviceName:DESC", label: "Service (Z–A)" },
+      );
+    }
     if (+profileType === userType.ADMIN) {
       opts.splice(2, 0,
-        { value: "staffFullName:ASC", label: "Submitted by (A–Z)" },
-        { value: "staffFullName:DESC", label: "Submitted by (Z–A)" },
+        {
+          value: "staffFullName:ASC",
+          label: isIncidentReportMode ? "Reported by (A–Z)" : "Submitted by (A–Z)",
+        },
+        {
+          value: "staffFullName:DESC",
+          label: isIncidentReportMode ? "Reported by (Z–A)" : "Submitted by (Z–A)",
+        },
       );
     }
     if (+profileType === userType.ADMIN || +profileType === userType.CUSTOMER) {
@@ -2566,7 +3015,7 @@ const NewReports: React.FC = () => {
       );
     }
     return opts;
-  }, [profileType]);
+  }, [profileType, isIncidentReportMode]);
   const onMobileSortChange = useCallback((value: string) => {
     const [orderBy, orderValue] = value.split(":");
     if (!orderBy || !orderValue) return;
@@ -2765,7 +3214,9 @@ const NewReports: React.FC = () => {
       const highlighted = linkedReportId != null && +r.id === +linkedReportId;
       const selectable = canUseBulkDelete && canSoftDeleteReport(r);
 
-      const siteDept = [r.siteName, r.serviceName].filter(Boolean).join(REPORT_LIST_SEP) || "—";
+      const siteDept = isIncidentReportMode
+        ? String(r.siteName || "").trim() || "—"
+        : [r.siteName, r.serviceName].filter(Boolean).join(REPORT_LIST_SEP) || "—";
 
       return (
         <MobileReportCardShell key={r.id} $dark={mobileUiDark} $highlight={highlighted}>
@@ -2807,7 +3258,7 @@ const NewReports: React.FC = () => {
                     $dark={mobileUiDark}
                     className={mobileUiDark ? "nr-mobile-report-meta-label" : undefined}
                   >
-                    Submitted by
+                    {isIncidentReportMode ? "Reported by" : "Submitted by"}
                   </MobileReportCardLabel>
                   <MobileReportCardValue
                     $dark={mobileUiDark}
@@ -2816,6 +3267,23 @@ const NewReports: React.FC = () => {
                     {formatSubmittedByRow(r)}
                   </MobileReportCardValue>
                 </MobileReportCardDetailRow>
+                {isIncidentReportMode ? (
+                <MobileReportCardDetailRow>
+                  <MobileReportCardLabel
+                    $dark={mobileUiDark}
+                    className={mobileUiDark ? "nr-mobile-report-meta-label" : undefined}
+                  >
+                    Incident type
+                  </MobileReportCardLabel>
+                  <MobileReportCardValue
+                    $dark={mobileUiDark}
+                    className={mobileUiDark ? "nr-mobile-report-meta-value" : undefined}
+                  >
+                    {formatIncidentType(r)}
+                  </MobileReportCardValue>
+                </MobileReportCardDetailRow>
+                ) : null}
+                {!isIncidentReportMode ? (
                 <MobileReportCardDetailRow>
                   <MobileReportCardLabel
                     $dark={mobileUiDark}
@@ -2830,22 +3298,41 @@ const NewReports: React.FC = () => {
                     {formatCustomerDisplayName(r)}
                   </MobileReportCardValue>
                 </MobileReportCardDetailRow>
+                ) : null}
               </>
             ) : +profileType === userType.STAFF ? (
-              <MobileReportCardDetailRow>
-                <MobileReportCardLabel
-                  $dark={mobileUiDark}
-                  className={mobileUiDark ? "nr-mobile-report-meta-label" : undefined}
-                >
-                  Submitted by
-                </MobileReportCardLabel>
-                <MobileReportCardValue
-                  $dark={mobileUiDark}
-                  className={mobileUiDark ? "nr-mobile-report-meta-value" : undefined}
-                >
-                  {formatSubmittedByRow(r)}
-                </MobileReportCardValue>
-              </MobileReportCardDetailRow>
+              <>
+                <MobileReportCardDetailRow>
+                  <MobileReportCardLabel
+                    $dark={mobileUiDark}
+                    className={mobileUiDark ? "nr-mobile-report-meta-label" : undefined}
+                  >
+                    {isIncidentReportMode ? "Reported by" : "Submitted by"}
+                  </MobileReportCardLabel>
+                  <MobileReportCardValue
+                    $dark={mobileUiDark}
+                    className={mobileUiDark ? "nr-mobile-report-meta-value" : undefined}
+                  >
+                    {formatSubmittedByRow(r)}
+                  </MobileReportCardValue>
+                </MobileReportCardDetailRow>
+                {isIncidentReportMode ? (
+                <MobileReportCardDetailRow>
+                  <MobileReportCardLabel
+                    $dark={mobileUiDark}
+                    className={mobileUiDark ? "nr-mobile-report-meta-label" : undefined}
+                  >
+                    Incident type
+                  </MobileReportCardLabel>
+                  <MobileReportCardValue
+                    $dark={mobileUiDark}
+                    className={mobileUiDark ? "nr-mobile-report-meta-value" : undefined}
+                  >
+                    {formatIncidentType(r)}
+                  </MobileReportCardValue>
+                </MobileReportCardDetailRow>
+                ) : null}
+              </>
             ) : null}
             <MobileReportCardDetailRow>
               <MobileReportCardLabel
@@ -2896,6 +3383,7 @@ const NewReports: React.FC = () => {
       mobileUiDark,
       mobileDarkBtnDefaultStyle,
       handleOpenReportPdf,
+      isIncidentReportMode,
     ],
   );
 
@@ -2903,7 +3391,11 @@ const NewReports: React.FC = () => {
     ...(Number(profileType) !== userType.CUSTOMER
       ? [
           {
-            title: +profileType === userType.ADMIN ? "Submitted by" : "Staff",
+            title: isIncidentReportMode
+              ? "Reported by"
+              : +profileType === userType.ADMIN
+                ? "Submitted by"
+                : "Staff",
             key: "staffFullName",
             dataIndex: "staffFullName",
             width: 150,
@@ -2917,30 +3409,44 @@ const NewReports: React.FC = () => {
     {
       title: "Job Site",
       dataIndex: "siteName",
-      ellipsis: true,
-      width: 200,
+      width: 280,
       ...tableSorter,
       sortOrder: sortOrderFor("siteName"),
+      render: (_: unknown, r: any) => renderClamp2(r.siteName),
     },
-    {
-      title: "Service",
-      dataIndex: "serviceName",
-      ellipsis: true,
-      width: 200,
-      ...tableSorter,
-      sortOrder: sortOrderFor("serviceName"),
-    },
-    ...(Number(profileType) === userType.ADMIN
+    ...(isIncidentReportMode
+      ? [
+          {
+            title: "Incident type",
+            key: "incidentType",
+            width: 160,
+            ellipsis: true,
+            render: (_: unknown, r: any) => renderClamp2(formatIncidentType(r)),
+          },
+        ]
+      : []),
+    ...(!isIncidentReportMode
+      ? [
+          {
+            title: "Service",
+            dataIndex: "serviceName",
+            width: 200,
+            ...tableSorter,
+            sortOrder: sortOrderFor("serviceName"),
+            render: (_: unknown, r: any) => renderClamp2(r.serviceName),
+          },
+        ]
+      : []),
+    ...(Number(profileType) === userType.ADMIN && !isIncidentReportMode
       ? [
           {
             title: "Customer",
             key: "customerName",
             dataIndex: "customerName",
-            ellipsis: true,
-            width: 180,
+            width: 240,
             ...tableSorter,
             sortOrder: sortOrderFor("customerName"),
-            render: (_: unknown, r: any) => formatCustomerDisplayName(r),
+            render: (_: unknown, r: any) => renderClamp2(formatCustomerDisplayName(r)),
           },
         ]
       : []),
@@ -3053,33 +3559,58 @@ const NewReports: React.FC = () => {
   const showSiteField =
     useStaffStyleCreate || (templateChosen && (!isEditMode || hadSubmittedSite));
   const showServiceField =
-    !useStaffStyleCreate && templateChosen && (!isEditMode || hadSubmittedService);
+    !isIncidentReportMode &&
+    !useStaffStyleCreate &&
+    templateChosen &&
+    (!isEditMode || hadSubmittedService);
   /** Other site: Service picker for staff/admin; Client picker only for admin (staff uses default assignment). */
   const showOtherClientServiceFields = useStaffStyleCreate && isOtherSite && !isEditMode;
   const showOtherClientField = showOtherClientServiceFields && isAdminUser;
-  const showOtherServiceField = showOtherClientServiceFields;
+  const showOtherServiceField = !isIncidentReportMode && showOtherClientServiceFields;
 
   const whereWhoHint = !templateChosen && !isEditMode
     ? useStaffStyleCreate
       ? isOtherSite
             ? isStaffUser
-              ? "Other site: enter the site name and address, then choose Service and template. Client comes from your site assignments."
-              : "Other site: enter the site name and address, then choose client, Service, and template."
-        : "Select the job site, then choose a report template. Only templates linked to that site's services are shown. Choose Other for a custom site."
-      : "Choose a report template first. Customer, site, and Service appear after a template is selected."
+              ? isIncidentForm
+                ? "Other site: enter the site name and address, then choose the incident template."
+                : "Other site: enter the site name and address, then choose Service and template. Client comes from your site assignments."
+              : isIncidentForm
+                ? "Other site: enter the site name and address, then choose client and template."
+                : "Other site: enter the site name and address, then choose client, Service, and template."
+        : isIncidentForm
+          ? "Select the job site, then choose an incident report template. Choose Other for a custom site."
+          : "Select the job site, then choose a report template. Only templates linked to that site's services are shown. Choose Other for a custom site."
+      : isIncidentForm
+        ? "Choose an incident report template first. Customer and site appear after a template is selected."
+        : "Choose a report template first. Customer, site, and Service appear after a template is selected."
     : isEditMode && !hadSubmittedCustomer && !hadSubmittedSite && !hadSubmittedService
-      ? "This report has no saved customer, site, or Service on file."
+      ? isIncidentForm
+        ? "This report has no saved customer or site on file."
+        : "This report has no saved customer, site, or Service on file."
       : !isEditMode
         ? useStaffStyleCreate
           ? isOtherSite
             ? isStaffUser
-              ? "Enter the custom site name and address. Client is filled from your assignments; choose Service if needed."
-              : "Enter the custom site name and address. Client and Service must be selected manually."
-            : "Select the job site for this report. Customer and Service are filled from the site assignment."
-          : "Choose customer, site, and Service for this report."
+              ? isIncidentForm
+                ? "Enter the custom site name and address. Client is filled from your assignments."
+                : "Enter the custom site name and address. Client is filled from your assignments; choose Service if needed."
+              : isIncidentForm
+                ? "Enter the custom site name and address. Client must be selected manually."
+                : "Enter the custom site name and address. Client and Service must be selected manually."
+            : isIncidentForm
+              ? "Select the job site for this incident report. Customer is filled from the site assignment."
+              : "Select the job site for this report. Customer and Service are filled from the site assignment."
+          : isIncidentForm
+            ? "Choose customer and site for this incident report."
+            : "Choose customer, site, and Service for this report."
         : isStaffUser
-          ? "Only the job site is shown below; customer and Service stay on file for this report."
-          : "Only customer, site, and Service that were saved on this report are shown below.";
+          ? isIncidentForm
+            ? "Only the job site is shown below; customer stays on file for this report."
+            : "Only the job site is shown below; customer and Service stay on file for this report."
+          : isIncidentForm
+            ? "Only customer and site that were saved on this report are shown below."
+            : "Only customer, site, and Service that were saved on this report are shown below.";
 
   const showTemplateField =
     !useStaffStyleCreate ||
@@ -3232,8 +3763,9 @@ const NewReports: React.FC = () => {
       : { paddingTop: 8 };
 
   return (
-    <Layout title="sidebar.newReports">
+    <Layout title={pageTitle}>
       <NewReportModalMobilePortraitStyles />
+      <NewReportsListChromeStyles />
       {reportsPageDark ? <ReportsMobileDarkPageStyles /> : null}
       <UsersDiv
         style={mobilePortraitBleed}
@@ -3241,28 +3773,67 @@ const NewReports: React.FC = () => {
           isMobilePortrait ? " new-reports-list-wrap--mobile-portrait" : ""
         }${reportsPageDark ? " new-reports-page-dark new-reports-theme-dark" : ""}`}
       >
+        <div className="nr-list-page">
+        <div
+          className={`nr-list-chrome${mobileUiDark ? " nr-list-chrome--dark" : ""}${
+            isMobilePortrait ? " nr-list-chrome--mobile" : ""
+          }`}
+        >
         {showReportDeletedTabs ? (
-          <Tabs
-            className={
-              isMobilePortrait || showMobileCards
-                ? `new-reports-mobile-tabs${mobileUiDark ? " new-reports-mobile-tabs--dark" : ""}`
-                : undefined
-            }
-            activeKey={reportListTab}
-            onChange={(k) => {
-              setReportListTab(k as ReportListTab);
-              setPage(1);
-              setSelectedRowKeys([]);
-            }}
-            style={{ marginBottom: 12 }}
-            items={[
-              { key: "active", label: "Reports" },
-              { key: "deleted", label: `Deleted (${deletedReportCount})` },
-            ]}
-          />
+          <div className={isMobilePortrait ? undefined : "nr-list-chrome-top"}>
+            {!isMobilePortrait ? (
+              <div>
+                <h2 className="nr-list-chrome-title">
+                  {intl.formatMessage({ id: pageTitle })}
+                </h2>
+                <p className="nr-list-chrome-sub">
+                  {isIncidentReportMode
+                    ? "Submitted incident reports"
+                    : isSafetyAuditMode
+                      ? "Submitted safety audits"
+                      : "Submitted field reports"}
+                </p>
+              </div>
+            ) : null}
+            <Tabs
+              className={
+                isMobilePortrait || showMobileCards
+                  ? `new-reports-mobile-tabs${mobileUiDark ? " new-reports-mobile-tabs--dark" : ""}`
+                  : "nr-list-chrome-tabs"
+              }
+              activeKey={reportListTab}
+              onChange={(k) => {
+                setReportListTab(k as ReportListTab);
+                setPage(1);
+                setSelectedRowKeys([]);
+              }}
+              style={isMobilePortrait ? { marginBottom: 12 } : { marginBottom: 0 }}
+              items={[
+                { key: "active", label: "Reports" },
+                { key: "deleted", label: `Deleted (${deletedReportCount})` },
+              ]}
+            />
+          </div>
+        ) : !isMobilePortrait ? (
+          <div className="nr-list-chrome-top">
+            <div>
+              <h2 className="nr-list-chrome-title">
+                {intl.formatMessage({ id: pageTitle })}
+              </h2>
+              <p className="nr-list-chrome-sub">
+                {isIncidentReportMode
+                  ? "Submitted incident reports"
+                  : isSafetyAuditMode
+                    ? "Submitted safety audits"
+                    : "Submitted field reports"}
+              </p>
+            </div>
+          </div>
         ) : null}
         <div
-          className={`new-reports-list-filters${mobileUiDark ? " new-reports-list-filters--dark" : ""}`}
+          className={`new-reports-list-filters${mobileUiDark ? " new-reports-list-filters--dark" : ""}${
+            !isMobilePortrait ? " nr-toolbar-card" : ""
+          }`}
         >
           {isMobilePortrait ? (
             <div
@@ -3291,31 +3862,37 @@ const NewReports: React.FC = () => {
                   onClick={openCreate}
                   loading={listLoading}
                 >
-                  New
+                  {newReportButtonLabel}
                 </Button>
               ) : null}
             </div>
           ) : null}
           <Form
             form={listForm}
-            layout={isMobilePortrait ? "vertical" : "inline"}
+            layout="vertical"
             className={[
+              !isMobilePortrait ? "nr-toolbar-form" : "",
+              !isMobilePortrait && isIncidentReportMode ? "nr-toolbar-form--no-service" : "",
               isMobilePortrait && !listFiltersOpen ? "new-reports-list-filters-form--collapsed" : "",
               mobileUiDark ? "new-reports-list-filters-form--dark" : "",
             ]
               .filter(Boolean)
               .join(" ")}
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "8px 16px",
-              alignItems: "flex-end",
-              marginBottom: 16,
-            }}
+            style={
+              isMobilePortrait
+                ? {
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "8px 16px",
+                    alignItems: "flex-end",
+                    marginBottom: 0,
+                  }
+                : { marginBottom: 0 }
+            }
           >
             <Form.Item
               name="dateRange"
-              label="Date from - Date to"
+              label="Date range"
               className={mobileUiDark ? "nr-dark-picker-shell" : undefined}
               style={isMobilePortrait ? { width: "100%" } : undefined}
             >
@@ -3324,7 +3901,7 @@ const NewReports: React.FC = () => {
                 popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
                 format="DD/MM/YYYY"
                 style={{
-                  ...(isMobilePortrait || mobileUiDark ? { width: "100%" } : undefined),
+                  width: "100%",
                   ...mobileDarkFieldStyle,
                 }}
                 onChange={() => {
@@ -3332,7 +3909,7 @@ const NewReports: React.FC = () => {
                 }}
               />
             </Form.Item>
-            <Form.Item name="siteId" label="Job Site" style={isMobilePortrait ? { width: "100%" } : undefined}>
+            <Form.Item name="siteId" label="Job site" style={isMobilePortrait ? { width: "100%" } : undefined}>
               <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
                 <Select
                   className={mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined}
@@ -3345,13 +3922,14 @@ const NewReports: React.FC = () => {
                   showSearch
                   optionFilterProp="label"
                   style={{
-                    minWidth: isMobilePortrait ? undefined : 200,
-                    width: isMobilePortrait ? "100%" : undefined,
-                    ...(mobileUiDark ? { width: "100%" } : mobileDarkFieldStyle),
+                    width: "100%",
+                    minWidth: isMobilePortrait ? undefined : 140,
+                    ...(mobileUiDark ? {} : mobileDarkFieldStyle),
                   }}
                 />
               </div>
             </Form.Item>
+            {!isIncidentReportMode ? (
             <Form.Item name="serviceId" label="Service" style={isMobilePortrait ? { width: "100%" } : undefined}>
               <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
                 <Select
@@ -3359,7 +3937,7 @@ const NewReports: React.FC = () => {
                   popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
                   dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
                   allowClear
-                  placeholder="All Services"
+                  placeholder="All services"
                   options={filterServices.map((d: any) => ({
                     value: String(d.id),
                     label: d.name || d.serviceName || String(d.id),
@@ -3368,13 +3946,14 @@ const NewReports: React.FC = () => {
                   showSearch
                   optionFilterProp="label"
                   style={{
-                    minWidth: isMobilePortrait ? undefined : 200,
-                    width: isMobilePortrait ? "100%" : undefined,
-                    ...(mobileUiDark ? { width: "100%" } : mobileDarkFieldStyle),
+                    width: "100%",
+                    minWidth: isMobilePortrait ? undefined : 140,
+                    ...(mobileUiDark ? {} : mobileDarkFieldStyle),
                   }}
                 />
               </div>
             </Form.Item>
+            ) : null}
             {supportsTableSort && (showMobileCards || isMobilePortrait) ? (
               <Form.Item label="Sort by" style={isMobilePortrait ? { width: "100%" } : undefined}>
                 <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
@@ -3386,73 +3965,107 @@ const NewReports: React.FC = () => {
                     options={reportSortOptions}
                     onChange={onMobileSortChange}
                     style={{
+                      width: "100%",
                       minWidth: isMobilePortrait ? undefined : 220,
-                      width: isMobilePortrait ? "100%" : undefined,
-                      ...(mobileUiDark ? { width: "100%" } : mobileDarkFieldStyle),
+                      ...(mobileUiDark ? {} : mobileDarkFieldStyle),
                     }}
                   />
                 </div>
               </Form.Item>
             ) : null}
-            <Form.Item className="nr-search-row" style={isMobilePortrait ? { width: "100%", marginBottom: 0 } : undefined}>
-              <Space wrap style={isMobilePortrait ? { width: "100%", justifyContent: "flex-end" } : undefined}>
-                <ReportListKeywordSearch
-                  value={listSearchDraft}
-                  disabled={bulkDeleting}
-                  mobileUiDark={mobileUiDark}
-                  isMobilePortrait={isMobilePortrait}
-                  fieldStyle={mobileDarkFieldStyle}
-                  onChange={onListSearchInputChange}
-                  onSearch={onListSearchInputSearch}
-                />
-                <Button type="primary" icon={<SearchOutlined />} style={staffPrimaryGreen} onClick={onSearchList}>
+            <Form.Item
+              className="nr-keyword-row"
+              label={!isMobilePortrait ? "Keyword" : undefined}
+              style={isMobilePortrait ? { width: "100%", marginBottom: 0 } : undefined}
+            >
+              <ReportListKeywordSearch
+                value={listSearchDraft}
+                disabled={bulkDeleting}
+                mobileUiDark={mobileUiDark}
+                isMobilePortrait={isMobilePortrait}
+                fullWidth={!isMobilePortrait}
+                fieldStyle={mobileDarkFieldStyle}
+                onChange={onListSearchInputChange}
+                onSearch={onListSearchInputSearch}
+              />
+            </Form.Item>
+            {isMobilePortrait ? (
+              <Form.Item className="nr-search-row" style={{ width: "100%", marginBottom: 0 }}>
+                <Space wrap style={{ width: "100%", justifyContent: "flex-end" }}>
+                  <Button type="primary" icon={<SearchOutlined />} style={staffPrimaryGreen} onClick={onSearchList}>
+                    Search
+                  </Button>
+                </Space>
+              </Form.Item>
+            ) : (
+              <Form.Item className="nr-toolbar-actions">
+                <Button
+                  type="primary"
+                  className="nr-btn-search"
+                  icon={<SearchOutlined />}
+                  onClick={onSearchList}
+                >
                   Search
                 </Button>
-                {!isMobilePortrait && +profileType !== userType.CUSTOMER ? (
-                  <Button type="primary" icon={<FileTextOutlined />} style={staffPrimaryGreen} onClick={openCreate} loading={listLoading}>
-                    New
+                {+profileType !== userType.CUSTOMER ? (
+                  <Button
+                    className="nr-btn-new"
+                    icon={<FileTextOutlined />}
+                    onClick={openCreate}
+                    loading={listLoading}
+                  >
+                    {newReportButtonLabel}
                   </Button>
                 ) : null}
-              </Space>
-            </Form.Item>
+              </Form.Item>
+            )}
           </Form>
         </div>
 
         {canUseBulkDelete ? (
           <div
-            className={
+            className={[
               showMobileCards
                 ? `new-reports-bulk-bar--mobile${mobileUiDark ? " new-reports-bulk-bar--dark" : ""}`
+                : "nr-bulk-bar--chrome",
+              mobileUiDark && !showMobileCards ? "new-reports-bulk-bar--dark" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={
+              showMobileCards || isMobilePortrait
+                ? {
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "stretch",
+                    gap: 12,
+                    marginTop: 10,
+                    marginBottom: 0,
+                    padding: "12px 14px",
+                    borderRadius: mobileUiDark ? 8 : 10,
+                    flexDirection: "column",
+                    ...(mobileUiDark
+                      ? {
+                          background: "#1a1a1a",
+                          border: "1px solid #444444",
+                          boxShadow: "none",
+                        }
+                      : {
+                          background: "#ffffff",
+                          border: "2px solid #d9d9d9",
+                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                        }),
+                  }
                 : undefined
             }
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: showMobileCards || isMobilePortrait ? "stretch" : "center",
-              gap: 12,
-              marginBottom: 12,
-              padding: "12px 14px",
-              borderRadius: mobileUiDark ? 8 : 10,
-              flexDirection: showMobileCards || isMobilePortrait ? "column" : undefined,
-              ...(mobileUiDark
-                ? {
-                    background: "#1a1a1a",
-                    border: "1px solid #444444",
-                    boxShadow: "none",
-                  }
-                : showMobileCards || isMobilePortrait
-                  ? {
-                      background: "#ffffff",
-                      border: "2px solid #d9d9d9",
-                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
-                    }
-                  : {
-                      background: "#fafafa",
-                      border: "1px solid #f0f0f0",
-                      boxShadow: "none",
-                    }),
-            }}
           >
+            {!showMobileCards && !isMobilePortrait ? (
+              <span className="nr-bulk-bar-hint">
+                {selectedRowKeys.length
+                  ? `${selectedRowKeys.length} selected`
+                  : "0 selected · choose rows for bulk actions"}
+              </span>
+            ) : null}
             <Space
               wrap={!showMobileCards}
               style={showMobileCards ? { width: "100%", justifyContent: "stretch" } : undefined}
@@ -3579,9 +4192,10 @@ const NewReports: React.FC = () => {
             </Space>
           </div>
         ) : null}
+        </div>
 
         {isDeletedReportTab && (isCustomerUser || isStaffUser || isAdminUser) ? (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", margin: "12px 0" }}>
             <Popconfirm
               title={
                 <span>
@@ -3612,6 +4226,7 @@ const NewReports: React.FC = () => {
           </div>
         ) : null}
 
+        <div className={`nr-list-table-panel${showMobileCards ? " nr-list-table-panel--mobile" : ""}`}>
         {showMobileCards ? (
           <Spin spinning={listLoading}>
             {!listLoading && displayRows.length === 0 ? (
@@ -3658,7 +4273,7 @@ const NewReports: React.FC = () => {
             rowClassName={(record) =>
               linkedReportId && +record.id === linkedReportId ? "report-row-highlight" : ""
             }
-            scroll={{ x: "max-content" }}
+            scroll={{ x: true }}
             pagination={{
               current: page,
               pageSize: limit,
@@ -3676,6 +4291,8 @@ const NewReports: React.FC = () => {
             }}
           />
         )}
+        </div>
+        </div>
       </UsersDiv>
 
       <Modal
@@ -3797,9 +4414,13 @@ const NewReports: React.FC = () => {
                 ) : null}
               </Col>
               <Col xs={24} sm={12}>
-                <div style={submittedMetaLabel}>Service</div>
-                <span style={submittedMetaValue}>{viewRow.serviceName || EM_DASH}</span>
-                <div style={{ ...submittedMetaLabel, marginTop: 18 }}>Submitted date</div>
+                {!isIncidentReportMode ? (
+                  <>
+                    <div style={submittedMetaLabel}>Service</div>
+                    <span style={submittedMetaValue}>{viewRow.serviceName || EM_DASH}</span>
+                  </>
+                ) : null}
+                <div style={{ ...submittedMetaLabel, marginTop: isIncidentReportMode ? 0 : 18 }}>Submitted date</div>
                 <span
                   style={{
                     ...submittedMetaValue,
@@ -4076,7 +4697,7 @@ const NewReports: React.FC = () => {
           <Space size={10}>
             <FileTextOutlined style={{ color: modalUiDark ? "#ffffff" : "#1890ff" }} />
             <span style={{ color: modalUiDark ? "#ffffff" : undefined }}>
-              {editing ? "Update report" : "New report"}
+              {formModalTitle}
             </span>
           </Space>
         }
@@ -4278,14 +4899,25 @@ const NewReports: React.FC = () => {
 
                   if (isAutoMergeTemplateField(it)) {
                     if (
-                      (fieldType === "[REPORT_DATE]" || fieldType === "[REPORT_TIME]") &&
+                      (fieldType === "[REPORT_DATE]" ||
+                        fieldType === "[REPORT_TIME]" ||
+                        fieldType === "[REPORT_DATETIME]") &&
                       // Staff: only show picker when allowed (otherwise read-only auto-merge).
                       (!isStaffUser || !isHiddenFromStaffCreate(it))
                     ) {
                       return (
                         <Col span={templateFieldColSpan} key={key}>
                           <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                            {fieldType === "[REPORT_DATE]" ? (
+                            {fieldType === "[REPORT_DATETIME]" ? (
+                              <DatePicker
+                                showTime
+                                size={controlSize}
+                                className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                                popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                                style={{ width: "100%", borderRadius: 8 }}
+                                format="YYYY-MM-DD HH:mm:ss"
+                              />
+                            ) : fieldType === "[REPORT_DATE]" ? (
                               <DatePicker
                                 size={controlSize}
                                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
@@ -4331,7 +4963,24 @@ const NewReports: React.FC = () => {
                     );
                   }
 
-                  // Some templates incorrectly define the "Time" field as TEXT/DATETIME.
+                  if (fieldType === "DATETIME") {
+                    return (
+                      <Col span={templateFieldColSpan} key={key}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <DatePicker
+                            showTime
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            style={{ width: "100%", borderRadius: 8 }}
+                            format="YYYY-MM-DD HH:mm:ss"
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  // Some templates incorrectly define the "Time" field as TEXT.
                   // Always show it as a time picker when the label/name is time-like.
                   if (timeLike) {
                     return (
@@ -4435,6 +5084,53 @@ const NewReports: React.FC = () => {
                             style={{ borderRadius: 8, overflow: "hidden" }}
                             placeholder="Enter details"
                           />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+                  if (fieldType === "GPS") {
+                    return (
+                      <Col span={templateFieldColSpan} key={key}>
+                        <Form.Item label={label} required={required}>
+                          <Input.Group compact style={{ display: "flex", width: "100%" }}>
+                            <Form.Item name={fieldKey} noStyle rules={[{ required }]}>
+                              <Input
+                                size={controlSize}
+                                className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                                style={{ flex: 1, borderRadius: "8px 0 0 8px" }}
+                                placeholder="lat,lng or tap Capture"
+                                allowClear
+                              />
+                            </Form.Item>
+                            <Button
+                              size={controlSize}
+                              icon={<EnvironmentOutlined />}
+                              className={mobileUiDark ? "nr-mobile-btn-dark" : undefined}
+                              style={{
+                                borderRadius: "0 8px 8px 0",
+                                ...mobileDarkBtnDefaultStyle,
+                              }}
+                              onClick={async () => {
+                                message.loading({
+                                  content: "Getting GPS location…",
+                                  key: `gps-${fieldKey}`,
+                                  duration: 0,
+                                });
+                                const loc = await getStaffLocation();
+                                message.destroy(`gps-${fieldKey}`);
+                                if (!loc) {
+                                  message.error(
+                                    "Could not get GPS. On your phone, allow Location for this site (Safari/Chrome), then try again.",
+                                  );
+                                  return;
+                                }
+                                form.setFieldsValue({ [fieldKey]: loc });
+                                message.success("GPS location captured");
+                              }}
+                            >
+                              Capture
+                            </Button>
+                          </Input.Group>
                         </Form.Item>
                       </Col>
                     );
@@ -4616,7 +5312,7 @@ const NewReports: React.FC = () => {
                   const fieldType = String(r?.type || "").toUpperCase();
                   const templateFieldColSpan = isMobilePortrait ? 24 : 12;
 
-                  if (isTimeLikeLabel(label)) {
+                  if (isTimeLikeLabel(label) && fieldType !== "DATETIME" && fieldType !== "[REPORT_DATETIME]") {
                     return (
                       <Col span={templateFieldColSpan} key={fieldKey}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
@@ -4642,6 +5338,23 @@ const NewReports: React.FC = () => {
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
                             style={{ width: "100%", borderRadius: 8 }}
                             format="YYYY-MM-DD"
+                          />
+                        </Form.Item>
+                      </Col>
+                    );
+                  }
+
+                  if (fieldType === "DATETIME" || fieldType === "[REPORT_DATETIME]") {
+                    return (
+                      <Col span={templateFieldColSpan} key={fieldKey}>
+                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                          <DatePicker
+                            showTime
+                            size={controlSize}
+                            className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
+                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            style={{ width: "100%", borderRadius: 8 }}
+                            format="YYYY-MM-DD HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>

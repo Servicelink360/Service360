@@ -204,3 +204,27 @@ export function formatCustomerDisplayName(row: any): string {
   if (person) return person;
   return EM_DASH;
 }
+
+/** Value of a named field from a custom report's `reports` items (e.g. Incident type). */
+export function getCustomReportFieldValue(row: any, fieldName: string): string {
+  const want = String(fieldName || "")
+    .trim()
+    .toLowerCase();
+  if (!want) return "";
+  const reports = Array.isArray(row?.reports) ? row.reports : [];
+  for (const item of reports) {
+    const name = String(item?.name || "")
+      .trim()
+      .toLowerCase();
+    if (name !== want) continue;
+    const val = item?.value;
+    if (val == null) return "";
+    const s = String(val).trim();
+    return s;
+  }
+  return "";
+}
+
+export function formatIncidentType(row: any): string {
+  return getCustomReportFieldValue(row, "Incident type") || EM_DASH;
+}

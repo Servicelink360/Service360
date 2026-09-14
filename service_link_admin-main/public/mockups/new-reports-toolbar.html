@@ -1,0 +1,481 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mockup · New Reports toolbar</title>
+  <style>
+    :root {
+      --green: #1f8f3a;
+      --green-dark: #166534;
+      --green-soft: #e8f7ec;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --bg: #f3f5f7;
+      --card: #ffffff;
+      --danger: #dc2626;
+      --focus: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.4;
+    }
+    .banner {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 10px 20px;
+      font-size: 13px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .banner strong { color: #86efac; }
+    .banner a { color: #93c5fd; }
+    .page {
+      max-width: 1280px;
+      margin: 20px auto 40px;
+      padding: 0 16px;
+    }
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    @media (min-width: 1100px) {
+      .compare { grid-template-columns: 1fr 1fr; }
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel-label {
+      padding: 10px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--line);
+    }
+    .panel-label.before { background: #fef2f2; color: #991b1b; }
+    .panel-label.after { background: var(--green-soft); color: var(--green-dark); }
+    .panel-body { padding: 14px; }
+
+    /* —— Current (sparse) —— */
+    .old-tabs {
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .old-tabs span {
+      padding: 8px 4px 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .old-tabs .on {
+      color: var(--focus);
+      border-bottom: 2px solid var(--focus);
+      font-weight: 600;
+    }
+    .old-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 18px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .old-filters label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .fake-input {
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 13px;
+      color: #9ca3af;
+      background: #fff;
+      min-width: 120px;
+    }
+    .fake-btn {
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: default;
+    }
+    .fake-btn.green { background: var(--green); color: #fff; }
+    .fake-btn.ghost {
+      background: #fff;
+      border: 1px solid var(--line);
+      color: #9ca3af;
+    }
+    .old-bulk {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    /* —— Proposed —— */
+    .new-shell { background: #f8faf9; border-radius: 10px; padding: 12px; }
+    .new-top {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .new-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--green-dark);
+      margin: 0 0 2px;
+    }
+    .new-sub { margin: 0; font-size: 12px; color: var(--muted); }
+    .new-tabs {
+      display: inline-flex;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .new-tabs button {
+      border: 0;
+      background: transparent;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: var(--muted);
+      cursor: default;
+    }
+    .new-tabs button.on {
+      background: var(--green);
+      color: #fff;
+      font-weight: 600;
+    }
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1.1fr auto;
+      gap: 10px;
+      align-items: end;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    @media (max-width: 900px) {
+      .toolbar { grid-template-columns: 1fr 1fr; }
+    }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .control {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-size: 13px;
+      color: var(--ink);
+      background: #fff;
+    }
+    .control.muted { color: #9ca3af; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: default;
+    }
+    .btn-primary { background: var(--green); color: #fff; }
+    .btn-secondary {
+      background: #fff;
+      color: var(--green-dark);
+      border: 1px solid #86efac;
+    }
+    .bulk-bar {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      background: #fff;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+    }
+    .bulk-bar .hint { font-size: 12px; color: var(--muted); }
+    .bulk-bar .right { display: flex; gap: 8px; }
+
+    /* sample table */
+    .table-wrap { margin-top: 14px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
+    th {
+      text-align: left;
+      background: var(--green);
+      color: #fff;
+      padding: 10px 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    tr:hover td { background: #f9fafb; }
+    .clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-width: 220px;
+      line-height: 1.35;
+    }
+    .clamp-2.wide { max-width: 280px; }
+    .icon-row { display: flex; gap: 8px; color: #64748b; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--green-dark);
+      background: var(--green-soft);
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+    .notes {
+      margin-top: 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .notes h2 { margin: 0 0 8px; font-size: 15px; }
+    .notes ul { margin: 0; padding-left: 18px; color: #374151; font-size: 13px; }
+    .notes li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <div><strong>MOCKUP REFERENCE - Proposed chrome is applied on /new-reports. This page is a static sample.</div>
+    <div>Open at <code>/mockups/new-reports-toolbar.html</code></div>
+  </div>
+
+  <div class="page">
+    <div class="compare">
+      <!-- BEFORE -->
+      <section class="panel">
+        <div class="panel-label before">Current · sparse strip</div>
+        <div class="panel-body">
+          <div class="old-tabs">
+            <span class="on">Reports</span>
+            <span>Deleted (0)</span>
+          </div>
+          <div class="old-filters">
+            <label>Date from - Date to:</label>
+            <div class="fake-input" style="min-width:180px">Start date ? End date</div>
+            <label>Job Site:</label>
+            <div class="fake-input">All sites</div>
+            <label>Service:</label>
+            <div class="fake-input">All Services</div>
+            <div class="fake-input" style="min-width:150px">Job site or service</div>
+            <button class="fake-btn green">Search</button>
+            <button class="fake-btn green">New</button>
+          </div>
+          <div class="old-bulk">
+            <button class="fake-btn ghost">Move to Deleted</button>
+            <button class="fake-btn ghost">Clear selection</button>
+          </div>
+          <p style="margin:16px 0 0;font-size:12px;color:#9ca3af">
+            Problems: labels inline with fields · large empty gaps · bulk actions floating alone · tabs fight the page title.
+          </p>
+        </div>
+      </section>
+
+      <!-- AFTER -->
+      <section class="panel">
+        <div class="panel-label after">Proposed · compact toolbar</div>
+        <div class="panel-body">
+          <div class="new-shell">
+            <div class="new-top">
+              <div>
+                <h1 class="new-title">New Reports</h1>
+                <p class="new-sub">Submitted field reports · sample mockup</p>
+              </div>
+              <div class="new-tabs">
+                <button class="on" type="button">Reports</button>
+                <button type="button">Deleted (0)</button>
+              </div>
+            </div>
+
+            <div class="toolbar">
+              <div class="field">
+                <label>Date range</label>
+                <div class="control muted">10 Sep 2026 ? 10 Sep 2026</div>
+              </div>
+              <div class="field">
+                <label>Job site</label>
+                <div class="control muted">All sites</div>
+              </div>
+              <div class="field">
+                <label>Service</label>
+                <div class="control muted">All services</div>
+              </div>
+              <div class="field">
+                <label>Keyword</label>
+                <div class="control muted">Search site, service, staff…</div>
+              </div>
+              <div class="actions">
+                <button class="btn btn-primary" type="button">Search</button>
+                <button class="btn btn-secondary" type="button">New</button>
+              </div>
+            </div>
+
+            <div class="bulk-bar">
+              <span class="hint">0 selected · bulk actions stay on the left when idle</span>
+              <div class="right">
+                <button class="fake-btn ghost" type="button">Move to Deleted</button>
+                <button class="fake-btn ghost" type="button">Clear</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Full proposed page sample -->
+    <section class="panel" style="margin-top:20px">
+      <div class="panel-label after">Proposed · full page sample (filters + table)</div>
+      <div class="panel-body">
+        <div class="new-shell">
+          <div class="new-top">
+            <div>
+              <h1 class="new-title">New Reports</h1>
+              <p class="new-sub">Wider site / customer columns · max 2 lines of text</p>
+            </div>
+            <div class="new-tabs">
+              <button class="on" type="button">Reports</button>
+              <button type="button">Deleted (0)</button>
+            </div>
+          </div>
+          <div class="toolbar">
+            <div class="field">
+              <label>Date range</label>
+              <div class="control muted">Start ? End</div>
+            </div>
+            <div class="field">
+              <label>Job site</label>
+              <div class="control muted">All sites</div>
+            </div>
+            <div class="field">
+              <label>Service</label>
+              <div class="control muted">All services</div>
+            </div>
+            <div class="field">
+              <label>Keyword</label>
+              <div class="control muted">Job site or service</div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" type="button">Search</button>
+              <button class="btn btn-secondary" type="button">New</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:36px"></th>
+                <th>Submitted by</th>
+                <th style="min-width:220px">Job site</th>
+                <th>Service</th>
+                <th style="min-width:180px">Customer</th>
+                <th>Submitted</th>
+                <th>Report</th>
+                <th>Read</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input type="checkbox" disabled /></td>
+                <td>Adam Kay</td>
+                <td><div class="clamp-2 wide">Mascot Public Amenities — Bay 3 male toilets entrance</div></td>
+                <td><div class="clamp-2">Public Amenities Cleaning</div></td>
+                <td><div class="clamp-2 wide">Bayside Council</div></td>
+                <td>10/09/2026 09:47</td>
+                <td><span class="pill">PDF</span></td>
+                <td>?</td>
+                <td><div class="icon-row">? ?? ? ??</div></td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" disabled /></td>
+                <td>Abo Taleb</td>
+                <td><div class="clamp-2 wide">Blackmore Oval (SES Building)</div></td>
+                <td><div class="clamp-2">Roof and Gutter Cleaning</div></td>
+                <td><div class="clamp-2 wide">Inner West Council</div></td>
+                <td>09/09/2026 16:12</td>
+                <td><span class="pill">PDF</span></td>
+                <td>?</td>
+                <td><div class="icon-row">? ?? ? ??</div></td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" disabled /></td>
+                <td>Adam Kay</td>
+                <td><div class="clamp-2 wide">Ador Avenue Reserve</div></td>
+                <td><div class="clamp-2">Public Amenities Cleaning</div></td>
+                <td><div class="clamp-2 wide">Bayside Council</div></td>
+                <td>10/09/2026 09:15</td>
+                <td><span class="pill">PDF</span></td>
+                <td>?</td>
+                <td><div class="icon-row">? ?? ? ??</div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div class="notes">
+      <h2>What this mockup changes</h2>
+      <ul>
+        <li>Page title + pill tabs on one row (no orphan centered tabs).</li>
+        <li>Filters in a single card grid with labels above fields (less horizontal sprawl).</li>
+        <li>Search / New grouped as primary actions on the right.</li>
+        <li>Bulk delete stays in a quiet bar under filters (not a lonely centered island).</li>
+        <li>Table: wider Job site &amp; Customer · text clamped to 2 lines.</li>
+      </ul>
+      <p style="margin:10px 0 0;font-size:12px;color:#6b7280">
+        Static mock only — say when you want this applied to the real New Reports page.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+

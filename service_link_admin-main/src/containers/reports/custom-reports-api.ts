@@ -27,6 +27,7 @@ export type CustomReportListParams = CustomReportListFilters & {
   reportId?: number;
   staffId?: number;
   sort?: CustomReportListSort;
+  templateCategory?: string;
 };
 
 function listQueryParams(input: CustomReportListParams): Record<string, unknown> {
@@ -56,6 +57,9 @@ function listQueryParams(input: CustomReportListParams): Record<string, unknown>
   if (input.siteId) params.siteId = input.siteId;
   if (input.serviceId) params.serviceId = input.serviceId;
   if (input.keyword?.trim()) params.keyword = input.keyword.trim();
+  if (input.templateCategory?.trim()) {
+    params.templateCategory = input.templateCategory.trim().toUpperCase();
+  }
 
   return params;
 }
@@ -85,7 +89,10 @@ export async function fetchCustomReportById(reportId: number) {
   return res?.code === 1 ? res.data : null;
 }
 
-export async function fetchCustomReportDeletedCount(filters: CustomReportListFilters, staffId?: number) {
+export async function fetchCustomReportDeletedCount(
+  filters: CustomReportListFilters & { templateCategory?: string },
+  staffId?: number,
+) {
   const params: Record<string, unknown> = {
     type: CUSTOM_REPORT_TYPE,
     status: "deleted",
@@ -96,6 +103,9 @@ export async function fetchCustomReportDeletedCount(filters: CustomReportListFil
   if (filters.siteId) params.siteId = filters.siteId;
   if (filters.serviceId) params.serviceId = filters.serviceId;
   if (filters.keyword?.trim()) params.keyword = filters.keyword.trim();
+  if (filters.templateCategory?.trim()) {
+    params.templateCategory = filters.templateCategory.trim().toUpperCase();
+  }
 
   const res = await callAPIAsync(
     serviceType.COMMON,

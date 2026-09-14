@@ -64,6 +64,10 @@ export const optionsStaff: option[] = [
 				label: 'sidebar.newReports',
 			},
 			{
+				key: 'safety-audits',
+				label: 'sidebar.safetyAudits',
+			},
+			{
 				key: 'report-faults',
 				label: 'sidebar.reportFaults',
 			},
@@ -249,6 +253,10 @@ const options: option[] = [
 				label: 'sidebar.newReports',
 			},
 			{
+				key: 'safety-audits',
+				label: 'sidebar.safetyAudits',
+			},
+			{
 				key: 'report-faults',
 				label: 'sidebar.reportFaults',
 			},
@@ -327,6 +335,10 @@ const options: option[] = [
 			{
 				key: 'report-templates',
 				label: 'sidebar.reportTemplates',
+			},
+			{
+				key: 'safety-audit-templates',
+				label: 'sidebar.safetyAuditTemplates',
 			},
 		]
 	},
@@ -442,6 +454,10 @@ const hashOptions: hashOption[] = [
 		label: 'sidebar.reportTemplates',
 	},
 	{
+		key: 'safety-audit-templates',
+		label: 'sidebar.safetyAuditTemplates',
+	},
+	{
 		key: 'user-sites',
 		label: 'sidebar.jobSites'
 	},
@@ -468,6 +484,10 @@ const hashOptions: hashOption[] = [
 	{
 		key: 'new-reports',
 		label: 'sidebar.newReports',
+	},
+	{
+		key: 'safety-audits',
+		label: 'sidebar.safetyAudits',
 	},
 	{
 		key: 'custom-reports',

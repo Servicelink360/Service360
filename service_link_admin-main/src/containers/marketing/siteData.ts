@@ -121,10 +121,45 @@ export const MARKETING_PAGES: MarketingPage[] = [
     hero: 'How it works',
     lead: 'Onboard your organisation, configure your services, and invite your team. Service360 scales with your operations.',
     sections: [
-      { type: 'steps', steps: [{ title: 'Create your workspace', text: 'Your organisation gets a dedicated environment on the Service360 platform.' }, { title: 'Configure sites & services', text: 'Set up properties, maintenance types, schedules, and user roles to match your operations.' }, { title: 'Run day-to-day operations', text: 'Teams sign in to manage work, report faults, and communicate — from anywhere.' }] },
+      {
+        type: 'steps',
+        steps: [
+          {
+            title: 'Create your workspace',
+            text: 'Your organisation gets a dedicated environment on the Service360 platform.',
+          },
+          {
+            title: 'Configure sites & services',
+            text: 'Set up properties, maintenance types, schedules, and user roles to match your operations.',
+          },
+          {
+            title: 'Run day-to-day operations',
+            text: 'Teams sign in to manage work, report faults, and communicate — from anywhere.',
+          },
+        ],
+      },
       { type: 'heading', text: 'After login' },
-      { type: 'paragraph', text: 'Users are redirected to the dashboard. Navigation adapts automatically: administrators see the full directory and system tools; staff see site check-in and field tasks; clients see tickets and service requests.' },
+      {
+        type: 'paragraph',
+        text: 'Users are redirected to the dashboard. Navigation adapts automatically: administrators see the full directory and system tools; staff see site check-in and field tasks; clients see tickets and service requests.',
+      },
     ],
+  },
+  {
+    slug: 'feature-highlights',
+    path: PUBLIC_ROUTE.MARKETING_FEATURE_HIGHLIGHTS,
+    title: 'App Feature Highlights — Service360',
+    hero: 'App feature highlights',
+    lead: 'Platform and client features — dashboard, tasks, reports, tickets, and more.',
+    sections: [],
+  },
+  {
+    slug: 'monthly-report-sample',
+    path: PUBLIC_ROUTE.MARKETING_MONTHLY_REPORT,
+    title: 'Monthly report sample — Bayside Council — Service360',
+    hero: 'Monthly operations report',
+    lead: 'Sample month-end pack for Bayside Council with KPIs, charts, invoices, and site activity.',
+    sections: [],
   },
   {
     slug: 'contact',

@@ -6,6 +6,8 @@ type Props = {
   disabled?: boolean;
   mobileUiDark?: boolean;
   isMobilePortrait?: boolean;
+  /** Stretch to parent (desktop toolbar grid cell). */
+  fullWidth?: boolean;
   fieldStyle?: React.CSSProperties;
   onChange: (value: string) => void;
   onSearch: (value: string) => void;
@@ -16,6 +18,7 @@ const ReportListKeywordSearch: React.FC<Props> = ({
   disabled,
   mobileUiDark,
   isMobilePortrait,
+  fullWidth,
   fieldStyle,
   onChange,
   onSearch,
@@ -29,9 +32,11 @@ const ReportListKeywordSearch: React.FC<Props> = ({
     onChange={(e) => onChange(e.target.value)}
     onPressEnter={(e) => onSearch((e.target as HTMLInputElement).value)}
     style={{
-      ...(isMobilePortrait || mobileUiDark
-        ? { flex: 1, minWidth: 160, width: "100%" }
-        : { width: 280, maxWidth: 520 }),
+      ...(fullWidth
+        ? { width: "100%" }
+        : isMobilePortrait || mobileUiDark
+          ? { flex: 1, minWidth: 160, width: "100%" }
+          : { width: 280, maxWidth: 520 }),
       ...fieldStyle,
     }}
   />

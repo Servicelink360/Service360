@@ -1,4 +1,4 @@
-import { EditOutlined, SearchOutlined, EyeOutlined, FilePdfOutlined, FileAddOutlined, CopyOutlined } from "@ant-design/icons";
+import { EditOutlined, SearchOutlined, EyeOutlined, FilePdfOutlined, FileAddOutlined, CopyOutlined, ImportOutlined } from "@ant-design/icons";
 import { DeleteOutlined } from "@ant-design/icons";
 import { ActionBtn } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
@@ -20,12 +20,24 @@ import UserTaskModal from "@app/components/tasks/user-task-create-report";
 import ReportPreview from "@app/components/report-templates/report-preview";
 import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
-import { reportTemplateCategories } from "../../constants/statusUser";
+import { reportTemplateCategories, SAFETY_AUDIT_CATEGORY } from "../../constants/statusUser";
+import { formatAssignToLabels } from "@app/lib/report-templates/reportTemplateAssignment";
 import { callAPIAsync } from "../../library/helpers/api";
 import serviceType from "@app/constants/serviceType";
 import endPoint from "@app/constants/endPoint";
+import { MONTHLY_SAFETY_AUDIT_TEMPLATE } from "@app/lib/safety-audit/monthlySafetyAuditTemplate";
+import { INCIDENT_REPORT_TEMPLATE } from "@app/lib/report-templates/incidentReportTemplate";
 
-const Unit: React.FC = () => {
+type ReportTemplatesPageProps = {
+  /** When set, list/create stay in this category (Safety Audit templates). */
+  lockedCategory?: string;
+  pageTitle?: string;
+};
+
+const Unit: React.FC<ReportTemplatesPageProps> = ({
+  lockedCategory,
+  pageTitle = "sidebar.reportTemplates",
+}) => {
     const [limit, setLimit] = useState(limitData);
     const [page, setPage] = useState(pageData);
     const [form] = Form.useForm();
@@ -40,7 +52,8 @@ const Unit: React.FC = () => {
     const [staffReportTemplate, setStaffReportTemplate] = useState<any>(null);
     const [staffOptions, setStaffOptions] = useState<{ value: number; label: string }[]>([]);
     const [ServiceOptions, setServiceOptions] = useState<{ value: number; label: string }[]>([]);
-
+    const [seedingTemplate, setSeedingTemplate] = useState(false);
+    const isSafetyAuditMode = lockedCategory === SAFETY_AUDIT_CATEGORY;
     const staffLabelById = useMemo(() => {
         return staffOptions.reduce((acc, s) => {
             acc[s.value] = s.label;
@@ -107,16 +120,18 @@ const Unit: React.FC = () => {
         },
         {
             title: 'Assign to',
-            dataIndex: 'assignedStaffId',
-            width: 160,
-            render: (staffId: number | null) => {
-                if (staffId == null) {
-                    return <Tag>None</Tag>;
-                }
-                if (+staffId === 0) {
-                    return <Tag color="green">All</Tag>;
-                }
-                return staffLabelById[staffId] || `Staff #${staffId}`;
+            dataIndex: 'assignedStaffIds',
+            width: 200,
+            render: (_: unknown, row: any) => {
+                const ids = Array.isArray(row?.assignedStaffIds)
+                    ? row.assignedStaffIds
+                    : row?.assignedStaffId != null
+                      ? [+row.assignedStaffId]
+                      : [];
+                const label = formatAssignToLabels(ids, staffLabelById);
+                if (label === 'All') return <Tag color="green">All</Tag>;
+                if (label === 'None') return <Tag>None</Tag>;
+                return label;
             },
         },
         {
@@ -254,14 +269,21 @@ const Unit: React.FC = () => {
         dispatch(
             actions.getData({
                 keyword: formData?.Name ? formData?.Name?.trim() : '',
-                category: formData?.Category || undefined,
+                category: lockedCategory || formData?.Category || undefined,
+                excludeCategory: lockedCategory ? undefined : SAFETY_AUDIT_CATEGORY,
                 page,
                 limit,
                 orderBy,
                 orderValue
             })
         );
-    }, [dispatch, form])
+    }, [dispatch, form, lockedCategory])
+
+    useEffect(() => {
+        if (lockedCategory) {
+            form.setFieldsValue({ Category: lockedCategory });
+        }
+    }, [lockedCategory, form]);
 
     useEffect(() => {
         fetchCategories();
@@ -332,6 +354,103 @@ const Unit: React.FC = () => {
         };
     }, [])
 
+    const handleImportMonthlyChecklist = useCallback(async () => {
+        if (!isSafetyAuditMode) return;
+        const existing = (rows || []).find((r: any) =>
+            String(r?.name || '')
+                .toLowerCase()
+                .includes('monthly safety audit'),
+        );
+        if (existing) {
+            message.info('Monthly Safety Audit template already exists. Edit it or create a new template.');
+            return;
+        }
+        setSeedingTemplate(true);
+        try {
+            await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.REPORT_TEMPLATES}/categories`,
+                'POST',
+                { name: SAFETY_AUDIT_CATEGORY },
+            );
+            const items = (MONTHLY_SAFETY_AUDIT_TEMPLATE.items || []).map((item, index) => ({
+                ...item,
+                label: item.name,
+                order: item.order ?? index + 1,
+                required: !!item.required,
+            }));
+            dispatch(
+                actions.saveInto(
+                    {
+                        name: MONTHLY_SAFETY_AUDIT_TEMPLATE.name,
+                        description: MONTHLY_SAFETY_AUDIT_TEMPLATE.description,
+                        category: SAFETY_AUDIT_CATEGORY,
+                        assignedStaffIds: [0],
+                        serviceIds: [],
+                        items,
+                    },
+                    actionType.ADD,
+                    false,
+                ),
+            );
+            message.success('Imported Monthly Safety Audit checklist from SACL DOC.');
+        } catch (error) {
+            // eslint-disable-next-line no-console
+            console.error(error);
+            message.error('Could not import Monthly Safety Audit template.');
+        } finally {
+            setSeedingTemplate(false);
+        }
+    }, [dispatch, isSafetyAuditMode, rows]);
+
+    const handleImportIncidentReport = useCallback(async () => {
+        if (isSafetyAuditMode) return;
+        const existing = (rows || []).find((r: any) =>
+            String(r?.name || '').toLowerCase() === 'incident report' &&
+            String(r?.category || '').toUpperCase() === 'INCIDENT',
+        );
+        if (existing) {
+            message.info('Incident Report template already exists. Edit it or create a new template.');
+            return;
+        }
+        setSeedingTemplate(true);
+        try {
+            await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.REPORT_TEMPLATES}/categories`,
+                'POST',
+                { name: 'INCIDENT' },
+            );
+            const items = (INCIDENT_REPORT_TEMPLATE.items || []).map((item: any, index: number) => ({
+                ...item,
+                label: item.name,
+                order: item.order ?? index + 1,
+                required: !!item.required,
+            }));
+            dispatch(
+                actions.saveInto(
+                    {
+                        name: INCIDENT_REPORT_TEMPLATE.name,
+                        description: INCIDENT_REPORT_TEMPLATE.description,
+                        category: INCIDENT_REPORT_TEMPLATE.category,
+                        assignedStaffIds: [0],
+                        serviceIds: [],
+                        items,
+                    },
+                    actionType.ADD,
+                    false,
+                ),
+            );
+            message.success('Created Incident Report template.');
+        } catch (error) {
+            // eslint-disable-next-line no-console
+            console.error(error);
+            message.error('Could not create Incident Report template.');
+        } finally {
+            setSeedingTemplate(false);
+        }
+    }, [dispatch, isSafetyAuditMode, rows]);
+
     const ActionBTN = () => {
         return (
             <>
@@ -344,6 +463,32 @@ const Unit: React.FC = () => {
                     >
                         {intl.formatMessage({ id: "sidebar.users.search" })}
                     </ActionBtn>
+
+                    {
+                        (checkRole('ADMIN') || checkRole('EDIT')) && isSafetyAuditMode ? (
+                            <ActionBtn
+                                onClick={handleImportMonthlyChecklist}
+                                type="default"
+                                icon={<ImportOutlined />}
+                                loading={seedingTemplate}
+                            >
+                                Import SACL monthly checklist
+                            </ActionBtn>
+                        ) : null
+                    }
+
+                    {
+                        (checkRole('ADMIN') || checkRole('EDIT')) && !isSafetyAuditMode ? (
+                            <ActionBtn
+                                onClick={handleImportIncidentReport}
+                                type="default"
+                                icon={<ImportOutlined />}
+                                loading={seedingTemplate}
+                            >
+                                Create Incident Report template
+                            </ActionBtn>
+                        ) : null
+                    }
 
                     {
                         (checkRole('ADMIN') || checkRole('EDIT')) ? (
@@ -381,7 +526,7 @@ const Unit: React.FC = () => {
     };
 
     return (
-        <Layout title="Report templates">
+        <Layout title={pageTitle}>
             <GlobalHotKeys
                 keyMap={{ SEARCH_CATEGORIES: "ctrl+alt+f" }}
                 handlers={{
@@ -419,11 +564,18 @@ const Unit: React.FC = () => {
                                     <Fieldset>
                                         <Form.Item name="Category" label="Category">
                                             <Select
-                                                allowClear
+                                                allowClear={!isSafetyAuditMode}
+                                                disabled={isSafetyAuditMode}
                                                 showSearch
                                                 optionFilterProp="label"
                                                 placeholder="Select category"
-                                                options={categoryOptions.map(item => ({ label: item.name, value: item.id }))}
+                                                options={
+                                                  isSafetyAuditMode
+                                                    ? [{ label: 'Safety Audit', value: SAFETY_AUDIT_CATEGORY }]
+                                                    : categoryOptions
+                                                        .filter((item) => item.id !== SAFETY_AUDIT_CATEGORY)
+                                                        .map(item => ({ label: item.name, value: item.id }))
+                                                }
                                             />
                                         </Form.Item>
                                     </Fieldset>
@@ -466,20 +618,31 @@ const Unit: React.FC = () => {
                     <ReportTemplateModal
                         title={
                             modalType === actionType.ADD
-                                ? "Add new template"
+                                ? isSafetyAuditMode
+                                    ? "Add safety audit template"
+                                    : "Add new template"
                                 : modalType === actionType.VIEW
                                     ? "View template"
                                     : "Edit template"
                         }
                         loadingAction={loadingAction}
                         loadingDetail={loadingDetail}
-                        data={templateModalData}
+                        data={
+                          modalType === actionType.ADD && lockedCategory
+                            ? { ...(templateModalData || {}), category: lockedCategory }
+                            : templateModalData
+                        }
                         modalType={modalType}
                         isSuccess={success}
-                        categoryOptions={categoryOptions}
+                        categoryOptions={
+                          isSafetyAuditMode
+                            ? [{ id: SAFETY_AUDIT_CATEGORY, name: 'Safety Audit' }]
+                            : categoryOptions.filter((item) => item.id !== SAFETY_AUDIT_CATEGORY)
+                        }
                         staffOptions={staffOptions}
                         ServiceOptions={ServiceOptions}
-                        onCategoryAdded={handleCategoryAddedAndRefresh}
+                        onCategoryAdded={isSafetyAuditMode ? undefined : handleCategoryAddedAndRefresh}
+                        defaultCategory={lockedCategory}
                     />
                 ) : null}
             {showStaffReportModal && (

@@ -1,4 +1,4 @@
-﻿import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { CheckInDto } from './dto/check-in-user-task.dto';
 import { ReportUserTaskDto, UserTaskItemDto } from './dto/report-user-task.dto';
 import { UserTask } from './entities/user-task.entity';
@@ -96,6 +96,37 @@ export class UserTasksService {
 
   private isStaffOwnCustomReport(row: UserTask, userId: number): boolean {
     return row.type === 'CUSTOM' && +row.staffId === userId && +row.createdBy === userId;
+  }
+
+  /** Exclude INCIDENT / SAFETY_AUDIT from general CUSTOM lists (own sidebar pages). */
+  private applyOwnPageCustomCategoryExclude(
+    query: import('typeorm').SelectQueryBuilder<UserTask>,
+    templateCategory?: string,
+  ): void {
+    if (String(templateCategory || '').trim()) return;
+    query.andWhere(
+      `NOT EXISTS (
+        SELECT 1 FROM report_templates rt_own
+        WHERE rt_own.id = usertasks.report_template_id
+          AND UPPER(TRIM(COALESCE(rt_own.category, ''))) IN ('INCIDENT', 'SAFETY_AUDIT')
+      )`,
+    );
+  }
+
+  private applyTemplateCategoryFilter(
+    query: import('typeorm').SelectQueryBuilder<UserTask>,
+    templateCategory?: string,
+  ): void {
+    const cat = String(templateCategory || '').trim().toUpperCase();
+    if (!cat) return;
+    query.andWhere(
+      `EXISTS (
+        SELECT 1 FROM report_templates rt_cat
+        WHERE rt_cat.id = usertasks.report_template_id
+          AND UPPER(TRIM(COALESCE(rt_cat.category, ''))) = :templateCategory
+      )`,
+      { templateCategory: cat },
+    );
   }
 
   /** Customer may soft-delete/restore only their own custom reports (not company peers'). */
@@ -505,6 +536,7 @@ export class UserTasksService {
   async updateReport(id: number, userInfo: IUserInfo, body: ReportUserTaskDto) {
     const query = this.userTasksRepository.createQueryBuilder('userTasks')
       .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
+      .leftJoinAndSelect('reportTemplate.items', 'templateItems')
       .leftJoinAndSelect('userTasks.reports', 'reports')
       .leftJoin('userTasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
       .leftJoin('userTasks.createdUser', 'createdUser')
@@ -958,6 +990,9 @@ export class UserTasksService {
         query.andWhere(' usertasks.type =:type ', { type: body.type })
         if (body.type === 'CUSTOM') {
           this.applyStaffSelfSubmittedCustomFilter(query, userInfo);
+          const templateCategory = String(body.templateCategory || '').trim();
+          this.applyTemplateCategoryFilter(query, templateCategory);
+          this.applyOwnPageCustomCategoryExclude(query, templateCategory);
         }
       } else {
         query.andWhere(' usertasks.type !=:type ', { type: 'CUSTOM' })
@@ -1861,6 +1896,7 @@ export class UserTasksService {
       const query = this.userTasksRepository.createQueryBuilder('userTasks')
         .leftJoinAndSelect('userTasks.reports', 'reports')
         .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
+        .leftJoinAndSelect('reportTemplate.items', 'templateItems')
         .leftJoin('userTasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
         .leftJoin('userTasks.createdUser', 'createdUser')
         .addSelect(['createdUser.fullName', 'createdUser.username', 'createdUser.type'])
@@ -1981,6 +2017,7 @@ export class UserTasksService {
       const query = this.userTasksRepository.createQueryBuilder('userTasks')
         .leftJoinAndSelect('userTasks.reports', 'reports')
         .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
+        .leftJoinAndSelect('reportTemplate.items', 'templateItems')
         .leftJoin('userTasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
         .leftJoin('userTasks.createdUser', 'createdUser')
         .addSelect(['createdUser.fullName', 'createdUser.username', 'createdUser.type'])
@@ -2032,6 +2069,7 @@ export class UserTasksService {
     const query = this.userTasksRepository.createQueryBuilder('userTasks')
       .leftJoinAndSelect('userTasks.reports', 'reports')
       .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
+      .leftJoinAndSelect('reportTemplate.items', 'templateItems')
       .leftJoin('userTasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
       .leftJoin('userTasks.createdUser', 'createdUser')
       .addSelect(['createdUser.fullName', 'createdUser.username', 'createdUser.type'])

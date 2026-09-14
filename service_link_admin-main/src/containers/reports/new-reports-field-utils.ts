@@ -24,6 +24,7 @@ export const getTemplateFieldKey = (it: TemplateItem, idx: number) => {
 const AUTO_MERGE_FIELD_TYPES = new Set([
   "[REPORT_DATE]",
   "[REPORT_TIME]",
+  "[REPORT_DATETIME]",
   "[SITE_NAME]",
   "[SITE_ADDRESS]",
   "[CUSTOMER_NAME]",
@@ -35,7 +36,7 @@ export const isAutoMergeTemplateField = (it: TemplateItem) =>
 
 export const autoMergeUsesPicker = (it: TemplateItem, isStaffUser: boolean): boolean => {
   const t = String(it?.type || "").toUpperCase();
-  if (t !== "[REPORT_DATE]" && t !== "[REPORT_TIME]") return false;
+  if (t !== "[REPORT_DATE]" && t !== "[REPORT_TIME]" && t !== "[REPORT_DATETIME]") return false;
   if (!isStaffUser) return true;
   const visibleToStaff = it?.config?.visibleToStaff;
   if (typeof visibleToStaff === "boolean") return visibleToStaff;
@@ -50,6 +51,7 @@ export const resolveAutoMergeFieldValue = (
   const t = String(it?.type || "").toUpperCase();
   if (t === "[REPORT_DATE]") return moment().format("YYYY-MM-DD");
   if (t === "[REPORT_TIME]") return moment().format("HH:mm:ss");
+  if (t === "[REPORT_DATETIME]") return moment().format("YYYY-MM-DD HH:mm:ss");
   if (t === "[SITE_NAME]") return String(values.siteName || "").trim();
   if (t === "[SITE_ADDRESS]") return String(values.siteAddress || "").trim();
   if (t === "[CUSTOMER_NAME]") {
@@ -207,6 +209,8 @@ export const getTemplateLabel = (it: TemplateItem) => {
 };
 
 export const isTimeLikeTemplateItem = (it: TemplateItem): boolean => {
+  const fieldType = String(it?.type || "").toUpperCase();
+  if (fieldType === "DATETIME" || fieldType === "[REPORT_DATETIME]") return false;
   // Some templates have "Time", "Time " or "Time (optional)" as label/name.
   const raw = String(getTemplateLabel(it) || it?.name || "");
   const normalized = raw
@@ -215,7 +219,15 @@ export const isTimeLikeTemplateItem = (it: TemplateItem): boolean => {
     .trim()
     .toLowerCase();
   if (!normalized) return false;
-  if (normalized.includes("time and date")) return false;
+  // Combined date+time labels must use DatePicker showTime, not TimePicker.
+  if (
+    normalized.includes("time and date") ||
+    normalized.includes("date and time") ||
+    normalized.includes("date time") ||
+    normalized.includes("datetime")
+  ) {
+    return false;
+  }
   return /\btime\b/.test(normalized);
 };
 
@@ -226,7 +238,14 @@ export const isTimeLikeLabel = (label: unknown): boolean => {
     .trim()
     .toLowerCase();
   if (!normalized) return false;
-  if (normalized.includes("time and date")) return false;
+  if (
+    normalized.includes("time and date") ||
+    normalized.includes("date and time") ||
+    normalized.includes("date time") ||
+    normalized.includes("datetime")
+  ) {
+    return false;
+  }
   return /\btime\b/.test(normalized);
 };
 
@@ -309,7 +328,19 @@ export function parseReportItemValueForForm(r: any): any {
     if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
     return moment(moment().format(`YYYY-MM-DD ${v}`));
   }
-  if ((rt === "TEXT" || rt === "DATETIME") && isTimeLabel) {
+  if (rt === "DATETIME" || rt === "[REPORT_DATETIME]") {
+    const s = String(r.value ?? "").trim();
+    if (!s) return undefined;
+    const strict = moment(
+      s,
+      ["YYYY-MM-DD HH:mm:ss", "YYYY-MM-DD HH:mm", "YYYY-MM-DDTHH:mm:ss", moment.ISO_8601],
+      true,
+    );
+    if (strict.isValid()) return strict;
+    const loose = moment(s);
+    return loose.isValid() ? loose : undefined;
+  }
+  if ((rt === "TEXT") && isTimeLabel) {
     const s = String(r.value ?? "").trim();
     if (!s || s.startsWith("[") || /^https?:\/\//i.test(s)) return undefined;
     const strict = moment(s, ["HH:mm:ss", "HH:mm", "h:mm:ss a", "h:mm a"], true);

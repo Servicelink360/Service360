@@ -31,6 +31,11 @@ import {
   syncTemplateServices,
   normalizeServiceIds,
 } from './report-template-services.helper';
+import {
+  attachStaffIdsToTemplates,
+  resolveStaffAssignment,
+  syncTemplateStaffs,
+} from './report-template-staffs.helper';
 import { GetReportTemplatesDto } from './dto/get-report-templates.dto';
 import { ASSIGNED_STAFF_ALL } from './report-template-assignment.constants';
 import { UserTasksService } from '../user-tasks/user-tasks.service';
@@ -43,6 +48,7 @@ import {
   sanitizeTemplateItemsText,
   sortTemplateItems,
 } from './report-template-items.helper';
+import { ReportTemplateStaff } from './entities/report-template-staff.entity';
 
 const PRESET_CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
   DEFAULT_REPORT_TEMPLATE_CATEGORIES.map((item) => [item.id, item.name]),
@@ -74,6 +80,8 @@ export class ReportTemplatesService {
     @InjectRepository(ReportTemplateCategory) private readonly categoryRepository: Repository<ReportTemplateCategory>,
     @InjectRepository(ReportTemplateService)
     private readonly ReportTemplateServiceRepository: Repository<ReportTemplateService>,
+    @InjectRepository(ReportTemplateStaff)
+    private readonly reportTemplateStaffRepository: Repository<ReportTemplateStaff>,
     @Inject('winston') private readonly logger: Logger,
     @Inject(forwardRef(() => UserTasksService)) private readonly userTasksService: UserTasksService,
     private readonly connection: Connection,
@@ -232,13 +240,23 @@ export class ReportTemplatesService {
             sourceDeptIds.map((r) => +r.serviceId),
           );
         }
-        const [withServices] = await attachServiceIdsToTemplates(
-          templateServicesRepo,
-          [withItems ?? savedTemplate],
+        const templateStaffRepo = manager.getRepository(ReportTemplateStaff);
+        const sourceStaffIds = await templateStaffRepo.find({
+          where: { reportTemplateId: +id },
+          select: ['staffId'],
+        });
+        await syncTemplateStaffs(
+          templateStaffRepo,
+          savedTemplate.id,
+          sourceStaffIds.map((r) => +r.staffId),
+        );
+        const [withAssignments] = await attachStaffIdsToTemplates(
+          templateStaffRepo,
+          await attachServiceIdsToTemplates(templateServicesRepo, [withItems ?? savedTemplate]),
         );
         return {
           ...errorCode.SUCCESS,
-          data: withServices,
+          data: withAssignments,
         };
       });
     } catch (error) {
@@ -248,14 +266,22 @@ export class ReportTemplatesService {
     }
   }
 
-  /** Staff: templates assigned to them or to all staff (id 0). Admin/customer: all active templates. */
+  /** Staff: templates assigned to them, listed in multi-assign, or All (id 0). */
   private applyStaffAssignmentFilter(
     query: import('typeorm').SelectQueryBuilder<ReportTemplate>,
     userInfo?: IUserInfo,
   ) {
     if (userInfo && +userInfo.type === userType.STAFF) {
       query.andWhere(
-        '(report_templates.assigned_staff_id = :staffUserId OR report_templates.assigned_staff_id = :allStaff)',
+        `(
+          report_templates.assigned_staff_id = :allStaff
+          OR report_templates.assigned_staff_id = :staffUserId
+          OR EXISTS (
+            SELECT 1 FROM report_template_staffs rts
+            WHERE rts.report_template_id = report_templates.id
+              AND rts.staff_id = :staffUserId
+          )
+        )`,
         {
           staffUserId: +userInfo.userId,
           allStaff: ASSIGNED_STAFF_ALL,
@@ -263,6 +289,14 @@ export class ReportTemplatesService {
       );
     }
     return query;
+  }
+
+  private async attachAssignmentFields(templates: ReportTemplate[]) {
+    const withServices = await attachServiceIdsToTemplates(
+      this.ReportTemplateServiceRepository,
+      templates,
+    );
+    return attachStaffIdsToTemplates(this.reportTemplateStaffRepository, withServices);
   }
 
   async getAll(userInfo?: IUserInfo) {
@@ -277,11 +311,8 @@ export class ReportTemplatesService {
       data.forEach((template) => {
         template.items = prepareTemplateItemsForResponse(template.items);
       });
-      const withServices = await attachServiceIdsToTemplates(
-        this.ReportTemplateServiceRepository,
-        data,
-      );
-      return { ...errorCode.SUCCESS, data: withServices };
+      const withAssignments = await this.attachAssignmentFields(data);
+      return { ...errorCode.SUCCESS, data: withAssignments };
     } catch (error) {
       this.logger.error(`Error getting all report templates: ${error.message}`, error.stack);
       return errorCode.EXCEPTION;
@@ -301,11 +332,8 @@ export class ReportTemplatesService {
         data.order = 0;
       }
       data.items = prepareTemplateItemsForResponse(data.items);
-      const [withServices] = await attachServiceIdsToTemplates(
-        this.ReportTemplateServiceRepository,
-        [data],
-      );
-      return { ...errorCode.SUCCESS, data: withServices };
+      const [withAssignments] = await this.attachAssignmentFields([data]);
+      return { ...errorCode.SUCCESS, data: withAssignments };
     } catch (error) {
       this.logger.error(`Error finding report template ${id}: ${error.message}`, error.stack);
       return errorCode.EXCEPTION;
@@ -321,11 +349,11 @@ export class ReportTemplatesService {
       data.fileUrl = body.fileUrl ?? '';
       data.order = body.order ?? 0;
       data.settings = body.settings ?? null;
-      if (body.assignedStaffId !== undefined) {
-        data.assignedStaffId = body.assignedStaffId;
-      } else {
-        data.assignedStaffId = null;
-      }
+      const staffAssignment =
+        body.assignedStaffIds !== undefined || body.assignedStaffId !== undefined
+          ? resolveStaffAssignment(body)
+          : { assignedStaffId: null, staffIds: [] as number[] };
+      data.assignedStaffId = staffAssignment.assignedStaffId;
       data.status = eStatus.YES;
       data.createdAt = new Date();
       data.updatedAt = new Date();
@@ -348,6 +376,11 @@ export class ReportTemplatesService {
         this.ReportTemplateServiceRepository,
         newItem.id,
         normalizeServiceIds(body.serviceIds),
+      );
+      await syncTemplateStaffs(
+        this.reportTemplateStaffRepository,
+        newItem.id,
+        staffAssignment.staffIds,
       );
       const full = await this.findOne(String(newItem.id));
       return full?.data
@@ -383,6 +416,14 @@ export class ReportTemplatesService {
         });
       }
 
+      const excludeCategory = (body.excludeCategory ?? '').trim();
+      if (excludeCategory && !categoryFilter) {
+        query.andWhere(
+          '(report_templates.category IS NULL OR LOWER(report_templates.category) <> LOWER(:excludeCategory))',
+          { excludeCategory },
+        );
+      }
+
       if (+body.limit) {
         query.take(body.limit).skip((body.page - 1) * body.limit);
       }
@@ -400,14 +441,15 @@ export class ReportTemplatesService {
         template.items = prepareTemplateItemsForResponse(template.items);
       });
       if (!result) return errorCode.EXCEPTION;
-      return { ...errorCode.SUCCESS, data: { count: result[1], rows: result[0] } };
+      const rows = await this.attachAssignmentFields(result[0]);
+      return { ...errorCode.SUCCESS, data: { count: result[1], rows } };
     } catch (error) {
       this.logger.error(`Error finding report templates: ${error.message}`, error.stack);
       return { ...errorCode.EXCEPTION, message: error.message };
     }
   }
 
-  /** Metadata only � never modifies template items. */
+  /** Metadata only — never modifies template items. */
   async update(userInfo: IUserInfo, id: string, body: UpdateReportTemplateDto) {
     try {
       const data = await this.reportTemplatesRepository.findOne({
@@ -427,8 +469,12 @@ export class ReportTemplatesService {
       }
       if (body.status !== undefined) data.status = body.status;
       if (body.settings !== undefined) data.settings = body.settings ?? null;
-      if (body.assignedStaffId !== undefined) {
-        data.assignedStaffId = body.assignedStaffId;
+
+      let staffIdsToSync: number[] | undefined;
+      if (body.assignedStaffIds !== undefined || body.assignedStaffId !== undefined) {
+        const staffAssignment = resolveStaffAssignment(body);
+        data.assignedStaffId = staffAssignment.assignedStaffId;
+        staffIdsToSync = staffAssignment.staffIds;
       }
 
       data.updatedBy = userInfo.userId;
@@ -441,6 +487,9 @@ export class ReportTemplatesService {
           +id,
           normalizeServiceIds(body.serviceIds),
         );
+      }
+      if (staffIdsToSync !== undefined) {
+        await syncTemplateStaffs(this.reportTemplateStaffRepository, +id, staffIdsToSync);
       }
       return this.findOne(id);
     } catch (error) {

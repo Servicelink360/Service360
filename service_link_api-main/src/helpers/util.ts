@@ -50,6 +50,10 @@ function findReportDateInItems(reportItems: unknown): string | null {
             const stored = parseReportWallClockDate(v);
             if (stored) return stored;
         }
+        if (t === '[REPORT_DATETIME]' || t === 'DATETIME') {
+            const stored = parseReportWallClockDate(v);
+            if (stored) return stored;
+        }
         if (t === 'DATE' || t === 'DATE_PICKER') {
             const stored = parseReportWallClockDate(v);
             if (stored) return stored;
@@ -68,12 +72,39 @@ function findReportTimeInItems(reportItems: unknown): string | null {
             const parsed = parseReportWallClockTime(v);
             if (parsed) return parsed;
         }
+        if (t === '[REPORT_DATETIME]' || t === 'DATETIME') {
+            const m = moment(
+                v,
+                ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-MM-DDTHH:mm:ss', moment.ISO_8601],
+                true,
+            );
+            if (m.isValid()) return m.format('HH:mm:ss');
+            const loose = moment(v);
+            if (loose.isValid()) return loose.format('HH:mm:ss');
+        }
     }
     return null;
 }
 
 /** Both date and time from form fields — never invent midnight when only a date exists. */
 function inferReportDateTimeFromItems(reportItems: unknown): moment.Moment | null {
+    if (Array.isArray(reportItems)) {
+        for (const it of reportItems) {
+            const t = String((it as any)?.type ?? '').toUpperCase();
+            const v = String((it as any)?.value ?? '').trim();
+            if (!v) continue;
+            if (t === '[REPORT_DATETIME]' || t === 'DATETIME') {
+                const m = moment(
+                    v,
+                    ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-MM-DDTHH:mm:ss', moment.ISO_8601],
+                    true,
+                );
+                if (m.isValid()) return m.utcOffset(REPORT_PDF_AU_OFFSET, true);
+                const loose = moment(v);
+                if (loose.isValid()) return loose.utcOffset(REPORT_PDF_AU_OFFSET, true);
+            }
+        }
+    }
     const dateStr = findReportDateInItems(reportItems);
     const timeStr = findReportTimeInItems(reportItems);
     if (!timeStr) return null;
@@ -703,12 +734,109 @@ function formatJsonPretty(val: unknown): string {
     }
 }
 
-function fieldRow(encName: string, innerHtml: string): string {
+function getReportSeverityLevel(items: any[]): 'low' | 'medium' | 'high' | 'critical' | '' {
+    if (!Array.isArray(items)) return '';
+    const severityItem = items.find((it) =>
+        String(it?.name || '')
+            .trim()
+            .toLowerCase()
+            .includes('severity'),
+    );
+    const raw = String(severityItem?.value ?? '')
+        .trim()
+        .toLowerCase();
+    if (raw === 'low') return 'low';
+    if (raw === 'medium') return 'medium';
+    if (raw === 'high') return 'high';
+    if (raw === 'critical') return 'critical';
+    return '';
+}
+
+function getTitleBarClassForSeverity(level: string): string {
+    if (level === 'low') return 'title-bar title-bar--severity-low';
+    if (level === 'medium') return 'title-bar title-bar--severity-medium';
+    if (level === 'high') return 'title-bar title-bar--severity-high';
+    if (level === 'critical') return 'title-bar title-bar--severity-critical';
+    return 'title-bar';
+}
+
+function isSafetyAuditPdf(row: any, items: any[]): boolean {
+    const cat = String(row?.reportTemplate?.category || '')
+        .trim()
+        .toUpperCase();
+    if (cat === 'SAFETY_AUDIT') return true;
+    const name = String(row?.reportTemplate?.name || row?.taskName || '')
+        .trim()
+        .toLowerCase();
+    if (name.includes('safety audit')) return true;
+    const list = Array.isArray(items) ? items : [];
+    const yesNoCount = list.filter((it) => normalizeReportFieldType(it?.type) === 'YES_NO').length;
+    return yesNoCount >= 8 && yesNoCount > list.length * 0.4;
+}
+
+function countYesNoValues(items: any[]): { yes: number; no: number; blank: number; total: number } {
+    let yes = 0;
+    let no = 0;
+    let blank = 0;
+    for (const it of items || []) {
+        if (normalizeReportFieldType(it?.type) !== 'YES_NO') continue;
+        const yn = String(it?.value ?? '')
+            .trim()
+            .toUpperCase();
+        if (yn === 'YES' || yn === 'TRUE' || yn === '1') yes += 1;
+        else if (yn === 'NO' || yn === 'FALSE' || yn === '0') no += 1;
+        else blank += 1;
+    }
+    return { yes, no, blank, total: yes + no + blank };
+}
+
+function getTitleBarClassForAudit(counts: { yes: number; no: number; total: number }): string {
+    if (counts.total <= 0) return 'title-bar';
+    if (counts.no === 0 && counts.yes > 0) return 'title-bar title-bar--severity-low';
+    if (counts.no >= 5 || counts.no / counts.total >= 0.3) {
+        return 'title-bar title-bar--severity-high';
+    }
+    if (counts.no > 0) return 'title-bar title-bar--severity-medium';
+    return 'title-bar';
+}
+
+function fieldRow(encName: string, innerHtml: string, opts?: { stack?: boolean }): string {
+    const rowClass = opts?.stack ? 'field-row field-row--stack' : 'field-row';
     return `
-            <div class="row">
-                <div class="item40"><div class="name"><span>${encName}</span></div></div>
-                <div class="item60"><div class="value">${innerHtml}</div></div>
+            <div class="${rowClass}">
+                <div class="field-label">${encName}</div>
+                <div class="field-value">${innerHtml}</div>
             </div>`;
+}
+
+function getReportFieldSection(it: any, row: any): string {
+    const direct = it?.config?.section ?? it?.section;
+    if (direct != null && String(direct).trim()) return String(direct).trim();
+    const tplItems = row?.reportTemplate?.items;
+    if (!Array.isArray(tplItems)) return '';
+    const match = tplItems.find(
+        (t: any) => String(t?.name || '').trim() === String(it?.name || '').trim(),
+    );
+    const fromTpl = match?.config?.section;
+    return fromTpl != null ? String(fromTpl).trim() : '';
+}
+
+function selectValuePill(fieldName: string, val: unknown): string {
+    const text = String(val ?? '').trim();
+    if (!text) return `<span class="value-text muted">—</span>`;
+    const lower = text.toLowerCase();
+    const nameLower = String(fieldName || '').toLowerCase();
+    if (nameLower.includes('severity')) {
+        if (lower === 'low') return `<span class="pill pill-severity-low">${escapeHtml(text)}</span>`;
+        if (lower === 'medium') return `<span class="pill pill-severity-medium">${escapeHtml(text)}</span>`;
+        if (lower === 'high' || lower === 'critical') {
+            return `<span class="pill pill-severity-high">${escapeHtml(text)}</span>`;
+        }
+    }
+    if (nameLower.includes('incident type') || nameLower.includes('type')) {
+        return `<span class="pill pill-select">${escapeHtml(text)}</span>`;
+    }
+    return `<span class="value-text">${escapeHtml(text)}</span>`;
 }
 
 function formatChecklistForPdf(val: unknown): string {
@@ -740,29 +868,45 @@ async function buildImagesBlock(fieldName: string, value: unknown): Promise<stri
         }
     }
     return `
-          <div class="row"> <div class="item40"><div class="name"> <span>${escapeHtml(fieldName)}</span> </div></div><div class="item60"></div></div>
-          <div class="images">${parts.join('')}</div>`;
+          <div class="field-row">
+            <div class="field-label">${escapeHtml(fieldName)}</div>
+            <div class="field-value"><span class="value-text muted">${parts.length ? '' : 'No images'}</span></div>
+          </div>
+          ${parts.length ? `<div class="images">${parts.join('')}</div>` : ''}`;
 }
 
 async function renderReportField(
     row: any,
     it: any,
-    opts: { hasNoteHeader: boolean; reportItems?: unknown },
+    opts: { hasNoteHeader: boolean; reportItems?: unknown; auditLayout?: boolean },
 ): Promise<string> {
     const rawType = it?.type;
     const type = normalizeReportFieldType(rawType);
     const name = String(it?.name ?? '');
     const encName = escapeHtml(name);
     const val = it?.value;
+    const stackLong =
+        !!opts.auditLayout && (name.length > 52 || type === 'TEXTAREA' || type === 'TEXT_AREA');
 
     if (opts.hasNoteHeader && name === 'Note') return '';
 
     if (type === 'YES_NO') {
-        const yn = String(val ?? '').toUpperCase();
+        const yn = String(val ?? '')
+            .trim()
+            .toUpperCase();
+        if (!yn) {
+            return fieldRow(encName, `<span class="value-text muted">—</span>`, {
+                stack: stackLong || (!!opts.auditLayout && name.length > 40),
+            });
+        }
         const isYes = yn === 'YES' || yn === 'TRUE' || yn === '1';
+        const isNo = yn === 'NO' || yn === 'FALSE' || yn === '0';
+        const label = yn === 'YES' || yn === 'NO' ? yn : String(val ?? '');
+        const pillClass = isYes ? 'pill-yes' : isNo ? 'pill-no' : 'pill-select';
         return fieldRow(
             encName,
-            `<span><span class="label ${isYes ? 'yes' : 'no'}"></span>${escapeHtml(String(val ?? ''))}</span>`,
+            `<span class="pill ${pillClass}">${escapeHtml(label || '—')}</span>`,
+            { stack: stackLong || (!!opts.auditLayout && name.length > 40) },
         );
     }
 
@@ -798,12 +942,22 @@ async function renderReportField(
         return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
     }
 
+    if (rawType === '[REPORT_DATETIME]' || type === '[REPORT_DATETIME]') {
+        const valStr = String(val ?? '').trim();
+        const display = valStr
+            ? formatReportPdfDateTimeValue(valStr)
+            : getReportPdfReferenceMoment(row, opts.reportItems).format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
+        return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
+    }
+
     if (type === 'TEXT' && name !== 'Note' && val) {
         return fieldRow(encName, `<span>${escapeHtml(val)}</span>`);
     }
 
     if ((type === 'TEXTAREA' || type === 'TEXT_AREA') && val) {
-        return fieldRow(encName, `<span style="white-space:pre-wrap;">${escapeHtml(val)}</span>`);
+        return fieldRow(encName, `<span class="value-text">${escapeHtml(val)}</span>`, {
+            stack: stackLong,
+        });
     }
 
     if (type === 'RICH_TEXT' && val) {
@@ -824,7 +978,7 @@ async function renderReportField(
     }
 
     if (type === 'SELECT' || type === 'DROPDOWN') {
-        return fieldRow(encName, `<span>${escapeHtml(val ?? '')}</span>`);
+        return fieldRow(encName, selectValuePill(name, val));
     }
 
     if (type === 'NUMBER' || type === 'PERCENTAGE' || type === 'CURRENCY' || type === 'INTEGER' || type === 'DECIMAL') {
@@ -875,13 +1029,17 @@ async function renderReportField(
 
     if (type === 'VIDEOS' || type === 'VIDEO' || type === 'AUDIO') {
         const urls = parseReportMediaList(val);
+        if (!urls.length) return '';
         let links = '';
         for (const file of urls) {
             const href = escapeAttr(file);
             links += `<div class="images-item"><a href="${href}">${escapeHtml(file)}</a></div>`;
         }
         return `
-          <div class="row"> <div class="item40"><div class="name"> <span>${encName}</span> </div></div><div class="item60"></div></div>
+          <div class="field-row">
+            <div class="field-label">${encName}</div>
+            <div class="field-value"></div>
+          </div>
           <div class="images">${links}</div>`;
     }
 
@@ -921,6 +1079,7 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
         );
     }
 
+    const auditLayout = isSafetyAuditPdf(row, newItems);
     let content = ``;
     if (newItems.length > 0) {
         const checkNote = newItems.find((c: any) => c.name === 'Note');
@@ -930,17 +1089,61 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
                 <div class="item100"><b>${escapeHtml(checkNote.value)}</b></div>
             </div>`;
         }
-        const fieldOpts = { hasNoteHeader: !!checkNote, reportItems: newItems };
+        const fieldOpts = {
+            hasNoteHeader: !!checkNote,
+            reportItems: newItems,
+            auditLayout,
+        };
+        let lastSection = '';
         for (const it of newItems) {
+            const section = getReportFieldSection(it, row);
+            if (section && section !== lastSection) {
+                let sectionMeta = '';
+                if (auditLayout) {
+                    const inSection = newItems.filter(
+                        (x: any) => getReportFieldSection(x, row) === section,
+                    );
+                    const sc = countYesNoValues(inSection);
+                    if (sc.total > 0) {
+                        sectionMeta = `<span class="section-head-meta">${sc.yes}/${sc.total} Yes</span>`;
+                    }
+                }
+                content += `<div class="section-head"><span>${escapeHtml(section)}</span>${sectionMeta}</div>`;
+                lastSection = section;
+            }
             content += await renderReportField(row, it, fieldOpts);
         }
     }
 
     const title = row?.reportTemplate?.name ?? 'Report';
     const reportWhen = getReportPdfReferenceMoment(row, newItems);
+    const severityLevel = getReportSeverityLevel(newItems);
+    const severityLabel =
+        severityLevel === 'low'
+            ? 'Low'
+            : severityLevel === 'medium'
+              ? 'Medium'
+              : severityLevel === 'high'
+                ? 'High'
+                : severityLevel === 'critical'
+                  ? 'Critical'
+                  : '';
+    const auditCounts = auditLayout ? countYesNoValues(newItems) : null;
+    const titleBarClass = auditLayout
+        ? getTitleBarClassForAudit(auditCounts!)
+        : getTitleBarClassForSeverity(severityLevel);
+    const metaBadge = severityLabel
+        ? `<div class="report-severity">Severity: ${escapeHtml(severityLabel)}</div>`
+        : auditCounts && auditCounts.total > 0
+          ? `<div class="report-severity">${auditCounts.yes} Yes · ${auditCounts.no} No</div>`
+          : '';
+
+    html = html.replace('{{TITLE_BAR_CLASS}}', titleBarClass);
     html = html.replace('{{TITLE}}', escapeHtml(title));
     // Header shows date only (time appears in report body fields).
     html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format(REPORT_PDF_DATE_FORMAT)));
+    html = html.replace('{{SEVERITY_BADGE}}', metaBadge);
+    html = html.replace('{{CONTENT_CLASS}}', auditLayout ? ' tcontent--audit' : '');
     html = html.replace('{{CONTENT}}', content);
 
     const isWindows = process.platform === 'win32';
@@ -988,15 +1191,24 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
 
     await fs.promises.mkdir(path.dirname(localPdfPath), { recursive: true });
 
+    // Estimate pages from content height so we can drop Chromium trailing blank pages.
+    const contentHeightPx = await page.evaluate(() => {
+        const el = document.body;
+        return Math.max(el.scrollHeight, el.offsetHeight, document.documentElement.scrollHeight || 0);
+    });
+
     console.log('3 convert to pdf');
     try {
         await page.pdf({
             path: localPdfPath,
             format: 'A4',
-            displayHeaderFooter: true,
-            printBackground: false,
+            // Must stay false (or supply empty templates). Chromium's default
+            // header prints locale date/time like "9/10/26, 11:54 AM" over the report.
+            displayHeaderFooter: false,
+            printBackground: true,
             preferCSSPageSize: false,
-            margin: { top: '30px', bottom: '30px' },
+            // Leave room for pdf-lib footer (title ~y40, submitted ~y26, id ~y14, green rule ~y48).
+            margin: { top: '28px', bottom: '58px', left: '22px', right: '22px' },
         });
     } finally {
         await browser.close().catch(() => undefined);
@@ -1004,7 +1216,15 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
 
     const documentAsBytes = await fs.promises.readFile(localPdfPath);
     const pdfDoc = await PDFDocument.load(documentAsBytes);
-    const numberOfPages = pdfDoc.getPages().length;
+    // A4 ~842pt tall; usable content ~842 - top/bottom margins (~86pt) ≈ 756pt ≈ 1008px @ 96dpi.
+    const approxContentPxPerPage = 980;
+    const expectedPages = Math.max(1, Math.ceil(contentHeightPx / approxContentPxPerPage));
+    console.log('pdf pages before trim', pdfDoc.getPageCount(), 'contentHeightPx', contentHeightPx, 'expected', expectedPages);
+    while (pdfDoc.getPageCount() > expectedPages && pdfDoc.getPageCount() > 1) {
+        pdfDoc.removePage(pdfDoc.getPageCount() - 1);
+    }
+    const numberOfPages = pdfDoc.getPageCount();
+    console.log('pdf pages after trim', numberOfPages);
     const submittedByLabel = getReportPdfSubmittedByLabel(row);
     const submittedStamp = formatReportPdfSubmittedStamp(row, newItems);
     for (let i = 0; i < numberOfPages; i++) {
@@ -1012,24 +1232,24 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
         if (pg) {
             const pageSize = pg.getSize();
             const bottomX = pageSize.width - 70;
-            pg.drawText(`Page ${i + 1}`, { x: bottomX, y: 18, size: 9 });
-            pg.drawText(normalizeUnicodeForPdf(title), { x: 30, y: 36, size: 9 });
+            pg.drawText(`Page ${i + 1}`, { x: bottomX, y: 14, size: 8 });
+            pg.drawText(normalizeUnicodeForPdf(title), { x: 30, y: 40, size: 8 });
             pg.drawText(
                 `Submitted by: ${normalizeUnicodeForPdf(submittedByLabel)} @ ${submittedStamp}`,
                 {
                     x: 30,
-                    y: 18,
-                    size: 9,
+                    y: 26,
+                    size: 8,
                 },
             );
             pg.drawText(`Submitted Id: ${rowNumber} Your Partner in Facilities www.servicelink.net.au`, {
                 x: 30,
-                y: 8,
-                size: 9,
+                y: 14,
+                size: 8,
             });
             pg.drawLine({
-                start: { x: 10, y: 30 },
-                end: { x: pageSize.width - 10, y: 32 },
+                start: { x: 10, y: 48 },
+                end: { x: pageSize.width - 10, y: 48 },
                 thickness: 2,
                 color: rgb(0.21, 0.66, 0),
                 opacity: 0.75,

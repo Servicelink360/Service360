@@ -40,8 +40,15 @@ export class GetUserTasksByUserDto {
 
     @ApiProperty({ default: '',required:false })
     type: string
+
+    @ApiProperty({
+      required: false,
+      description: 'When type=CUSTOM, filter by report_templates.category (e.g. INCIDENT, SAFETY_AUDIT)',
+    })
+    @IsOptional()
+    templateCategory?: string
     
-    @ApiProperty({ default: '',required:false })
+    @ApiProperty({ default: '',required:false})
     keyword:string
 
     @ApiProperty({ required: false, description: 'Open a specific custom report from messages / deep link' })

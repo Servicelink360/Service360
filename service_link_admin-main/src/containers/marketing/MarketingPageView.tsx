@@ -174,6 +174,18 @@ function renderSection(section: PageSection, index: number) {
               For account or technical support, contact your organisation administrator or reach out
               via the <Link to={section.links[0].path}>{section.links[0].label}</Link>.
             </p>
+          ) : section.text === 'feature-highlights-link' && section.links?.[0] ? (
+            <p>
+              Browse sample screen layouts for platform and client features:{' '}
+              <Link to={section.links[0].path}>{section.links[0].label}</Link>
+              {section.links[1] ? (
+                <>
+                  {' '}
+                  · <Link to={section.links[1].path}>{section.links[1].label}</Link>
+                </>
+              ) : null}
+              .
+            </p>
           ) : section.text === 'cookie-link' && section.links?.[0] ? (
             <p>
               See our <Link to={section.links[0].path}>{section.links[0].label}</Link> for details on

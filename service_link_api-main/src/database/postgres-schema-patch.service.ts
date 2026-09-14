@@ -95,6 +95,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     }
 
     await this.ensureReportTemplateServicesTable();
+    await this.ensureReportTemplateStaffsTable();
     await this.ensureFaultIssuesTables();
     await this.ensureRoofGutterFaultIssues();
     await this.ensureGroundMaintenanceFaultIssues();
@@ -1103,6 +1104,66 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     } catch (e) {
       this.logger.warn(
         `report_template_services patch: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  /** report_template_staffs: multi staff assignment for New Report templates. */
+  private async ensureReportTemplateStaffsTable(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.report_template_staffs (
+          report_template_id INT NOT NULL,
+          staff_id INT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (report_template_id, staff_id)
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_report_template_staffs_staff_id
+          ON public.report_template_staffs (staff_id);
+      `);
+      await this.dataSource.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'fk_rtstaff_report_template'
+          ) THEN
+            ALTER TABLE public.report_template_staffs
+              ADD CONSTRAINT fk_rtstaff_report_template
+              FOREIGN KEY (report_template_id)
+              REFERENCES public.report_templates(id) ON DELETE CASCADE;
+          END IF;
+        END$$;
+      `);
+      await this.dataSource.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'fk_rtstaff_staff'
+          ) THEN
+            ALTER TABLE public.report_template_staffs
+              ADD CONSTRAINT fk_rtstaff_staff
+              FOREIGN KEY (staff_id)
+              REFERENCES public.users(id) ON DELETE CASCADE;
+          END IF;
+        END$$;
+      `);
+      // Backfill single assigned_staff_id into junction (skip All=0 and null).
+      await this.dataSource.query(`
+        INSERT INTO public.report_template_staffs (report_template_id, staff_id)
+        SELECT rt.id, rt.assigned_staff_id
+        FROM public.report_templates rt
+        WHERE rt.assigned_staff_id IS NOT NULL
+          AND rt.assigned_staff_id > 0
+        ON CONFLICT DO NOTHING
+      `);
+      this.logger.log('report_template_staffs table ensured');
+    } catch (e) {
+      this.logger.warn(
+        `report_template_staffs patch: ${(e as Error).message}`,
       );
     }
   }
