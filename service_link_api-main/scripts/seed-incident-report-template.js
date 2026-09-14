@@ -233,12 +233,19 @@ const items = [
 ];
 
 async function main() {
+  const ssl =
+    String(process.env.DATABASE_SSL || '').toLowerCase() === 'true' ||
+    String(process.env.DATABASE_HOST || '').includes('rds.amazonaws.com')
+      ? { rejectUnauthorized: false }
+      : undefined;
+
   const client = new Client({
     host: process.env.DATABASE_HOST || 'localhost',
     port: +(process.env.DATABASE_PORT || 5432),
     user: process.env.DATABASE_USERNAME || 'postgres',
     password: process.env.DATABASE_PASSWORD || '123456',
     database: process.env.DATABASE_DB_NAME || 'service360',
+    ssl,
   });
   await client.connect();
 
