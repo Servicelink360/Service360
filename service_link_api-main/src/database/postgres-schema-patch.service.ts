@@ -104,6 +104,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureAdminPersonnelAndStaffDelegation();
     await this.ensureInvoicesTable();
     await this.ensureAssetsTable();
+    await this.ensureTrainingTables();
     await this.applyRenameDepartmentsToServices();
 
     try {
@@ -2129,6 +2130,147 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('assets table ensured');
     } catch (e) {
       this.logger.warn(`assets table patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureTrainingTables(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_modules (
+          id SERIAL PRIMARY KEY,
+          code VARCHAR(40) NOT NULL UNIQUE,
+          title VARCHAR(255) NOT NULL,
+          description TEXT NULL,
+          duration_mins INTEGER NOT NULL DEFAULT 30,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          status SMALLINT NOT NULL DEFAULT 1,
+          source_file VARCHAR(255) NULL,
+          module_kind VARCHAR(20) NOT NULL DEFAULT 'TRAINING',
+          site_id INTEGER NULL,
+          site_name VARCHAR(255) NULL,
+          validity_days INTEGER NULL,
+          pass_percent INTEGER NOT NULL DEFAULT 80,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_modules
+          ADD COLUMN IF NOT EXISTS module_kind VARCHAR(20) NOT NULL DEFAULT 'TRAINING',
+          ADD COLUMN IF NOT EXISTS site_id INTEGER NULL,
+          ADD COLUMN IF NOT EXISTS site_name VARCHAR(255) NULL,
+          ADD COLUMN IF NOT EXISTS validity_days INTEGER NULL,
+          ADD COLUMN IF NOT EXISTS pass_percent INTEGER NOT NULL DEFAULT 80;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_topics (
+          id SERIAL PRIMARY KEY,
+          module_id INTEGER NOT NULL REFERENCES public.training_modules(id) ON DELETE CASCADE,
+          title VARCHAR(255) NOT NULL,
+          body TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_training_topics_module
+          ON public.training_topics(module_id, sort_order);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_questions (
+          id SERIAL PRIMARY KEY,
+          module_id INTEGER NOT NULL REFERENCES public.training_modules(id) ON DELETE CASCADE,
+          type VARCHAR(20) NOT NULL,
+          prompt TEXT NOT NULL,
+          options JSONB NOT NULL DEFAULT '[]'::jsonb,
+          correct_key VARCHAR(20) NULL,
+          answer_reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+          reviewed_at TIMESTAMPTZ NULL,
+          reviewed_by INTEGER NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_questions
+          ADD COLUMN IF NOT EXISTS answer_reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ NULL,
+          ADD COLUMN IF NOT EXISTS reviewed_by INTEGER NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_training_questions_module
+          ON public.training_questions(module_id, sort_order);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_progress (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          module_id INTEGER NOT NULL REFERENCES public.training_modules(id) ON DELETE CASCADE,
+          status VARCHAR(40) NOT NULL DEFAULT 'not_started',
+          completed_topic_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+          quiz_attempts INTEGER NOT NULL DEFAULT 0,
+          best_score INTEGER NULL,
+          best_total INTEGER NULL,
+          started_at TIMESTAMPTZ NULL,
+          topics_completed_at TIMESTAMPTZ NULL,
+          passed_at TIMESTAMPTZ NULL,
+          expires_at TIMESTAMPTZ NULL,
+          certificate_url VARCHAR(1000) NULL,
+          certificate_code VARCHAR(64) NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (user_id, module_id)
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_progress
+          ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL,
+          ADD COLUMN IF NOT EXISTS certificate_url VARCHAR(1000) NULL,
+          ADD COLUMN IF NOT EXISTS certificate_code VARCHAR(64) NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_training_progress_user
+          ON public.training_progress(user_id);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_quiz_attempts (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          module_id INTEGER NOT NULL REFERENCES public.training_modules(id) ON DELETE CASCADE,
+          score INTEGER NOT NULL,
+          total INTEGER NOT NULL,
+          passed BOOLEAN NOT NULL DEFAULT FALSE,
+          answers JSONB NOT NULL DEFAULT '[]'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_training_attempts_user_module
+          ON public.training_quiz_attempts(user_id, module_id, created_at DESC);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_assignments (
+          id SERIAL PRIMARY KEY,
+          module_id INTEGER NOT NULL REFERENCES public.training_modules(id) ON DELETE CASCADE,
+          staff_id INTEGER NULL,
+          site_id INTEGER NULL,
+          site_name VARCHAR(255) NULL,
+          due_at TIMESTAMPTZ NULL,
+          notes TEXT NULL,
+          assigned_by INTEGER NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_training_assignments_module
+          ON public.training_assignments(module_id);
+      `);
+      await this.dataSource.query(`
+        UPDATE public.training_modules
+        SET validity_days = 365
+        WHERE validity_days IS NULL AND UPPER(COALESCE(module_kind,'TRAINING')) = 'TRAINING';
+      `);
+      this.logger.log('training tables ensured');
+    } catch (e) {
+      this.logger.warn(`training tables patch: ${(e as Error).message}`);
     }
   }
 }

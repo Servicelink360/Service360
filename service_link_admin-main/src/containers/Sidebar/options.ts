@@ -83,12 +83,21 @@ export const optionsStaff: option[] = [
 				key: 'action-plans',
 				label: 'sidebar.actionPlans',
 			},
-
 			{
 				key: 'ppe-report',
 				label: 'sidebar.ppeReport',
 			},
 		]
+	},
+	{
+		key: 'training',
+		label: 'sidebar.training',
+		leftIcon: 'icon-staff',
+	},
+	{
+		key: 'induction',
+		label: 'sidebar.induction',
+		leftIcon: 'icon-staff',
 	},
 ]
 
@@ -291,6 +300,10 @@ const options: option[] = [
 			{
 				key: 'training',
 				label: 'sidebar.training',
+			},
+			{
+				key: 'training-admin',
+				label: 'sidebar.trainingAdmin',
 			},
 			{
 				key: 'induction',

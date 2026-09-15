@@ -38,6 +38,7 @@ import { CustomerPersonnelModule } from './customer-personnel/customer-personnel
 import { AdminPersonnelModule } from './admin-personnel/admin-personnel.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { AssetsModule } from './assets/assets.module';
+import { TrainingModule } from './training/training.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -107,6 +108,7 @@ import { AssetsModule } from './assets/assets.module';
     AdminPersonnelModule,
     InvoicesModule,
     AssetsModule,
+    TrainingModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

@@ -417,7 +417,20 @@ const imageFileFilter = (
     file: any,
     callback
 ) => {
-    if (!file.originalname.toLowerCase().match(/\.(webp|jpg|jpeg|png|gif|avif|txt|log|doc|docx|pdf|dmp|erl|dat|evtx|dll|ini|mp4|mov|m4v|webm|avi|3gp|mpeg|mpg|heic|heif)$/)) {
+    const name = String(file?.originalname || '').toLowerCase();
+    const mime = String(file?.mimetype || '').toLowerCase();
+    const extOk = !!name.match(
+        /\.(webp|jpg|jpeg|png|gif|avif|txt|log|doc|docx|pdf|dmp|erl|dat|evtx|dll|ini|mp4|mov|m4v|webm|avi|3gp|mpeg|mpg|heic|heif)$/,
+    );
+    // Some Android/iOS camera uploads omit an extension; allow by MIME type.
+    const mimeOk =
+        mime.startsWith('image/') ||
+        mime.startsWith('video/') ||
+        mime === 'application/pdf' ||
+        mime === 'application/msword' ||
+        mime ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (!extOk && !mimeOk) {
         return callback(new Error('Only image/video/document files are allowed!'), false);
     }
     callback(null, true);

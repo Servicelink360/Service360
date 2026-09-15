@@ -9,7 +9,7 @@ import serviceType from "@app/constants/serviceType";
 import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EnvironmentOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync } from "../../library/helpers/api";
-import { getStaffLocation } from "@app/library/helpers/geolocation";
+import { getStaffLocationDetailed } from "@app/library/helpers/geolocation";
 import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -2542,6 +2542,11 @@ const NewReports: React.FC<{
       if (!existing.length && !pending) {
         message.error(`Please add ${getTemplateLabel(it) || it.name || "required media"}.`);
         return;
+      }
+      // Pending camera/gallery files are not written into Form until upload.
+      // Seed a placeholder so Ant Design `required` does not fail before upload runs.
+      if (!existing.length && pending) {
+        form.setFieldsValue({ [fieldKey]: JSON.stringify(["__pending_upload__"]) });
       }
     }
 
@@ -5116,11 +5121,13 @@ const NewReports: React.FC<{
                                   key: `gps-${fieldKey}`,
                                   duration: 0,
                                 });
-                                const loc = await getStaffLocation();
+                                const { location: loc, error: gpsError } =
+                                  await getStaffLocationDetailed();
                                 message.destroy(`gps-${fieldKey}`);
                                 if (!loc) {
                                   message.error(
-                                    "Could not get GPS. On your phone, allow Location for this site (Safari/Chrome), then try again.",
+                                    gpsError ||
+                                      "Could not get GPS. On your phone, allow Location for this site (Safari/Chrome), then try again.",
                                   );
                                   return;
                                 }
@@ -5152,7 +5159,26 @@ const NewReports: React.FC<{
                   if (fieldType === "IMAGES" || fieldType === "PHOTOS") {
                     return (
                       <Col xs={24} sm={24} md={12} span={templateFieldColSpan} key={key}>
-                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                        <Form.Item
+                          name={fieldKey}
+                          label={label}
+                          rules={[
+                            {
+                              validator: async () => {
+                                if (!required) return;
+                                const existing = parseMediaListValue(
+                                  form.getFieldValue(fieldKey),
+                                );
+                                const pending =
+                                  mediaUploadRefs.current[fieldKey]?.hasPending();
+                                if (existing.length || pending) return;
+                                throw new Error(
+                                  `Please add ${label || "required photos"}`,
+                                );
+                              },
+                            },
+                          ]}
+                        >
                           <TemplateImageUpload
                             multiple
                             ref={(instance) => {
@@ -5166,7 +5192,26 @@ const NewReports: React.FC<{
                   if (fieldType === "PHOTO" || fieldType === "IMAGE") {
                     return (
                       <Col xs={24} sm={24} md={12} span={templateFieldColSpan} key={key}>
-                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                        <Form.Item
+                          name={fieldKey}
+                          label={label}
+                          rules={[
+                            {
+                              validator: async () => {
+                                if (!required) return;
+                                const existing = parseMediaListValue(
+                                  form.getFieldValue(fieldKey),
+                                );
+                                const pending =
+                                  mediaUploadRefs.current[fieldKey]?.hasPending();
+                                if (existing.length || pending) return;
+                                throw new Error(
+                                  `Please add ${label || "required photo"}`,
+                                );
+                              },
+                            },
+                          ]}
+                        >
                           <TemplateImageUpload
                             multiple={false}
                             ref={(instance) => {
@@ -5180,7 +5225,26 @@ const NewReports: React.FC<{
                   if (fieldType === "VIDEOS" || fieldType === "VIDEO") {
                     return (
                       <Col xs={24} sm={24} md={12} span={templateFieldColSpan} key={key}>
-                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
+                        <Form.Item
+                          name={fieldKey}
+                          label={label}
+                          rules={[
+                            {
+                              validator: async () => {
+                                if (!required) return;
+                                const existing = parseMediaListValue(
+                                  form.getFieldValue(fieldKey),
+                                );
+                                const pending =
+                                  mediaUploadRefs.current[fieldKey]?.hasPending();
+                                if (existing.length || pending) return;
+                                throw new Error(
+                                  `Please add ${label || "required video"}`,
+                                );
+                              },
+                            },
+                          ]}
+                        >
                           <TemplateVideoUpload
                             ref={(instance) => {
                               mediaUploadRefs.current[fieldKey] = instance;

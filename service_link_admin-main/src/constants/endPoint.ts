@@ -39,6 +39,7 @@ const crmEndPoint = {
     PERSONNEL_FAULT_ACCESS: 'v1/personnel-fault-access',
     INVOICES: 'v1/invoices',
     ASSETS: 'v1/assets',
+    TRAINING: 'v1/training',
     MESSAGES: 'v1/messages',
     /** Multipart upload (must match API UploadController version prefix). */
     UPLOAD_FILE: 'v1/uploadFile',
