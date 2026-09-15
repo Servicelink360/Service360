@@ -331,25 +331,48 @@
         }
 
         .images {
-            display: block;
-            padding: 8px 12px 10px;
-            background: #fafbfc;
-            border-bottom: 1px solid #eef2f7;
-            break-inside: avoid;
-            page-break-inside: avoid;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 8px 10px;
+            padding: 8px 0 10px;
+            /* Cover .tcontent left/right border so photo rows have no side lines */
+            margin-left: -1px;
+            margin-right: -1px;
+            width: calc(100% + 2px);
+            box-sizing: border-box;
+            background: #fff;
+            border: none;
+            border-bottom: none;
+            outline: none;
+            box-shadow: none;
+            /* Photo grids may span pages. */
+            break-inside: auto;
+            page-break-inside: auto;
         }
 
         .images-item {
-            display: inline-block;
-            margin: 0 8px 8px 0;
+            /* Image 2 layout: 4 columns of larger portrait photos */
+            flex: 0 0 calc(25% - 7.5px);
+            margin: 0;
+            min-width: 0;
             vertical-align: top;
+            background: transparent;
+            border: none;
+            outline: none;
+            box-shadow: none;
         }
 
         .images-item img {
-            max-height: 160px;
-            max-width: 200px;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
+            width: 100%;
+            height: auto;
+            max-height: 235px;
+            object-fit: contain;
+            object-position: top center;
+            border-radius: 0;
+            border: none;
+            outline: none;
+            box-shadow: none;
             display: block;
         }
 

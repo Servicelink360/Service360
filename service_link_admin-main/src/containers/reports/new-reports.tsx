@@ -1634,18 +1634,30 @@ const NewReports: React.FC<{
     const isCustomer = +profileType === userType.CUSTOMER;
     const isStaff = +profileType === userType.STAFF;
     if (!isAdmin && !isCustomer && !isStaff) return;
+    // Admin hard-delete only from Deleted; active list is always soft-delete.
+    const adminHardDelete = isAdmin && isDeletedReportTab;
     Modal.confirm({
-      title: isAdmin ? "Delete this report?" : "Remove this report from your list?",
-      content: isAdmin
-        ? "This permanently removes the report and its submitted data."
-        : "The report moves to Deleted. You can restore it from the Deleted tab.",
-      okText: isAdmin ? "Delete" : "Remove",
+      title: adminHardDelete
+        ? "Permanently delete this report?"
+        : isAdmin
+          ? "Move this report to Deleted?"
+          : "Remove this report from your list?",
+      content: adminHardDelete
+        ? "This permanently removes the report and its submitted data. This cannot be undone."
+        : isAdmin
+          ? "You can permanently delete it later from the Deleted tab (admin only)."
+          : "The report moves to Deleted. You can restore it from the Deleted tab.",
+      okText: adminHardDelete ? "Delete permanently" : isAdmin ? "Move to Deleted" : "Remove",
       okType: "danger",
       onOk: async () => {
         const res = await deleteCustomReport(+viewRow.id);
         if (res?.code === 1) {
           message.success(
-            isAdmin ? "Report deleted" : "Report moved to Deleted",
+            adminHardDelete
+              ? "Report permanently deleted"
+              : isAdmin
+                ? "Report moved to Deleted"
+                : "Report moved to Deleted",
           );
           setViewOpen(false);
           setViewRow(null);
@@ -4208,7 +4220,9 @@ const NewReports: React.FC<{
                     ? "Permanently delete all reports on this page?"
                     : "Clear all deleted reports?"}
                   <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
-                    This hides them from your Deleted tab (soft clear). You can't restore after clearing.
+                    {isAdminUser
+                      ? "This permanently removes the reports and cannot be undone. Only admins can hard-delete."
+                      : "This hides them from your Deleted tab (soft clear). The data stays until an admin permanently deletes it."}
                   </div>
                 </span>
               }
@@ -4325,7 +4339,7 @@ const NewReports: React.FC<{
           >
             {+profileType === userType.ADMIN ? (
               <Button icon={<DeleteOutlined />} style={submittedDeleteFooterBtn} onClick={confirmDeleteViewReport}>
-                Delete
+                {isDeletedReportTab ? "Delete permanently" : "Move to Deleted"}
               </Button>
             ) : null}
             {isDeletedReportTab &&

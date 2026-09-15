@@ -1414,7 +1414,7 @@ export class UserTasksService {
 
   /**
    * Clear exactly the visible deleted rows (by id list).
-   * This is the only way to guarantee the toast matches what the user sees.
+   * Admin: hard-delete rows. Staff/customer: soft-clear from Deleted tab only (no hard delete).
    */
   async clearDeletedReportsByIds(userInfo: IUserInfo, body: ClearDeletedReportsDto) {
     try {
@@ -1489,6 +1489,7 @@ export class UserTasksService {
       }
 
       if (type === userType.STAFF) {
+        // Soft-clear only — never hard-delete. Data remains until an admin permanently deletes it.
         const rows = await this.userTasksRepository
           .createQueryBuilder('usertasks')
           .select(['usertasks.id', 'usertasks.staffId', 'usertasks.createdBy', 'usertasks.type', 'usertasks.status'])
@@ -1532,6 +1533,7 @@ export class UserTasksService {
       const userId = +userInfo.userId;
       const type = +userInfo.type;
 
+      // Submitted custom reports: admin soft→hard; staff/customer soft only (never hard-delete).
       if (type === userType.ADMIN) {
         if (+data.status === dJobStatus.DELETED) {
           await this.hardDeleteUserTask(taskId);
@@ -1559,7 +1561,11 @@ export class UserTasksService {
       }
 
       if (+data.status === dJobStatus.DELETED) {
-        return errorCode.NOT_FOUND;
+        // Staff cannot hard-delete; only admins purge from Deleted.
+        return {
+          ...errorCode.CAN_NOT_DELETE,
+          message: 'Only an admin can permanently delete reports',
+        };
       }
 
       if (type === userType.STAFF) {

@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync } from '../../library/helpers/api';
+import { formatTrainingBody } from './formatTrainingBody';
 import './training.css';
 
 type ModuleListItem = {
@@ -451,7 +452,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                 </div>
                 <h1>{currentTopic.title}</h1>
                 <p className="lead">{moduleDesc}</p>
-                <div className="training-body">{currentTopic.body}</div>
+                <div className="training-body">{formatTrainingBody(currentTopic.body)}</div>
                 <div className="training-actions">
                   <Button
                     disabled={topicIndex <= 0}

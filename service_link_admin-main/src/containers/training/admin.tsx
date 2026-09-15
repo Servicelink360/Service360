@@ -190,7 +190,7 @@ const TrainingAdminPage: React.FC = () => {
       title: 'Site',
       dataIndex: 'siteName',
       width: 160,
-      render: (v) => v || '�',
+      render: (v) => v || '—',
     },
     {
       title: 'Validity',
@@ -317,19 +317,19 @@ const TrainingAdminPage: React.FC = () => {
       title: 'Score',
       width: 90,
       render: (_, r) =>
-        r.bestScore != null ? `${r.bestScore}/${r.bestTotal}` : '�',
+        r.bestScore != null ? `${r.bestScore}/${r.bestTotal}` : '—',
     },
     {
       title: 'Due',
       dataIndex: 'dueAt',
       width: 110,
-      render: (v) => (v ? moment(v).format('YYYY-MM-DD') : '�'),
+      render: (v) => (v ? moment(v).format('YYYY-MM-DD') : '—'),
     },
     {
       title: 'Expires',
       dataIndex: 'expiresAt',
       width: 110,
-      render: (v) => (v ? moment(v).format('YYYY-MM-DD') : '�'),
+      render: (v) => (v ? moment(v).format('YYYY-MM-DD') : '—'),
     },
     {
       title: 'Certificate',
@@ -340,7 +340,7 @@ const TrainingAdminPage: React.FC = () => {
             PDF
           </a>
         ) : (
-          '�'
+          '—'
         ),
     },
   ];
@@ -351,8 +351,14 @@ const TrainingAdminPage: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <strong>Training management</strong>
-            <div style={{ color: '#666', fontSize: 13 }}>
-              Answer keys � progress � assignments � expiry � site inductions
+            <div style={{ marginTop: 6 }}>
+              <Space size={[6, 6]} wrap>
+                <Tag>Answer keys</Tag>
+                <Tag>Progress</Tag>
+                <Tag>Assignments</Tag>
+                <Tag>Expiry</Tag>
+                <Tag color="blue">Site inductions</Tag>
+              </Space>
             </div>
           </div>
           <Space>
@@ -395,7 +401,7 @@ const TrainingAdminPage: React.FC = () => {
                       onChange={(v) => openQuestions(v)}
                       options={modules.map((m) => ({
                         value: m.id,
-                        label: `${m.code} � ${m.title}`,
+                        label: `${m.code} · ${m.title}`,
                       }))}
                     />
                     <Button disabled={!qModuleId} onClick={markAllReviewed}>
@@ -403,7 +409,7 @@ const TrainingAdminPage: React.FC = () => {
                     </Button>
                     {qSummary?.total != null ? (
                       <Tag>
-                        {qSummary.reviewed}/{qSummary.withAnswer} reviewed �{' '}
+                        {qSummary.reviewed}/{qSummary.withAnswer} reviewed ·{' '}
                         {qSummary.needsReview} need review
                       </Tag>
                     ) : null}
@@ -455,7 +461,7 @@ const TrainingAdminPage: React.FC = () => {
                       title: 'Site filter',
                       dataIndex: 'siteName',
                       width: 160,
-                      render: (v) => v || '�',
+                      render: (v) => v || '—',
                     },
                     {
                       title: 'Due',
@@ -467,7 +473,7 @@ const TrainingAdminPage: React.FC = () => {
                             {moment(v).format('YYYY-MM-DD')}
                           </span>
                         ) : (
-                          '�'
+                          '—'
                         ),
                     },
                     { title: 'Notes', dataIndex: 'notes', ellipsis: true },
@@ -537,7 +543,7 @@ const TrainingAdminPage: React.FC = () => {
               <Select
                 options={modules.map((m) => ({
                   value: m.id,
-                  label: `${m.code} � ${m.title}`,
+                  label: `${m.code} · ${m.title}`,
                 }))}
                 showSearch
                 optionFilterProp="label"
@@ -602,7 +608,7 @@ const TrainingAdminPage: React.FC = () => {
               <Select options={siteOptions} showSearch optionFilterProp="label" />
             </Form.Item>
             <Form.Item name="title" label="Title (optional)">
-              <Input placeholder="e.g. Ador Avenue Reserve � Site Induction" />
+              <Input placeholder="e.g. Ador Avenue Reserve · Site Induction" />
             </Form.Item>
             <Form.Item
               name="sourceModuleId"
@@ -614,7 +620,7 @@ const TrainingAdminPage: React.FC = () => {
                   .filter((m) => String(m.moduleKind).toUpperCase() !== 'INDUCTION')
                   .map((m) => ({
                     value: m.id,
-                    label: `${m.code} � ${m.title}`,
+                    label: `${m.code} · ${m.title}`,
                   }))}
                 showSearch
                 optionFilterProp="label"

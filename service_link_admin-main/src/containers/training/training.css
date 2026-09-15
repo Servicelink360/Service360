@@ -261,13 +261,36 @@
   color: var(--tr-muted);
   margin: 0 0 18px;
   line-height: 1.5;
+  font-size: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--tr-line);
 }
 
 .training-body {
   font-size: 15px;
   line-height: 1.65;
-  white-space: pre-wrap;
   color: #1f332b;
+}
+
+.training-body p {
+  margin: 0 0 14px;
+}
+
+.training-body p:last-child {
+  margin-bottom: 0;
+}
+
+.training-body ul {
+  margin: 0 0 14px;
+  padding-left: 1.25em;
+}
+
+.training-body li {
+  margin: 0 0 8px;
+}
+
+.training-body li:last-child {
+  margin-bottom: 0;
 }
 
 .training-actions {
