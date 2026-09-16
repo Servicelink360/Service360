@@ -41,7 +41,7 @@ export function formatTrainingBody(raw: string): React.ReactNode {
 }
 
 const SECTION_START =
-  /^(?:Employers?|Workers?|Customers?|Visitors?|Managers?|Supervisors?|Contractors?|Moreover|Additionally|Furthermore|However|Importantly|Remember|Note|Warning|PPE|Ladders?|It is a legal|The following|The type of|As a (?:ù|')?worker|Personal protective)\b/i;
+  /^(?:Employers?|Workers?|Customers?|Visitors?|Managers?|Supervisors?|Contractors?|Moreover|Additionally|Furthermore|However|Importantly|Remember|Note|Warning|PPE|Ladders?|It is a legal|The following|The type of|As a '?worker|Personal protective)\b/i;
 
 function splitDenseParagraph(text: string): string[] {
   // Extracted Word copy often drops periods between sentences.
@@ -58,9 +58,9 @@ function splitDenseParagraph(text: string): string[] {
     if (!sentence) continue;
 
     const forceBreak = buf.length > 0 && SECTION_START.test(sentence);
-    const longEnough = bufLen >= 220 || buf.length >= 2;
+    const longEnough = bufLen >= 140 || buf.length >= 2;
 
-    if (forceBreak || (longEnough && bufLen + sentence.length > 160)) {
+    if (forceBreak || (longEnough && bufLen + sentence.length > 100)) {
       paras.push(buf.join(' '));
       buf = [sentence];
       bufLen = sentence.length;
@@ -75,7 +75,7 @@ function splitDenseParagraph(text: string): string[] {
 }
 
 function extractListItems(block: string): { lead: string; items: string[] } | null {
-  // "ù hierarchy: A. B. C." or "ù following: 1. 2. 3."
+  // " hierarchy: A. B. C." or " following: 1. 2. 3."
   const numbered = block.match(
     /^([\s\S]+?[:.])\s*((?:\d+[.)]\s+[\s\S]+)+)$/,
   );
@@ -109,7 +109,7 @@ function extractListItems(block: string): { lead: string; items: string[] } | nu
     } else if (!inList) {
       leadParts.push(t);
     } else {
-      // Trailing sentence after the list ù append to last item or keep as lead-less note
+      // Trailing sentence after the list  append to last item or keep as lead-less note
       if (items.length) items[items.length - 1] += ` ${t}`;
       else leadParts.push(t);
     }

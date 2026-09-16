@@ -1,4 +1,4 @@
-/* Staff training LMS � Service360 green */
+/* Staff training LMS  Service360 green */
 .training-page {
   --tr-ink: #0f241c;
   --tr-muted: #4d6359;
@@ -189,9 +189,17 @@
 }
 
 .training-side .sub {
+  margin: 0 0 6px;
+  color: var(--tr-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.training-side .sub-hint {
   margin: 0 0 12px;
   color: var(--tr-muted);
   font-size: 12px;
+  line-height: 1.35;
 }
 
 .training-topic-list {
@@ -314,6 +322,36 @@
   margin: 0 0 10px;
   font-size: 14px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.training-quiz-option {
+  align-items: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.training-quiz-option span.ant-radio + * {
+  white-space: normal;
+  padding-top: 1px;
+}
+
+.training-more {
+  border: 0;
+  background: transparent;
+  color: var(--tr-accent);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  margin-left: 2px;
+}
+
+.training-topic-list button span:last-child {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .training-result-ok { color: var(--tr-accent); font-weight: 600; }

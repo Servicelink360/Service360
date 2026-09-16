@@ -64,6 +64,45 @@ const statusLabel: Record<string, string> = {
   expired: 'Expired - refresh',
 };
 
+/** Keep long extracted Word titles/prompts readable in the learner UI. */
+function clipText(raw: string, max: number): string {
+  const t = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}...`;
+}
+
+function ExpandableText({
+  text,
+  max = 140,
+  className,
+}: {
+  text: string;
+  max?: number;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const full = String(text || '').trim();
+  if (full.length <= max) {
+    return <span className={className}>{full}</span>;
+  }
+  return (
+    <span className={className}>
+      {open ? full : clipText(full, max)}{' '}
+      <button
+        type="button"
+        className="training-more"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        {open ? 'Show less' : 'Show more'}
+      </button>
+    </span>
+  );
+}
+
 type TrainingPageProps = {
   kind?: 'TRAINING' | 'INDUCTION';
 };
@@ -207,7 +246,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
       setTopicIndex(topicIndex + 1);
       message.success('Topic completed');
     } else if (unlocked) {
-      message.success('All topics done ù you can take the test');
+      message.success('All topics done - you can take the test');
       setMode('quiz');
       // refresh questions
       const detail = await callAPIAsync(
@@ -327,20 +366,20 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                   </div>
                   <h3>{m.title}</h3>
                   <p className="desc">
-                    {m.siteName ? `${m.siteName} ù ` : ''}
-                    {m.description || 'Safety and workplace training module.'}
+                    {m.siteName ? `${m.siteName} - ` : ''}
+                    {clipText(m.description || 'Safety and workplace training module.', 120)}
                   </p>
                   <div className="training-card-meta">
                     <span>
-                      {m.durationMins} min ù {m.topicCount} topics
+                      {m.durationMins} min - {m.topicCount} topics
                       {m.assignment?.dueAt
-                        ? ` ù due ${String(m.assignment.dueAt).slice(0, 10)}`
+                        ? ` - due ${String(m.assignment.dueAt).slice(0, 10)}`
                         : ''}
                       {m.progress?.expiresAt && m.progress.status === 'passed'
-                        ? ` ù expires ${String(m.progress.expiresAt).slice(0, 10)}`
+                        ? ` - expires ${String(m.progress.expiresAt).slice(0, 10)}`
                         : ''}
                       {m.progress?.bestScore != null
-                        ? ` ù best ${m.progress.bestScore}/${m.progress.bestTotal}`
+                        ? ` - best ${m.progress.bestScore}/${m.progress.bestTotal}`
                         : ''}
                     </span>
                     <div className="training-progress-bar" style={{ maxWidth: 90 }}>
@@ -368,6 +407,8 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
     [loading, modules, summary, loadModule, isInduction],
   );
 
+  const topicsDone = topics.filter((t) => t.completed).length;
+
   const playerView = (
     <>
       <button
@@ -388,12 +429,17 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
       ) : (
         <div className="training-player">
           <aside className="training-side">
-            <h2>{moduleTitle}</h2>
+            <h2 title={moduleTitle}>{clipText(moduleTitle, 80)}</h2>
             <p className="sub">
               {statusLabel[progressStatus] || progressStatus}
-              {quizUnlocked ? ' ù Test unlocked' : ' ù Finish topics to unlock test'}
-              {expiresAt ? ` ù Expires ${String(expiresAt).slice(0, 10)}` : ''}
+              {topics.length ? ` - Topics ${topicsDone}/${topics.length}` : ''}
+              {expiresAt ? ` - Expires ${String(expiresAt).slice(0, 10)}` : ''}
             </p>
+            {!quizUnlocked && progressStatus !== 'passed' ? (
+              <p className="sub-hint">Finish all topics to unlock the test.</p>
+            ) : quizUnlocked && progressStatus !== 'passed' ? (
+              <p className="sub-hint">Test unlocked - take the assessment when ready.</p>
+            ) : null}
             {certificateUrl ? (
               <a
                 href={certificateUrl}
@@ -410,13 +456,14 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                   <button
                     type="button"
                     className={mode === 'learn' && i === topicIndex ? 'active' : ''}
+                    title={t.title}
                     onClick={() => {
                       setMode('learn');
                       setTopicIndex(i);
                     }}
                   >
                     <span className={`dot ${t.completed ? 'done' : ''}`} />
-                    <span>{t.title}</span>
+                    <span>{clipText(t.title, 64)}</span>
                   </button>
                 </li>
               ))}
@@ -450,8 +497,10 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                     </Tag>
                   ) : null}
                 </div>
-                <h1>{currentTopic.title}</h1>
-                <p className="lead">{moduleDesc}</p>
+                <h1 title={currentTopic.title}>{clipText(currentTopic.title, 100)}</h1>
+                {moduleDesc ? (
+                  <p className="lead">{clipText(moduleDesc, 160)}</p>
+                ) : null}
                 <div className="training-body">{formatTrainingBody(currentTopic.body)}</div>
                 <div className="training-actions">
                   <Button
@@ -499,7 +548,8 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                     {quizQuestions.map((q, idx) => (
                       <div className="training-quiz-q" key={q.id}>
                         <h4>
-                          {idx + 1}. {q.prompt}
+                          {idx + 1}.{' '}
+                          <ExpandableText text={q.prompt} max={160} />
                         </h4>
                         <Radio.Group
                           value={answers[q.id]}
@@ -507,10 +557,16 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                             setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
                           }
                         >
-                          <Space direction="vertical">
+                          <Space direction="vertical" style={{ width: '100%' }}>
                             {(q.options || []).map((o) => (
-                              <Radio key={o.key} value={o.key}>
-                                {q.type === 'TRUE_FALSE' ? o.text : `(${o.key}) ${o.text}`}
+                              <Radio key={o.key} value={o.key} className="training-quiz-option">
+                                {q.type === 'TRUE_FALSE' ? (
+                                  <ExpandableText text={o.text} max={120} />
+                                ) : (
+                                  <>
+                                    ({o.key}) <ExpandableText text={o.text} max={120} />
+                                  </>
+                                )}
                               </Radio>
                             ))}
                           </Space>
@@ -550,17 +606,17 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                       Download your certificate PDF
                     </a>
                     {result.certificateCode || result.progress?.certificateCode
-                      ? ` ù ID ${result.certificateCode || result.progress?.certificateCode}`
+                      ? ` - ID ${result.certificateCode || result.progress?.certificateCode}`
                       : ''}
                   </p>
                 ) : null}
                 {(result.results || []).map((r: any, idx: number) => (
                   <div className="training-quiz-q" key={r.questionId}>
                     <h4>
-                      {idx + 1}. {r.prompt}
+                      {idx + 1}. <ExpandableText text={r.prompt} max={160} />
                     </h4>
                     <div className={r.correct ? 'training-result-ok' : 'training-result-bad'}>
-                      Your answer: {String(r.answerKey || 'ù').toUpperCase()}
+                      Your answer: {String(r.answerKey || '-').toUpperCase()}
                       {r.correct
                         ? ' (correct)'
                         : ` (correct was ${String(r.correctKey || '').toUpperCase()})`}
