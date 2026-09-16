@@ -196,6 +196,17 @@ export class TicketsService {
       }
       if (userInfo.type === userType.CUSTOMER) {
         applyCustomerScopeToQuery(query, userInfo, 'tickets.customerId');
+        if (listDeleted) {
+          query.andWhere(
+            `NOT EXISTS (
+              SELECT 1 FROM public.ticket_customer_visibility v
+              WHERE v.ticket_id = tickets.id
+                AND v.user_id = :ticketClearedViewerId
+                AND v.cleared_at IS NOT NULL
+            )`,
+            { ticketClearedViewerId: +userInfo.userId },
+          );
+        }
       }
       if (+body.limit) {
         query.take(body.limit).skip((body.page - 1) * body.limit)
@@ -309,6 +320,14 @@ export class TicketsService {
         data.updatedBy = userId;
         data.updatedAt = new Date();
         await this.ticketsRepository.save(data);
+        await this.ticketsRepository.query(
+          `
+          UPDATE public.ticket_customer_visibility
+          SET cleared_at = NULL
+          WHERE ticket_id = $1
+          `,
+          [ticketId],
+        );
         return errorCode.SUCCESS;
       }
 
@@ -327,6 +346,15 @@ export class TicketsService {
         data.updatedBy = userId;
         data.updatedAt = new Date();
         await this.ticketsRepository.save(data);
+        await this.ticketsRepository.query(
+          `
+          INSERT INTO public.ticket_customer_visibility (ticket_id, user_id, cleared_at)
+          VALUES ($1, $2, NULL)
+          ON CONFLICT (ticket_id, user_id) DO UPDATE
+          SET cleared_at = NULL
+          `,
+          [ticketId, userId],
+        );
         return errorCode.SUCCESS;
       }
 
@@ -367,6 +395,16 @@ export class TicketsService {
       data.updatedBy = userId;
       data.updatedAt = new Date();
       await this.ticketsRepository.save(data);
+      if (type === userType.CUSTOMER) {
+        await this.ticketsRepository.query(
+          `
+          UPDATE public.ticket_customer_visibility
+          SET cleared_at = NULL
+          WHERE ticket_id = $1 AND user_id = $2
+          `,
+          [ticketId, userId],
+        );
+      }
       return errorCode.SUCCESS;
     } catch (error) {
       this.logger.error(error);
@@ -376,27 +414,68 @@ export class TicketsService {
 
   async purgeDeletedTicketsByIds(userInfo: IUserInfo, body: ClearDeletedTicketsDto) {
     try {
-      if (+userInfo.type !== userType.ADMIN) {
-        return errorCode.CAN_NOT_DELETE;
-      }
       const ids = Array.from(
         new Set((body?.ids || []).map((n) => +n).filter((n) => Number.isFinite(n) && n > 0)),
       );
       if (!ids.length) {
         return { ...errorCode.SUCCESS, data: { clearedCount: 0 } };
       }
-      const tickets = await this.ticketsRepository
-        .createQueryBuilder('t')
-        .where('t.id IN (:...ids)', { ids })
-        .andWhere('t.status = :deletedStatus', { deletedStatus: ticketStatus.DELETED })
-        .getMany();
-      let clearedCount = 0;
-      for (const ticket of tickets) {
-        await this.ticketAnswersRepository.delete({ ticketId: ticket.id });
-        await this.ticketsRepository.delete(ticket.id);
-        clearedCount += 1;
+
+      if (+userInfo.type === userType.ADMIN) {
+        const tickets = await this.ticketsRepository
+          .createQueryBuilder('t')
+          .where('t.id IN (:...ids)', { ids })
+          .andWhere('t.status = :deletedStatus', { deletedStatus: ticketStatus.DELETED })
+          .getMany();
+        let clearedCount = 0;
+        for (const ticket of tickets) {
+          await this.ticketAnswersRepository.delete({ ticketId: ticket.id });
+          await this.ticketsRepository.delete(ticket.id);
+          clearedCount += 1;
+        }
+        return { ...errorCode.SUCCESS, data: { clearedCount } };
       }
-      return { ...errorCode.SUCCESS, data: { clearedCount } };
+
+      if (+userInfo.type === userType.CUSTOMER) {
+        const viewerId = +userInfo.userId;
+        const query = this.ticketsRepository
+          .createQueryBuilder('t')
+          .select(['t.id'])
+          .where('t.id IN (:...ids)', { ids })
+          .andWhere('t.status = :deletedStatus', { deletedStatus: ticketStatus.DELETED })
+          .andWhere(
+            `NOT EXISTS (
+              SELECT 1 FROM public.ticket_customer_visibility v
+              WHERE v.ticket_id = t.id
+                AND v.user_id = :viewerId
+                AND v.cleared_at IS NOT NULL
+            )`,
+            { viewerId },
+          );
+        applyCustomerScopeToQuery(query, userInfo, 't.customerId');
+        const tickets = await query.getMany();
+        const clearIds = tickets.map((t) => +t.id).filter((n) => Number.isFinite(n) && n > 0);
+        if (!clearIds.length) {
+          return { ...errorCode.SUCCESS, data: { clearedCount: 0 } };
+        }
+        const params: unknown[] = [viewerId, ...clearIds];
+        const placeholders = clearIds.map((_, idx) => `$${idx + 2}`).join(', ');
+        await this.ticketsRepository.query(
+          `
+          INSERT INTO public.ticket_customer_visibility (ticket_id, user_id, cleared_at)
+          SELECT t.id, $1, NOW()
+          FROM public.tickets t
+          WHERE t.id IN (${placeholders})
+          ON CONFLICT (ticket_id, user_id) DO UPDATE
+          SET cleared_at = NOW()
+          WHERE public.ticket_customer_visibility.cleared_at IS NULL
+          `,
+          params,
+        );
+        return { ...errorCode.SUCCESS, data: { clearedCount: clearIds.length } };
+      }
+
+      return errorCode.CAN_NOT_DELETE;
     } catch (error) {
       this.logger.error((error as Error).message);
       return {

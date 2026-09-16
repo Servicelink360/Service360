@@ -3,6 +3,7 @@ import { dateFormat, dateTimeFormat } from '@app/config/data.config';
 import {
   DeleteOutlined,
   EditOutlined,
+  EnvironmentOutlined,
   EyeOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -36,6 +37,7 @@ import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { userType } from '../../constants/statusUser';
 import { callAPIAsync } from '../../library/helpers/api';
+import { getStaffLocationDetailed } from '../../library/helpers/geolocation';
 
 type AssetListTab = 'active' | 'deleted';
 
@@ -61,6 +63,7 @@ type AssetRow = {
   siteId?: number | null;
   siteName?: string | null;
   locationDetail?: string | null;
+  gpsLocation?: string | null;
   manufacturer?: string | null;
   model?: string | null;
   serialNumber?: string | null;
@@ -342,6 +345,7 @@ const AssetsPage: React.FC = () => {
       siteId: row.siteId || undefined,
       siteName: row.siteName || '',
       locationDetail: row.locationDetail || '',
+      gpsLocation: row.gpsLocation || '',
       manufacturer: row.manufacturer || '',
       model: row.model || '',
       serialNumber: row.serialNumber || '',
@@ -374,6 +378,7 @@ const AssetsPage: React.FC = () => {
       siteId: site.siteId,
       siteName: site.siteName,
       locationDetail: String(values.locationDetail || '').trim() || null,
+      gpsLocation: String(values.gpsLocation || '').trim() || null,
       manufacturer: String(values.manufacturer || '').trim() || null,
       model: String(values.model || '').trim() || null,
       serialNumber: String(values.serialNumber || '').trim() || null,
@@ -721,6 +726,9 @@ const AssetsPage: React.FC = () => {
             <Descriptions.Item label="Company">{viewRow.companyName || '—'}</Descriptions.Item>
             <Descriptions.Item label="Site">{viewRow.siteName || '—'}</Descriptions.Item>
             <Descriptions.Item label="Location">{viewRow.locationDetail || '—'}</Descriptions.Item>
+            <Descriptions.Item label="GPS location">
+              {viewRow.gpsLocation || '—'}
+            </Descriptions.Item>
             <Descriptions.Item label="Status">
               <Tag color={statusColor(viewRow.status)}>
                 {String(viewRow.status || 'active').toUpperCase()}
@@ -851,6 +859,42 @@ const AssetsPage: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item label="GPS location (if captured)" extra="Optional">
+            <Input.Group compact style={{ display: 'flex', width: '100%' }}>
+              <Form.Item name="gpsLocation" noStyle>
+                <Input
+                  style={{ flex: 1 }}
+                  maxLength={64}
+                  allowClear
+                  placeholder="lat,lng or tap Capture"
+                />
+              </Form.Item>
+              <Button
+                icon={<EnvironmentOutlined />}
+                onClick={async () => {
+                  message.loading({
+                    content: 'Getting GPS location…',
+                    key: 'asset-gps',
+                    duration: 0,
+                  });
+                  const { location: loc, error: gpsError } =
+                    await getStaffLocationDetailed();
+                  message.destroy('asset-gps');
+                  if (!loc) {
+                    message.error(
+                      gpsError ||
+                        'Could not get GPS. Allow Location for this site, then try again.',
+                    );
+                    return;
+                  }
+                  form.setFieldsValue({ gpsLocation: loc });
+                  message.success('GPS location captured');
+                }}
+              >
+                Capture
+              </Button>
+            </Input.Group>
+          </Form.Item>
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="manufacturer" label="Manufacturer">

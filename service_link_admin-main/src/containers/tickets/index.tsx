@@ -15,7 +15,7 @@ import {
 } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
 import { limitData, pageData, dateTimeFormat } from "@app/config/data.config";
-import { Col, Popconfirm, Row, Form, Input, Tag, Image, Tabs, message } from "antd";
+import { Col, Popconfirm, Row, Form, Input, Tag, Image, Tabs, message, Button } from "antd";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useIntl } from "react-intl";
 import { useDispatch, useSelector } from "react-redux";
@@ -99,6 +99,7 @@ const Index: React.FC = () => {
     const [sites, setSites] = useState([]);
     const [ticketListTab, setTicketListTab] = useState<TicketListTab>("active");
     const [deletedTicketCount, setDeletedTicketCount] = useState(0);
+    const [clearingDeleted, setClearingDeleted] = useState(false);
     const urlParams = new URLSearchParams(window.location.search);
     const status = urlParams.get('status') ? urlParams.get('status') : ''
     const profileRaw = localStorage.getItem('profile');
@@ -500,6 +501,52 @@ const Index: React.FC = () => {
         dispatch(dashboardActions.getData({ startDate: '', endDate: '' }));
     }, [dispatch]);
 
+    const clearDeletedTickets = useCallback(async () => {
+        setClearingDeleted(true);
+        try {
+            const visibleIds = (rows || [])
+                .map((r: any) => +r?.id)
+                .filter((n: number) => Number.isFinite(n) && n > 0);
+            if (!visibleIds.length) {
+                message.success("Deleted folder is already empty");
+                return;
+            }
+            const res = await callAPIAsync(
+                serviceType.COMMON,
+                `${endPoint.TICKETS}/clear-deleted`,
+                "PATCH",
+                { ids: visibleIds },
+            );
+            if (res?.code === 1) {
+                const clearedCount = +res?.data?.clearedCount || 0;
+                const shownCount = visibleIds.length;
+                const safeCount = Math.max(0, Math.min(clearedCount, shownCount));
+                message.success(
+                    safeCount
+                        ? isAdminUser
+                            ? `Permanently deleted ${safeCount} ticket${safeCount === 1 ? "" : "s"}`
+                            : `Cleared ${safeCount} deleted ticket${safeCount === 1 ? "" : "s"}`
+                        : "Deleted folder is already empty",
+                );
+                await refreshTicketList(page, limit);
+                void loadDeletedTicketCount();
+                refreshDashboard();
+            } else {
+                message.error(res?.message || "Could not clear deleted tickets");
+            }
+        } finally {
+            setClearingDeleted(false);
+        }
+    }, [
+        rows,
+        isAdminUser,
+        page,
+        limit,
+        refreshTicketList,
+        loadDeletedTicketCount,
+        refreshDashboard,
+    ]);
+
     useEffect(() => {
         window.scrollTo({
             top: 0,
@@ -623,6 +670,38 @@ const Index: React.FC = () => {
                             { key: "deleted", label: `Deleted (${deletedTicketCount})` },
                         ]}
                     />
+                ) : null}
+                {isDeletedTicketTab && (isAdminUser || isCustomerUser) ? (
+                    <div style={{ display: "flex", justifyContent: "flex-end", margin: "0 0 12px" }}>
+                        <Popconfirm
+                            title={
+                                <span>
+                                    {isAdminUser
+                                        ? "Permanently delete all tickets on this page?"
+                                        : "Clear all deleted tickets?"}
+                                    <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: "#595959" }}>
+                                        {isAdminUser
+                                            ? "This permanently removes the tickets and cannot be undone. Only admins can hard-delete."
+                                            : "This hides them from your Deleted tab (soft clear). The data stays until an admin permanently deletes it."}
+                                    </div>
+                                </span>
+                            }
+                            okText={isAdminUser ? "Delete permanently" : "Clear deleted"}
+                            okButtonProps={{ danger: true }}
+                            cancelText="Cancel"
+                            disabled={clearingDeleted || loading || deletedTicketCount === 0}
+                            onConfirm={() => void clearDeletedTickets()}
+                        >
+                            <Button
+                                danger
+                                icon={<DeleteOutlined />}
+                                loading={clearingDeleted}
+                                disabled={clearingDeleted || loading || deletedTicketCount === 0}
+                            >
+                                {isAdminUser ? "Delete all on page" : "Clear deleted"}
+                            </Button>
+                        </Popconfirm>
+                    </div>
                 ) : null}
                 <InformationDiv>
                     <TableComponent

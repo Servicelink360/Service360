@@ -37,6 +37,10 @@ export class Asset extends BaseEntity {
   @Column({ name: 'location_detail', type: 'varchar', length: 500, nullable: true })
   locationDetail?: string | null;
 
+  /** Optional "lat,lng" from browser geolocation capture. */
+  @Column({ name: 'gps_location', type: 'varchar', length: 64, nullable: true })
+  gpsLocation?: string | null;
+
   @Column({ type: 'varchar', length: 255, nullable: true })
   manufacturer?: string | null;
 

@@ -777,6 +777,10 @@ export class PostgresSchemaPatchService implements OnModuleInit {
         );
       `);
       await this.dataSource.query(`
+        ALTER TABLE public.ticket_customer_visibility
+        ADD COLUMN IF NOT EXISTS cleared_at TIMESTAMP NULL;
+      `);
+      await this.dataSource.query(`
         CREATE INDEX IF NOT EXISTS idx_tcv_user_id
           ON public.ticket_customer_visibility(user_id);
       `);
@@ -2103,6 +2107,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           site_id INTEGER NULL,
           site_name VARCHAR(255) NULL,
           location_detail VARCHAR(500) NULL,
+          gps_location VARCHAR(64) NULL,
           manufacturer VARCHAR(255) NULL,
           model VARCHAR(255) NULL,
           serial_number VARCHAR(255) NULL,
@@ -2117,6 +2122,10 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           created_by INTEGER NULL,
           updated_by INTEGER NULL
         );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.assets
+        ADD COLUMN IF NOT EXISTS gps_location VARCHAR(64) NULL;
       `);
       await this.dataSource.query(`
         CREATE INDEX IF NOT EXISTS idx_assets_company_id ON public.assets(company_id);

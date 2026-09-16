@@ -28,6 +28,9 @@ export class UpdateAssetDto {
   @ApiProperty({ required: false })
   locationDetail?: string | null;
 
+  @ApiProperty({ required: false, description: 'Optional lat,lng from GPS capture' })
+  gpsLocation?: string | null;
+
   @ApiProperty({ required: false })
   manufacturer?: string | null;
 

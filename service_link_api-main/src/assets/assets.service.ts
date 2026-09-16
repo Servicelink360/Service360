@@ -170,6 +170,7 @@ export class AssetsService {
         siteId: body.siteId ? +body.siteId : null,
         siteName: body.siteName?.trim() || null,
         locationDetail: body.locationDetail?.trim() || null,
+        gpsLocation: body.gpsLocation?.trim() || null,
         manufacturer: body.manufacturer?.trim() || null,
         model: body.model?.trim() || null,
         serialNumber: body.serialNumber?.trim() || null,
@@ -215,6 +216,9 @@ export class AssetsService {
       if (body.siteName !== undefined) asset.siteName = body.siteName?.trim() || null;
       if (body.locationDetail !== undefined) {
         asset.locationDetail = body.locationDetail?.trim() || null;
+      }
+      if (body.gpsLocation !== undefined) {
+        asset.gpsLocation = body.gpsLocation?.trim() || null;
       }
       if (body.manufacturer !== undefined) {
         asset.manufacturer = body.manufacturer?.trim() || null;
