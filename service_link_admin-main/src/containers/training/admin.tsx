@@ -41,6 +41,7 @@ const TrainingAdminPage: React.FC = () => {
   const [qModuleId, setQModuleId] = useState<number | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [qSummary, setQSummary] = useState<any>({});
+  const [activeTab, setActiveTab] = useState('modules');
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [inductionOpen, setInductionOpen] = useState(false);
@@ -125,6 +126,7 @@ const TrainingAdminPage: React.FC = () => {
 
   const openQuestions = async (moduleId: number) => {
     setQModuleId(moduleId);
+    setActiveTab('answers');
     const res = await callAPIAsync(
       serviceType.COMMON,
       `${endPoint.TRAINING}/admin/modules/${moduleId}/questions`,
@@ -373,6 +375,8 @@ const TrainingAdminPage: React.FC = () => {
         </div>
 
         <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: 'modules',
