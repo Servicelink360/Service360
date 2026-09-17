@@ -98,7 +98,8 @@ const DEFAULT_CATEGORY = 'GENERAL'
 const ItemsTable = styled.div`
     border: 1px solid #f0f0f0;
     border-radius: 8px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     background: #fff;
 `
 
@@ -110,9 +111,12 @@ const ItemsRow = styled.div<{
 }>
 `
     display: grid;
-    grid-template-columns: 48px 1.4fr 1.4fr 0.85fr 1.05fr 1fr 140px;
+    grid-template-columns: 48px minmax(0, 1.4fr) minmax(0, 1.4fr) 0.85fr 1.05fr minmax(0, 1fr) 140px;
     align-items: center;
     padding: 8px 12px;
+    min-width: 720px;
+    width: 100%;
+    box-sizing: border-box;
     background: ${({ $isHeader }) => ($isHeader ? '#fafafa' : '#fff')};
     font-weight: ${({ $isHeader }) => ($isHeader ? 600 : 400)};
     border-bottom: 1px solid #f0f0f0;
@@ -124,7 +128,8 @@ const ItemsRow = styled.div<{
         border-bottom: none;
     }
     @media (max-width: 768px) {
-        grid-template-columns: 40px 1fr 1fr 0.75fr 0.9fr 0.9fr 110px;
+        grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr) 0.75fr 0.9fr minmax(0, 0.9fr) 110px;
+        min-width: 640px;
     }
 `
 
@@ -132,6 +137,7 @@ const ItemsCell = styled.div`
     padding: 0 8px;
     display: flex;
     align-items: center;
+    min-width: 0;
     min-height: 32px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1048,10 +1054,18 @@ const Index = (props: IProps) => {
                                 <Text type="secondary">{index + 1}</Text>
                             </ItemsCell>
                             <ItemsCell>
-                                <Text strong>{item.name || 'Untitled item'}</Text>
+                                <Tooltip title={item.name || 'Untitled item'}>
+                                    <Text strong ellipsis style={{ maxWidth: '100%' }}>
+                                        {item.name || 'Untitled item'}
+                                    </Text>
+                                </Tooltip>
                             </ItemsCell>
                             <ItemsCell>
-                                <Text>{item.label || '—'}</Text>
+                                <Tooltip title={item.label || '—'}>
+                                    <Text ellipsis style={{ maxWidth: '100%' }}>
+                                        {item.label || '—'}
+                                    </Text>
+                                </Tooltip>
                             </ItemsCell>
                             <ItemsCell>
                                 {item.required ? (
@@ -1061,19 +1075,26 @@ const Index = (props: IProps) => {
                                 )}
                             </ItemsCell>
                             <ItemsCell>
-                                <Text>{typeLabel}</Text>
+                                <Tooltip title={typeLabel}>
+                                    <Text ellipsis style={{ maxWidth: '100%' }}>
+                                        {typeLabel}
+                                    </Text>
+                                </Tooltip>
                             </ItemsCell>
                             <ItemsCell style={{ overflow: 'visible', whiteSpace: 'normal' }}>
                                 {renderDefaultCell(item, index)}
                             </ItemsCell>
-                            <ItemsCell style={{ justifyContent: 'flex-end', gap: 8 }}>
+                            <ItemsCell style={{ justifyContent: 'flex-end', gap: 8, overflow: 'visible', flexShrink: 0 }}>
                                 {isReadOnly ? (
                                     <Text type="secondary">—</Text>
                                 ) : (
                                     <>
                                         <Tooltip title="Copy item">
                                             <ButtonMR
-                                                onClick={() => handleCopyItem(item, index)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleCopyItem(item, index)
+                                                }}
                                                 className="btnLink"
                                             >
                                                 <CopyOutlined />
@@ -1081,7 +1102,8 @@ const Index = (props: IProps) => {
                                         </Tooltip>
                                         <Tooltip title="Edit item">
                                             <ButtonMR
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
                                                     setInfoModal(item)
                                                     setShowModal(true)
                                                 }}
@@ -1098,7 +1120,13 @@ const Index = (props: IProps) => {
                                             onConfirm={() => handleDeleteItem(item)}
                                         >
                                             <Tooltip title="Delete item">
-                                                <button className="btnDelete"><DeleteOutlined /></button>
+                                                <button
+                                                    type="button"
+                                                    className="btnDelete"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <DeleteOutlined />
+                                                </button>
                                             </Tooltip>
                                         </Popconfirm>
                                     </>
