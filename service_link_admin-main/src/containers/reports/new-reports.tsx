@@ -35,6 +35,7 @@ import {
   isJunkTemplateField,
   isJsonMediaFieldType,
   isObsoleteCombinedDateTimeRow,
+  isObsoleteSeparateDateOrTimeRow,
   isTimeLikeLabel,
   isTimeLikeTemplateItem,
   isVideoMediaUrl,
@@ -2185,11 +2186,18 @@ const NewReports: React.FC<{
       const coveredKeys = new Set<string>();
       sortedTpl.forEach((it: TemplateItem, idx: number) => {
         const rep = matchReportItemForTemplate(mergedReports, it, idx);
-        if (rep) coveredKeys.add(reportFieldStorageKey(rep.name));
+        if (rep) {
+          coveredKeys.add(reportFieldStorageKey(rep.name));
+          const synthesized = (rep as any).__synthesizedFrom;
+          if (Array.isArray(synthesized)) {
+            synthesized.forEach((n: string) => coveredKeys.add(reportFieldStorageKey(n)));
+          }
+        }
       });
       mergedReports.forEach((r: any, idx: number) => {
         if (coveredKeys.has(reportFieldStorageKey(r.name))) return;
         if (isObsoleteCombinedDateTimeRow(r, sortedTpl)) return;
+        if (isObsoleteSeparateDateOrTimeRow(r, sortedTpl)) return;
         const parsed = parseReportItemValueForForm(r);
         if (parsed !== undefined) {
           reportValues[legacyFieldKey(r, idx)] = parsed;
@@ -3306,6 +3314,7 @@ const NewReports: React.FC<{
       .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
       .filter((r: any) => !covered.has(reportFieldStorageKey(r.name)))
       .filter((r: any) => !isObsoleteCombinedDateTimeRow(r, templateItemsForSubmit))
+      .filter((r: any) => !isObsoleteSeparateDateOrTimeRow(r, templateItemsForSubmit))
       .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
   }, [isEditMode, editing, templateItemsForSubmit]);
 

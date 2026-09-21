@@ -318,6 +318,8 @@ export function reportFieldTypesCompatible(a?: string, b?: string): boolean {
 
 function isDateLikeFieldName(name?: string): boolean {
   const n = reportFieldStorageKey(name || "");
+  // Exclude combined labels like "date and time" / "time and date".
+  if (!n || n.includes("time")) return false;
   return n === "date" || n.startsWith("date ") || n.endsWith(" date");
 }
 
@@ -326,6 +328,62 @@ function isTimeLikeFieldNameOnly(name?: string): boolean {
   if (!n || n.includes("date")) return false;
   return n === "time" || /\btime\b/.test(n);
 }
+
+function findSeparateDateReportRow(reports: any[]): any | undefined {
+  return reports.find((rep) => {
+    const t = String(rep?.type || "").toUpperCase();
+    if (DATETIME_FIELD_TYPES.has(t)) return false;
+    return DATE_FIELD_TYPES.has(t) || isDateLikeFieldName(rep?.name);
+  });
+}
+
+function findSeparateTimeReportRow(reports: any[]): any | undefined {
+  return reports.find((rep) => {
+    const t = String(rep?.type || "").toUpperCase();
+    if (DATETIME_FIELD_TYPES.has(t)) return false;
+    return TIME_FIELD_TYPES.has(t) || isTimeLikeFieldNameOnly(rep?.name);
+  });
+}
+
+/** Combine separate Date + Time saved rows into one moment (template switched to Date and Time). */
+export function combineDateAndTimeMoments(
+  dateM?: moment.Moment | null,
+  timeM?: moment.Moment | null,
+): moment.Moment | undefined {
+  const d = dateM && moment.isMoment(dateM) && dateM.isValid() ? dateM : null;
+  const t = timeM && moment.isMoment(timeM) && timeM.isValid() ? timeM : null;
+  if (d && t) {
+    return d
+      .clone()
+      .hour(t.hour())
+      .minute(t.minute())
+      .second(t.second())
+      .millisecond(0);
+  }
+  if (d) return d.clone().hour(12).minute(0).second(0).millisecond(0);
+  if (t) return t.clone();
+  return undefined;
+}
+
+/** Separate Date/Time leftovers after template switched to a single Date and Time field. */
+export const isObsoleteSeparateDateOrTimeRow = (
+  row: { name?: string; type?: string } | null | undefined,
+  templateItems: TemplateItem[] = [],
+): boolean => {
+  const templateHasCombined = templateItems.some((it) => {
+    const itType = String(it?.type || "").toUpperCase();
+    return DATETIME_FIELD_TYPES.has(itType);
+  });
+  if (!templateHasCombined) return false;
+  const t = String(row?.type || "").toUpperCase();
+  if (DATETIME_FIELD_TYPES.has(t)) return false;
+  return (
+    DATE_FIELD_TYPES.has(t) ||
+    TIME_FIELD_TYPES.has(t) ||
+    isDateLikeFieldName(row?.name) ||
+    isTimeLikeFieldNameOnly(row?.name)
+  );
+};
 
 function reportRowMatchesTemplateItem(rep: any, it: TemplateItem): boolean {
   if (!reportFieldTypesCompatible(rep?.type, it?.type)) return false;
@@ -380,15 +438,64 @@ export function matchReportItemForTemplate(
   const sameType = sorted.filter(typeMatch);
   if (sameType.length === 1) return sameType[0];
 
-  // Name-only fallback for date/time after template type changed (DATE → [REPORT_DATE])
   const tplType = String(it.type || "").toUpperCase();
+
+  // Template has Date and Time; older amenities reports still store separate Date + Time.
+  if (DATETIME_FIELD_TYPES.has(tplType)) {
+    const dateRow = findSeparateDateReportRow(sorted);
+    const timeRow = findSeparateTimeReportRow(sorted);
+    if (dateRow || timeRow) {
+      const dateM = dateRow ? parseReportItemValueForForm(dateRow) : undefined;
+      const timeM = timeRow ? parseReportItemValueForForm(timeRow) : undefined;
+      const combined = combineDateAndTimeMoments(
+        moment.isMoment(dateM) ? dateM : null,
+        moment.isMoment(timeM) ? timeM : null,
+      );
+      if (combined) {
+        return {
+          name: it.name || label || "Date and Time",
+          type: it.type || "[REPORT_DATETIME]",
+          order: it.order ?? idx + 1,
+          value: combined.format("YYYY-MM-DD HH:mm:ss"),
+          __synthesizedFrom: [dateRow?.name, timeRow?.name].filter(Boolean),
+        };
+      }
+    }
+  }
+
+  // Name-only fallback for date/time after template type changed (DATE → [REPORT_DATE])
   if (DATE_FIELD_TYPES.has(tplType)) {
     const byDateName = sorted.filter((rep) => isDateLikeFieldName(rep?.name));
     if (byDateName.length === 1) return byDateName[0];
+    // Split from a combined datetime row if present.
+    const dtRow = sorted.find((rep) => DATETIME_FIELD_TYPES.has(String(rep?.type || "").toUpperCase()));
+    if (dtRow) {
+      const dt = parseReportItemValueForForm(dtRow);
+      if (moment.isMoment(dt) && dt.isValid()) {
+        return {
+          name: it.name,
+          type: it.type,
+          value: dt.format("YYYY-MM-DD"),
+          order: it.order ?? idx + 1,
+        };
+      }
+    }
   }
   if (TIME_FIELD_TYPES.has(tplType)) {
     const byTimeName = sorted.filter((rep) => isTimeLikeFieldNameOnly(rep?.name));
     if (byTimeName.length === 1) return byTimeName[0];
+    const dtRow = sorted.find((rep) => DATETIME_FIELD_TYPES.has(String(rep?.type || "").toUpperCase()));
+    if (dtRow) {
+      const dt = parseReportItemValueForForm(dtRow);
+      if (moment.isMoment(dt) && dt.isValid()) {
+        return {
+          name: it.name,
+          type: it.type,
+          value: dt.format("HH:mm:ss"),
+          order: it.order ?? idx + 1,
+        };
+      }
+    }
   }
 
   return sorted[idx] && typeMatch(sorted[idx]) ? sorted[idx] : undefined;
