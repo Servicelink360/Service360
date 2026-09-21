@@ -78,6 +78,29 @@ export class UserTasksService {
     });
   }
 
+  /** Build PDF after responding so mobile clients are not blocked by puppeteer. */
+  private queueReportPdfGeneration(task: UserTask, context: string): void {
+    void (async () => {
+      try {
+        this.mergeChunkedReportsOnTask(task);
+        const resultRownumber = await this.userTasksRepository.query(`select * from 
+            ( SELECT id, ROW_NUMBER() OVER(PARTITION BY 'id' ) AS row_num  
+                FROM user_tasks
+                ) as t
+                WHERE t.id=${task.id}
+                `);
+        const rowNum = resultRownumber?.[0]?.row_num ?? 1;
+        const reportsSorted = [...(task.reports || [])].sort((a, b) => a.order - b.order);
+        const pdfFile = await convertHtmlToPdf(task, reportsSorted, rowNum);
+        if (pdfFile) {
+          await this.userTasksRepository.update(task.id, { pdfFile });
+        }
+      } catch (error) {
+        this.logger.error(`[${context}] PDF generation failed for task ${task.id}`, error);
+      }
+    })();
+  }
+
   private mergeChunkedReportsOnTask(task: UserTask | null | undefined): void {
     if (!task?.reports?.length) return;
     task.reports = mergeChunkedReportItems(
@@ -309,9 +332,26 @@ export class UserTasksService {
     manager: EntityManager,
     userTaskId: number,
     items: ReportItemInput[],
+    site?: { siteName?: string | null; siteAddress?: string | null },
   ): Promise<void> {
     await manager.query(`DELETE FROM public.user_task_reports WHERE user_task_id = $1`, [userTaskId]);
-    const expanded = expandReportItemsForStorage(items || []);
+    let expanded = expandReportItemsForStorage(items || []);
+    if (site) {
+      const tmp = expanded.map((item) => {
+        const nItem = new UserTaskReport();
+        nItem.name = item.name != null ? String(item.name) : '';
+        nItem.type = item.type != null ? String(item.type) : '';
+        nItem.value = item.value != null ? String(item.value) : '';
+        nItem.order = Number.isFinite(Number(item.order)) ? Number(item.order) : 0;
+        return nItem;
+      });
+      expanded = this.ensureSiteFieldsOnReportItems(tmp, site).map((r) => ({
+        name: r.name,
+        type: r.type,
+        value: r.value,
+        order: r.order,
+      }));
+    }
     if (!expanded.length) return;
 
     const maxRows = await manager.query(
@@ -1665,6 +1705,89 @@ export class UserTasksService {
     }
   }
 
+  private async fillMissingSiteDetails(data: {
+    siteId?: number | null;
+    siteName?: string | null;
+    siteAddress?: string | null;
+  }): Promise<void> {
+    const siteId = data.siteId != null ? +data.siteId : 0;
+    if (!siteId) return;
+    const needName = !String(data.siteName || '').trim();
+    const needAddress = !String(data.siteAddress || '').trim();
+    if (!needName && !needAddress) return;
+    try {
+      const rows = await this.userTasksRepository.query(
+        `SELECT name, address_name AS "addressName"
+         FROM public.sites
+         WHERE id = $1
+         LIMIT 1`,
+        [siteId],
+      );
+      const site = rows?.[0];
+      if (!site) return;
+      if (needName && site.name) data.siteName = String(site.name).trim();
+      if (needAddress && site.addressName) {
+        data.siteAddress = String(site.addressName).trim();
+      }
+    } catch (e) {
+      this.logger.warn(
+        `fillMissingSiteDetails(${siteId}): ${(e as Error).message}`,
+      );
+    }
+  }
+
+  /** Guarantee Site Name / Address rows exist on saved report field snapshots. */
+  private ensureSiteFieldsOnReportItems(
+    items: UserTaskReport[],
+    data: { siteName?: string | null; siteAddress?: string | null },
+  ): UserTaskReport[] {
+    const list = Array.isArray(items) ? [...items] : [];
+    const isName = (it: any) => {
+      const t = String(it?.type || '').toUpperCase();
+      const n = String(it?.name || '').trim().toLowerCase().replace(/:$/, '');
+      return t === '[SITE_NAME]' || n === 'site name';
+    };
+    const isAddress = (it: any) => {
+      const t = String(it?.type || '').toUpperCase();
+      const n = String(it?.name || '').trim().toLowerCase().replace(/:$/, '');
+      return t === '[SITE_ADDRESS]' || n === 'site address';
+    };
+    const siteName = String(data.siteName || '').trim();
+    const siteAddress = String(data.siteAddress || '').trim();
+    const hasName = list.some(isName);
+    const hasAddress = list.some(isAddress);
+    if (hasName) {
+      for (const it of list) {
+        if (isName(it) && !String(it.value || '').trim() && siteName) it.value = siteName;
+      }
+    } else {
+      const nItem = new UserTaskReport();
+      nItem.createdAt = new Date();
+      nItem.name = 'Site Name';
+      nItem.type = '[SITE_NAME]';
+      nItem.value = siteName;
+      nItem.order = 0;
+      list.unshift(nItem);
+    }
+    if (hasAddress) {
+      for (const it of list) {
+        if (isAddress(it) && !String(it.value || '').trim() && siteAddress) {
+          it.value = siteAddress;
+        }
+      }
+    } else {
+      const nItem = new UserTaskReport();
+      nItem.createdAt = new Date();
+      nItem.name = 'Site Address';
+      nItem.type = '[SITE_ADDRESS]';
+      nItem.value = siteAddress;
+      nItem.order = 1;
+      const insertAt = list.findIndex(isName) + 1;
+      list.splice(insertAt > 0 ? insertAt : 1, 0, nItem);
+    }
+    return list;
+  }
+
   async createCustomerReports(userInfo: IUserInfo, body: CreateCustomReportsDto) {
     try {
       const data = new UserTask();
@@ -1675,6 +1798,7 @@ export class UserTasksService {
       data.siteName = body.siteName;
       data.siteLocation = body.siteLocation;
       data.siteAddress = body.siteAddress;
+      await this.fillMissingSiteDetails(data);
       data.serviceName = body.serviceName;
       data.customerName = body.customerName;
       data.companyName = body.companyName;
@@ -1731,7 +1855,7 @@ export class UserTasksService {
           nItem.value = val;
           items.push(nItem);
         }
-        data.reports = items;
+        data.reports = this.ensureSiteFieldsOnReportItems(items, data);
       }
 
       if (data.reports?.length) {
@@ -1915,25 +2039,7 @@ export class UserTasksService {
       const ut = await query.getOne();
       if (ut) {
         this.mergeChunkedReportsOnTask(ut);
-        try {
-          const resultRownumber = await this.userTasksRepository.query(`select * from 
-            ( SELECT id, ROW_NUMBER() OVER(PARTITION BY 'id' ) AS row_num  
-                FROM user_tasks
-                ) as t
-                WHERE t.id=${ut.id}
-                `)
-          console.log('convertHtmlToPdf')
-          const rowNum = resultRownumber?.[0]?.row_num ?? 1;
-          const reportsSorted = [...(ut.reports || [])].sort((a, b) => a.order - b.order);
-          const pdfFile = await convertHtmlToPdf(ut, reportsSorted, rowNum);
-
-          data.pdfFile = pdfFile;
-        } catch (error) {
-          this.logger.error(`[createCustomerReports] PDF generation failed for task ${taskSaved.id}`, error);
-        }
-      }
-      if (data.pdfFile) {
-        await this.userTasksRepository.update(taskSaved.id, { pdfFile: data.pdfFile });
+        this.queueReportPdfGeneration(ut, 'createCustomerReports');
       }
       this.maybeNotifyNewReportEmail(userInfo, {
         id: taskSaved.id,
@@ -1990,14 +2096,20 @@ export class UserTasksService {
       }
 
       await this.userTasksRepository.manager.transaction(async (manager) => {
+        const sitePatch = {
+          siteId,
+          siteName: body.siteName ?? '',
+          siteAddress: body.siteAddress ?? '',
+        };
+        await this.fillMissingSiteDetails(sitePatch);
         await manager.update(UserTask, { id: +id }, {
           taskName: body.taskName,
           serviceId: body.serviceId ?? null,
           customerId,
           siteId,
-          siteName: body.siteName ?? '',
+          siteName: sitePatch.siteName ?? '',
           siteLocation: body.siteLocation ?? '',
-          siteAddress: body.siteAddress ?? '',
+          siteAddress: sitePatch.siteAddress ?? '',
           serviceName: body.serviceName ?? '',
           customerName: body.customerName ?? '',
           companyName: body.companyName ?? '',
@@ -2016,7 +2128,7 @@ export class UserTasksService {
         });
 
         if (body.items) {
-          await this.replaceUserTaskReports(manager, +id, body.items);
+          await this.replaceUserTaskReports(manager, +id, body.items, sitePatch);
         }
       });
 
@@ -2039,23 +2151,7 @@ export class UserTasksService {
       }
 
       this.mergeChunkedReportsOnTask(ut);
-      const reportsSorted = [...(ut.reports || [])].sort((a, b) => a.order - b.order);
-
-      try {
-        const resultRownumber = await this.userTasksRepository.query(`select * from 
-            ( SELECT id, ROW_NUMBER() OVER(PARTITION BY 'id' ) AS row_num  
-                FROM user_tasks
-                ) as t
-                WHERE t.id=${ut.id}
-                `);
-        const rowNum = resultRownumber?.[0]?.row_num ?? 1;
-        const pdfFile = await convertHtmlToPdf(ut, reportsSorted, rowNum);
-        if (pdfFile) {
-          await this.userTasksRepository.update(+id, { pdfFile });
-        }
-      } catch (error) {
-        this.logger.error(`[updateCustomerReports] PDF generation failed for task ${id}`, error);
-      }
+      this.queueReportPdfGeneration(ut, 'updateCustomerReports');
 
       return errorCode.SUCCESS;
     } catch (error) {

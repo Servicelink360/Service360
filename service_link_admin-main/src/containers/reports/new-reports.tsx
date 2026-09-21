@@ -13,6 +13,7 @@ import { getStaffLocationDetailed } from "@app/library/helpers/geolocation";
 import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import styled, { createGlobalStyle, css } from "styled-components";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
 import MobileReportPdfOverlay from "@app/components/common/MobileReportPdfOverlay";
@@ -478,6 +479,15 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
 
 /** Desktop list chrome — match proposed mockup (filters + table). */
 const NewReportsListChromeStyles = createGlobalStyle`
+  /* Above report upload progress modal (zIndex 1100) so success/error toasts show on mobile. */
+  .ant-message {
+    z-index: 4000 !important;
+  }
+  /* Keep form fully inert while progress modal is up (mobile WebKit can leave it interactive). */
+  .ant-modal-wrap.new-report-form-modal-hidden {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
   .nr-list-page {
     width: 100%;
     max-width: 100%;
@@ -1177,6 +1187,7 @@ const NewReports: React.FC<{
   }>({ percent: 0, label: "" });
   const saveProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaUploadRefs = useRef<Record<string, UploadImageMultilHandle | null>>({});
+  const submitLockRef = useRef(false);
 
   const clearSaveProgressTimer = useCallback(() => {
     if (saveProgressTimerRef.current) {
@@ -1189,6 +1200,17 @@ const NewReports: React.FC<{
     clearSaveProgressTimer();
     setProgressOpen(false);
     setSubmitProgress({ percent: 0, label: "" });
+  }, [clearSaveProgressTimer]);
+
+  /** Close form + progress immediately (flushSync so mobile paints closed before toast/reload). */
+  const closeReportFormModal = useCallback(() => {
+    clearSaveProgressTimer();
+    flushSync(() => {
+      setProgressOpen(false);
+      setSubmitProgress({ percent: 0, label: "" });
+      setVisible(false);
+      setEditing(null);
+    });
   }, [clearSaveProgressTimer]);
 
   const setSubmitStep = useCallback(
@@ -2800,6 +2822,9 @@ const NewReports: React.FC<{
   };
 
   const submit = async () => {
+    if (submitLockRef.current || progressOpen) return;
+    submitLockRef.current = true;
+    try {
     const mediaFields = templateItemsForSubmit
       .map((it, idx) => ({ it, fieldKey: getTemplateFieldKey(it, idx) }))
       .filter(({ it }) => isJsonMediaFieldType(String(it.type || "").toUpperCase()));
@@ -2962,6 +2987,7 @@ const NewReports: React.FC<{
     });
 
     startSaveProgressTicker();
+    const wasEditing = !!editing?.id;
     try {
       let res: any;
       if (editing?.id) {
@@ -2989,16 +3015,34 @@ const NewReports: React.FC<{
         return;
       }
       setSubmitStep(100, "Report saved");
-      await delay(800);
-      setVisible(false);
-      resetSubmitUi();
-      message.success(editing ? "Report updated successfully" : "Report created successfully");
-      await loadRows(page, limit);
-      refreshDashboard();
+      await delay(500);
     } catch {
       clearSaveProgressTimer();
       message.error("Could not save report. Please try again.");
       resetSubmitUi();
+      return;
+    }
+
+    // Close overlays before toast — progress modal is zIndex 1100; ant-message defaults to ~1010.
+    closeReportFormModal();
+    await delay(150);
+    message.success({
+      content: wasEditing ? "Report updated successfully" : "Report created successfully",
+      duration: 4,
+      key: "nr-report-save-ok",
+    });
+    try {
+      if (page !== 1) setPage(1);
+      await loadRows(1, limit, listFilters, listSort, reportListTab);
+      refreshDashboard();
+      if (isMobilePortrait || showMobileCards) {
+        window.scrollTo?.({ top: 0, behavior: "smooth" });
+      }
+    } catch (reloadErr) {
+      console.error("Failed to refresh report list after save", reloadErr);
+    }
+    } finally {
+      submitLockRef.current = false;
     }
   };
 
@@ -4921,6 +4965,7 @@ const NewReports: React.FC<{
 
       <Modal
         className={`new-report-form-modal${modalUiDark ? " new-report-form-modal--dark" : ""}`}
+        visible={visible}
         open={visible}
         closable={!progressOpen}
         maskClosable={!progressOpen}
@@ -4942,14 +4987,16 @@ const NewReports: React.FC<{
         maskStyle={modalUiDark ? { backgroundColor: "rgba(0, 0, 0, 0.82)" } : undefined}
         zIndex={1050}
         onCancel={() => {
-          if (!progressOpen) setVisible(false);
+          if (!progressOpen) {
+            closeReportFormModal();
+          }
         }}
         footer={
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
             <Button
               size="large"
               icon={<CloseOutlined />}
-              onClick={() => setVisible(false)}
+              onClick={() => closeReportFormModal()}
                 className={modalUiDark ? "nr-mobile-btn-dark" : undefined}
               style={{ borderRadius: 8, ...mobileDarkBtnDefaultStyle }}
               disabled={progressOpen}
