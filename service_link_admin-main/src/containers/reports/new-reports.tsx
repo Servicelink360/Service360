@@ -5035,17 +5035,11 @@ const NewReports: React.FC<{
                 })
               : null}
             <Col span={24}>
-              <Typography.Text
-                strong
-                style={{ fontSize: 15, color: mobileUiDark ? "#f0f0f0" : undefined }}
-              >
-                Where & who
-              </Typography.Text>
               <Typography.Paragraph
                 type="secondary"
                 style={{
                   marginBottom: 12,
-                  marginTop: 4,
+                  marginTop: 0,
                   fontSize: 13,
                   color: mobileUiDark ? "#9a9a9a" : undefined,
                 }}
@@ -5161,9 +5155,6 @@ const NewReports: React.FC<{
               className={isMobilePortrait ? "nr-template-fields-mobile" : undefined}
               style={{ marginTop: 20 }}
             >
-              <Divider orientation="left" plain style={{ margin: "8px 0 16px", fontSize: 15, fontWeight: 600 }}>
-                Template fields
-              </Divider>
               <Row gutter={[16, 8]}>
                 {templateItemsForRender.map((it: TemplateItem, idx: number) => {
                   const required = !!it.required;
