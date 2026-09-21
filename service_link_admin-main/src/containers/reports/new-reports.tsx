@@ -34,6 +34,7 @@ import {
   isAutoMergeTemplateField,
   isJunkTemplateField,
   isJsonMediaFieldType,
+  isObsoleteCombinedDateTimeRow,
   isTimeLikeLabel,
   isTimeLikeTemplateItem,
   isVideoMediaUrl,
@@ -2054,6 +2055,12 @@ const NewReports: React.FC<{
     }
 
     setVisible(true);
+    // DatePicker/TimePicker often miss values set before their Form.Items mount.
+    if (Object.keys(reportValues).length) {
+      setTimeout(() => {
+        form.setFieldsValue(reportValues);
+      }, 0);
+    }
   }, [
     resetSubmitUi,
     markReportOpenedForViewer,
@@ -2456,7 +2463,18 @@ const NewReports: React.FC<{
           }
         }
 
-        if (raw === undefined || raw === null || raw === "") return null;
+        const fieldTypeUpper = String(it.type || "").toUpperCase();
+        const isSiteAutoMerge =
+          fieldTypeUpper === "[SITE_NAME]" || fieldTypeUpper === "[SITE_ADDRESS]";
+        if (isSiteAutoMerge) {
+          if (raw === undefined || raw === null || raw === "") {
+            raw = resolveAutoMergeFieldValue(it, values, profile);
+          }
+          // Always persist site rows so PDFs keep Site Name / Address even when blank.
+          raw = raw == null ? "" : String(raw);
+        } else if (raw === undefined || raw === null || raw === "") {
+          return null;
+        }
 
         let value: any = raw;
         if (fieldType === "TIME" && moment.isMoment(raw)) value = raw.format("HH:mm:ss");
@@ -3057,6 +3075,7 @@ const NewReports: React.FC<{
       .slice()
       .filter((r: any) => !isJunkTemplateField({ name: r?.name, type: r?.type }))
       .filter((r: any) => !covered.has(reportFieldStorageKey(r.name)))
+      .filter((r: any) => !isObsoleteCombinedDateTimeRow(r, templateItemsForSubmit))
       .sort((a: any, b: any) => (+a.order || 0) - (+b.order || 0));
   }, [isEditMode, editing, templateItemsForSubmit]);
 

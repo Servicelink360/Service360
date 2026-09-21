@@ -132,6 +132,7 @@ const normalizeReportFieldName = (name: string): string =>
   String(name || "")
     .trim()
     .replace(/[\u2013\u2014\u2212]/g, "-")
+    .replace(/:+\s*$/g, "")
     .replace(/\s+/g, " ")
     .toLowerCase();
 
@@ -249,6 +250,41 @@ export const isTimeLikeLabel = (label: unknown): boolean => {
   return /\btime\b/.test(normalized);
 };
 
+/** Combined date+time leftover after template switched to separate Date / Time fields. */
+export const isObsoleteCombinedDateTimeRow = (
+  row: { name?: string; type?: string } | null | undefined,
+  templateItems: TemplateItem[] = [],
+): boolean => {
+  const t = String(row?.type || "").toUpperCase();
+  const n = String(row?.name || "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase();
+  const isCombined =
+    t === "[REPORT_DATETIME]" ||
+    t === "DATETIME" ||
+    n === "date and time" ||
+    n.includes("date and time") ||
+    n.includes("time and date");
+  if (!isCombined) return false;
+
+  const templateHasCombined = templateItems.some((it) => {
+    const itType = String(it?.type || "").toUpperCase();
+    return itType === "[REPORT_DATETIME]" || itType === "DATETIME";
+  });
+  if (templateHasCombined) return false;
+
+  const hasSeparateDate = templateItems.some((it) => {
+    const itType = String(it?.type || "").toUpperCase();
+    return itType === "[REPORT_DATE]" || itType === "DATE" || itType === "DATE_PICKER";
+  });
+  const hasSeparateTime = templateItems.some((it) => {
+    const itType = String(it?.type || "").toUpperCase();
+    return itType === "[REPORT_TIME]" || itType === "TIME";
+  });
+  return hasSeparateDate || hasSeparateTime;
+};
+
 export const legacyFieldKey = (r: any, idx: number) =>
   `_legacy_${r?.id != null && Number.isFinite(+r.id) ? +r.id : r?.order != null && Number.isFinite(+r.order) ? +r.order : idx}`;
 
@@ -295,16 +331,21 @@ export function matchReportItemForTemplate(
   if (matches.length === 1) return matches[0];
 
   const label = getTemplateLabel(it);
-  return (
+  const byName =
     sorted.find((rep) => rep.name === it.name && typeMatch(rep)) ??
     (label ? sorted.find((rep) => rep.name === label && typeMatch(rep)) : undefined) ??
     sorted.find(
       (rep) =>
         typeMatch(rep) &&
         templateFieldNameKeys(it).includes(reportFieldStorageKey(rep.name)),
-    ) ??
-    (sorted[idx] && typeMatch(sorted[idx]) ? sorted[idx] : undefined)
-  );
+    );
+  if (byName) return byName;
+
+  // Unique type on the saved report (e.g. one [REPORT_DATE] after template renamed "Date:" → "Date")
+  const sameType = sorted.filter(typeMatch);
+  if (sameType.length === 1) return sameType[0];
+
+  return sorted[idx] && typeMatch(sorted[idx]) ? sorted[idx] : undefined;
 }
 
 export function parseReportItemValueForForm(r: any): any {
@@ -315,18 +356,26 @@ export function parseReportItemValueForForm(r: any): any {
     const v = String(r.value ?? "").trim();
     // Corrupt legacy values: TIME field sometimes stored photo JSON/URLs.
     if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
-    return moment(moment().format(`YYYY-MM-DD ${v}`));
+    const m = moment(moment().format(`YYYY-MM-DD ${v}`), "YYYY-MM-DD HH:mm:ss");
+    return m.isValid() ? m : undefined;
   }
   if (rt === "DATE" || rt === "DATE_PICKER") {
-    return r.value ? moment(r.value) : undefined;
+    if (!r.value) return undefined;
+    const m = moment(r.value);
+    return m.isValid() ? m : undefined;
   }
   if (rt === "[REPORT_DATE]") {
-    return r.value ? moment(r.value, "YYYY-MM-DD") : undefined;
+    if (!r.value) return undefined;
+    const strict = moment(String(r.value).trim(), ["YYYY-MM-DD", "YYYY-MMM-DD", "DD/MM/YYYY"], true);
+    if (strict.isValid()) return strict;
+    const loose = moment(r.value);
+    return loose.isValid() ? loose : undefined;
   }
   if (rt === "[REPORT_TIME]") {
     const v = String(r.value ?? "").trim();
     if (!v || v.startsWith("[") || /^https?:\/\//i.test(v)) return undefined;
-    return moment(moment().format(`YYYY-MM-DD ${v}`));
+    const m = moment(moment().format(`YYYY-MM-DD ${v}`), ["YYYY-MM-DD HH:mm:ss", "YYYY-MM-DD HH:mm"]);
+    return m.isValid() ? m : undefined;
   }
   if (rt === "DATETIME" || rt === "[REPORT_DATETIME]") {
     const s = String(r.value ?? "").trim();
