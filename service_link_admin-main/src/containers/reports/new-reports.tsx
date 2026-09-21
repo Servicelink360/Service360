@@ -10,7 +10,7 @@ import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, 
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync } from "../../library/helpers/api";
 import { getStaffLocationDetailed } from "@app/library/helpers/geolocation";
-import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, TimePicker, Tooltip, Typography } from "antd";
+import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled, { createGlobalStyle, css } from "styled-components";
@@ -76,6 +76,7 @@ import {
 import {
   REPORT_DISPLAY_DATE,
   REPORT_LIST_SEP,
+  REPORT_TIME_PICKER_FORMAT,
   buildReportDisplayTitle,
   formatCustomerDisplayName,
   formatIncidentType,
@@ -241,6 +242,211 @@ function useNarrowViewport() {
 }
 
 type MobileStyledDark = { $dark?: boolean };
+
+const ReportTimePickerPopupStyles = createGlobalStyle`
+  .nr-report-ampm-wrap {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .nr-report-ampm-datetime {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  .nr-report-ampm-datetime .nr-report-ampm-date,
+  .nr-report-ampm-datetime .nr-report-ampm-date.ant-picker {
+    width: 100% !important;
+  }
+  .nr-report-ampm-wrap .nr-report-ampm-hour.ant-select,
+  .nr-report-ampm-wrap .nr-report-ampm-minute.ant-select {
+    width: 88px !important;
+    min-width: 88px !important;
+    max-width: 88px !important;
+    flex: 0 0 88px !important;
+  }
+  .nr-report-ampm-wrap .nr-report-ampm-hour .ant-select-selector,
+  .nr-report-ampm-wrap .nr-report-ampm-minute .ant-select-selector {
+    width: 100% !important;
+  }
+  .nr-report-ampm-btns.ant-btn-group {
+    display: inline-flex;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .nr-report-ampm-btns .ant-btn {
+    min-width: 52px;
+    font-weight: 600;
+    height: 40px;
+    padding: 0 14px;
+  }
+  .nr-report-ampm-btns .ant-btn-primary {
+    background: #1890ff;
+    border-color: #1890ff;
+  }
+`;
+
+const AMPM_HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => {
+  const h = i + 1;
+  return { value: h, label: String(h) };
+});
+const AMPM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
+  value: i,
+  label: String(i).padStart(2, "0"),
+}));
+
+function normalizeAmPmMoment(value: unknown): moment.Moment | null {
+  if (value == null || value === "") return null;
+  if (moment.isMoment(value)) return value.isValid() ? value : null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const strict = moment(
+    s,
+    [
+      "YYYY-MM-DD HH:mm:ss",
+      "YYYY-MM-DD HH:mm",
+      "HH:mm:ss",
+      "HH:mm",
+      "h:mm:ss A",
+      "h:mm A",
+      "h:mm:ss a",
+      "h:mm a",
+    ],
+    true,
+  );
+  if (strict.isValid()) return strict;
+  const loose = moment(s);
+  return loose.isValid() ? loose : null;
+}
+
+function buildAmPmMoment(
+  base: moment.Moment | null,
+  hour12: number,
+  minute: number,
+  pm: boolean,
+): moment.Moment {
+  let h24 = hour12 % 12;
+  if (pm) h24 += 12;
+  const next = base && base.isValid() ? base.clone() : moment();
+  return next.hour(h24).minute(minute).second(0).millisecond(0);
+}
+
+type AmPmPickerSharedProps = {
+  value?: moment.Moment | null;
+  onChange?: (v: moment.Moment | null) => void;
+  size?: "large" | "middle" | "small";
+  className?: string;
+  popupClassName?: string;
+  style?: React.CSSProperties;
+  allowClear?: boolean;
+};
+
+/** Hour + minute dropdowns with AM/PM buttons (reliable load/edit; no cramped time panel). */
+function ReportAmPmTimePicker({
+  value,
+  onChange,
+  size = "large",
+  className,
+}: AmPmPickerSharedProps) {
+  const m = normalizeAmPmMoment(value);
+  const hour12 = m ? m.hour() % 12 || 12 : undefined;
+  const minute = m ? m.minute() : undefined;
+  const isPm = !!(m && m.hour() >= 12);
+
+  const commit = (nextHour12: number, nextMinute: number, nextPm: boolean) => {
+    onChange?.(buildAmPmMoment(m, nextHour12, nextMinute, nextPm));
+  };
+
+  return (
+    <div className="nr-report-ampm-wrap">
+      <Select
+        size={size}
+        className={["nr-report-ampm-hour", className].filter(Boolean).join(" ")}
+        placeholder="Hour"
+        value={hour12}
+        options={AMPM_HOUR_OPTIONS}
+        style={{ width: 88 }}
+        dropdownMatchSelectWidth={false}
+        onChange={(h) => commit(h, minute ?? 0, isPm)}
+      />
+      <Select
+        size={size}
+        className={["nr-report-ampm-minute", className].filter(Boolean).join(" ")}
+        placeholder="Min"
+        value={minute}
+        options={AMPM_MINUTE_OPTIONS}
+        style={{ width: 88 }}
+        dropdownMatchSelectWidth={false}
+        onChange={(min) => commit(hour12 ?? 12, min, isPm)}
+      />
+      <Button.Group className="nr-report-ampm-btns">
+        <Button
+          type={!isPm ? "primary" : "default"}
+          size={size}
+          onClick={(e) => {
+            e.preventDefault();
+            commit(hour12 ?? 12, minute ?? 0, false);
+          }}
+        >
+          AM
+        </Button>
+        <Button
+          type={isPm ? "primary" : "default"}
+          size={size}
+          onClick={(e) => {
+            e.preventDefault();
+            commit(hour12 ?? 12, minute ?? 0, true);
+          }}
+        >
+          PM
+        </Button>
+      </Button.Group>
+    </div>
+  );
+}
+
+/** Date picker + hour/minute + AM/PM buttons (single form moment value). */
+function ReportAmPmDateTimePicker({
+  value,
+  onChange,
+  size = "large",
+  className,
+  popupClassName,
+}: AmPmPickerSharedProps) {
+  const m = normalizeAmPmMoment(value);
+
+  return (
+    <div className="nr-report-ampm-datetime">
+      <DatePicker
+        value={m || undefined}
+        onChange={(d) => {
+          if (!d || !d.isValid()) {
+            onChange?.(null);
+            return;
+          }
+          const next = d.clone();
+          if (m) {
+            next.hour(m.hour()).minute(m.minute()).second(0).millisecond(0);
+          } else {
+            next.hour(12).minute(0).second(0).millisecond(0);
+          }
+          onChange?.(next);
+        }}
+        allowClear
+        size={size}
+        className={["nr-report-ampm-date", className].filter(Boolean).join(" ")}
+        popupClassName={popupClassName}
+        style={{ width: "100%", borderRadius: 8 }}
+        format="YYYY-MM-DD"
+      />
+      <ReportAmPmTimePicker value={m} onChange={onChange} size={size} className={className} />
+    </div>
+  );
+}
 
 /** Smaller template field labels on mobile portrait (long YES/NO questions). */
 const NewReportModalMobilePortraitStyles = createGlobalStyle`
@@ -928,7 +1134,7 @@ function renderSubmittedReportValue(report: any): React.ReactNode {
   }
   if (t === "DATETIME" || t === "[REPORT_DATETIME]") {
     const m = moment(String(v));
-    return m.isValid() ? m.format(`${REPORT_DISPLAY_DATE} HH:mm`) : String(v);
+    return m.isValid() ? m.format(`${REPORT_DISPLAY_DATE} ${REPORT_TIME_PICKER_FORMAT}`) : String(v);
   }
   return String(v);
 }
@@ -2066,12 +2272,24 @@ const NewReports: React.FC<{
     }
 
     setVisible(true);
-    // DatePicker/TimePicker often miss values set before their Form.Items mount.
-    if (Object.keys(reportValues).length) {
-      const reapply = () => form.setFieldsValue(reportValues);
-      setTimeout(reapply, 0);
-      setTimeout(reapply, 50);
-    }
+    // Re-apply after mount so DatePicker / AM-PM selects pick up saved moments.
+    const fullValues = {
+      ...reportValues,
+      description: editRow.description,
+      siteId: editRow.siteId,
+      siteName: editRow.siteName,
+      siteLocation: editRow.siteLocation,
+      siteAddress: editRow.siteAddress,
+      serviceId: editRow.serviceId != null ? String(editRow.serviceId) : undefined,
+      serviceName: editRow.serviceName,
+      customerId: editRow.customerId != null ? +editRow.customerId : undefined,
+      customerName: editRow.customerName,
+      companyName: editRow.companyName,
+      reportTemplateId: editRow.reportTemplateId,
+    };
+    const reapply = () => form.setFieldsValue(fullValues);
+    setTimeout(reapply, 0);
+    setTimeout(reapply, 50);
   }, [
     resetSubmitUi,
     markReportOpenedForViewer,
@@ -3812,6 +4030,7 @@ const NewReports: React.FC<{
 
   return (
     <Layout title={pageTitle}>
+      <ReportTimePickerPopupStyles />
       <NewReportModalMobilePortraitStyles />
       <NewReportsListChromeStyles />
       {reportsPageDark ? <ReportsMobileDarkPageStyles /> : null}
@@ -4959,13 +5178,10 @@ const NewReports: React.FC<{
                         <Col span={templateFieldColSpan} key={key}>
                           <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
                             {fieldType === "[REPORT_DATETIME]" ? (
-                              <DatePicker
-                                showTime
+                              <ReportAmPmDateTimePicker
                                 size={controlSize}
                                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                                 popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                                style={{ width: "100%", borderRadius: 8 }}
-                                format="YYYY-MM-DD HH:mm:ss"
                               />
                             ) : fieldType === "[REPORT_DATE]" ? (
                               <DatePicker
@@ -4976,12 +5192,10 @@ const NewReports: React.FC<{
                                 format="YYYY-MM-DD"
                               />
                             ) : (
-                              <TimePicker
+                              <ReportAmPmTimePicker
                                 size={controlSize}
                                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                                 popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                                style={{ width: "100%", borderRadius: 8 }}
-                                format="HH:mm:ss"
                               />
                             )}
                           </Form.Item>
@@ -5017,13 +5231,10 @@ const NewReports: React.FC<{
                     return (
                       <Col span={templateFieldColSpan} key={key}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <DatePicker
-                            showTime
+                          <ReportAmPmDateTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                            style={{ width: "100%", borderRadius: 8 }}
-                            format="YYYY-MM-DD HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>
@@ -5036,12 +5247,10 @@ const NewReports: React.FC<{
                     return (
                       <Col span={templateFieldColSpan} key={key}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <TimePicker
+                          <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                            style={{ width: "100%", borderRadius: 8 }}
-                            format="HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>
@@ -5068,12 +5277,10 @@ const NewReports: React.FC<{
                     return (
                       <Col span={templateFieldColSpan} key={key}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <TimePicker
+                          <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                            style={{ width: "100%", borderRadius: 8 }}
-                            format="HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>
@@ -5425,12 +5632,10 @@ const NewReports: React.FC<{
                     return (
                       <Col span={templateFieldColSpan} key={fieldKey}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <TimePicker
+                          <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                            style={{ width: "100%", borderRadius: 8 }}
-                            format="HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>
@@ -5457,13 +5662,10 @@ const NewReports: React.FC<{
                     return (
                       <Col span={templateFieldColSpan} key={fieldKey}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <DatePicker
-                            showTime
+                          <ReportAmPmDateTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                            style={{ width: "100%", borderRadius: 8 }}
-                            format="YYYY-MM-DD HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>
@@ -5474,12 +5676,10 @@ const NewReports: React.FC<{
                     return (
                       <Col span={templateFieldColSpan} key={fieldKey}>
                         <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <TimePicker
+                          <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
                             popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
-                            style={{ width: "100%", borderRadius: 8 }}
-                            format="HH:mm:ss"
                           />
                         </Form.Item>
                       </Col>

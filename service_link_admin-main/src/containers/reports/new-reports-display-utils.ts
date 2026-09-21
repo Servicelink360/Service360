@@ -108,6 +108,11 @@ export function formatReportSubmittedAt(row: any): string {
 export const REPORT_DISPLAY_DATE = "D MMM YYYY";
 export const REPORT_LIST_SEP = " · ";
 
+/** Form TimePicker display (12-hour with AM/PM). Stored values stay 24h HH:mm:ss. */
+export const REPORT_TIME_PICKER_FORMAT = "h:mm A";
+/** Form DatePicker+time display (12-hour with AM/PM). */
+export const REPORT_DATETIME_PICKER_FORMAT = "YYYY-MM-DD h:mm A";
+
 export function formatReportViewDate(raw: unknown): string {
   const s = String(raw ?? "").trim();
   if (!s) return "";
@@ -121,10 +126,10 @@ export function formatReportViewDate(raw: unknown): string {
 export function formatReportViewTime(raw: unknown): string {
   const s = String(raw ?? "").trim();
   if (!s || s === "Invalid date") return "";
-  const strict = moment(s, ["HH:mm:ss", "HH:mm"], true);
-  if (strict.isValid()) return strict.format("HH:mm");
+  const strict = moment(s, ["HH:mm:ss", "HH:mm", "h:mm:ss A", "h:mm A", "h:mm:ss a", "h:mm a"], true);
+  if (strict.isValid()) return strict.format(REPORT_TIME_PICKER_FORMAT);
   const m = moment(s);
-  return m.isValid() ? m.format("HH:mm") : s;
+  return m.isValid() ? m.format(REPORT_TIME_PICKER_FORMAT) : s;
 }
 
 const AUTO_REPORT_NAME_SUFFIX = / - \d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}$/;
