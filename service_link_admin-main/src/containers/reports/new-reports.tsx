@@ -267,10 +267,10 @@ const ReportTimePickerPopupStyles = createGlobalStyle`
   }
   .nr-report-ampm-wrap .nr-report-ampm-hour.ant-select,
   .nr-report-ampm-wrap .nr-report-ampm-minute.ant-select {
-    width: 88px !important;
-    min-width: 88px !important;
-    max-width: 88px !important;
-    flex: 0 0 88px !important;
+    width: 96px !important;
+    min-width: 96px !important;
+    max-width: 96px !important;
+    flex: 0 0 96px !important;
   }
   .nr-report-ampm-wrap .nr-report-ampm-hour .ant-select-selector,
   .nr-report-ampm-wrap .nr-report-ampm-minute .ant-select-selector {
@@ -451,12 +451,27 @@ function ReportAmPmDateTimePicker({
   );
 }
 
-/** Smaller template field labels on mobile portrait (long YES/NO questions). */
+/** Mobile portrait form typography + sage theme (readable app sizes, not tiny desktop scale). */
 const NewReportModalMobilePortraitStyles = createGlobalStyle`
   @media (orientation: portrait) and (max-width: 768px) {
+    .new-report-form-modal .ant-modal-title,
+    .new-report-form-modal .ant-modal-title span {
+      font-size: 18px !important;
+      font-weight: 700 !important;
+      line-height: 1.3 !important;
+    }
+
+    .new-report-form-modal .ant-form-item-label > label {
+      font-size: 16px !important;
+      line-height: 1.4 !important;
+      white-space: normal !important;
+      word-break: break-word;
+      height: auto !important;
+    }
+
     .new-report-form-modal .nr-template-fields-mobile .ant-form-item-label {
-      font-size: 14px;
-      line-height: 1.35;
+      font-size: 16px;
+      line-height: 1.4;
       white-space: normal;
       overflow: visible;
       height: auto !important;
@@ -465,8 +480,8 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     }
 
     .new-report-form-modal .nr-template-fields-mobile .ant-form-item-label > label {
-      font-size: 50%;
-      line-height: 1.35;
+      font-size: 16px !important;
+      line-height: 1.4;
       white-space: normal;
       word-break: break-word;
       height: auto;
@@ -474,6 +489,64 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
 
     .new-report-form-modal.new-report-form-modal--dark .nr-template-fields-mobile .ant-form-item-label > label {
       color: #f0f0f0 !important;
+    }
+
+    .new-report-form-modal .ant-input,
+    .new-report-form-modal .ant-input-affix-wrapper,
+    .new-report-form-modal .ant-input-affix-wrapper > input,
+    .new-report-form-modal .ant-select-selector,
+    .new-report-form-modal .ant-select-selection-item,
+    .new-report-form-modal .ant-select-selection-placeholder,
+    .new-report-form-modal .ant-picker,
+    .new-report-form-modal .ant-picker-input > input,
+    .new-report-form-modal textarea.ant-input {
+      font-size: 16px !important;
+      line-height: 1.45 !important;
+      min-height: 44px;
+    }
+
+    .new-report-form-modal .ant-select-single:not(.ant-select-customize-input) .ant-select-selector {
+      height: 44px !important;
+      padding-top: 6px !important;
+      padding-bottom: 6px !important;
+    }
+
+    .new-report-form-modal .ant-btn {
+      font-size: 16px !important;
+      height: 44px !important;
+      padding: 0 16px !important;
+    }
+
+    .new-report-form-modal .nr-report-ampm-btns .ant-btn {
+      min-width: 52px;
+      font-size: 15px !important;
+      font-weight: 700;
+    }
+
+    .new-report-form-modal .ant-typography,
+    .new-report-form-modal .ant-form-item-explain,
+    .new-report-form-modal .ant-form-item-extra {
+      font-size: 15px !important;
+      line-height: 1.45 !important;
+    }
+
+    .new-report-form-modal .ant-upload-select,
+    .new-report-form-modal .ant-upload-select button {
+      font-size: 15px !important;
+    }
+
+    /* Dropdown option text (portaled to body) */
+    .ant-select-dropdown .ant-select-item {
+      font-size: 16px !important;
+      line-height: 1.4 !important;
+      min-height: 44px !important;
+      padding: 10px 12px !important;
+    }
+
+    .ant-picker-dropdown .ant-picker-cell,
+    .ant-picker-dropdown .ant-picker-header,
+    .ant-picker-dropdown .ant-picker-content th {
+      font-size: 15px !important;
     }
 
     /* Light mobile form: sage page, green header, white field cards (not a blank white sheet). */
@@ -511,31 +584,40 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-form-item {
-      background: #ffffff;
-      border: 1px solid #d5e4cf;
+      background: #cfe5c8;
+      border: 1px solid #9fc49a;
       border-radius: 12px;
-      padding: 10px 12px 6px;
-      margin-bottom: 10px !important;
+      padding: 12px 12px 8px;
+      margin-bottom: 12px !important;
+      box-shadow: 0 2px 8px rgba(31, 107, 58, 0.08);
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-form-item-label > label {
-      color: #1a4d2e !important;
-      font-weight: 600;
+      color: #143d24 !important;
+      font-weight: 700;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input,
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input-affix-wrapper,
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selector,
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker {
-      background: #f7fbf6 !important;
-      border-color: #b7d0b0 !important;
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) textarea.ant-input {
+      background: #ffffff !important;
+      border-color: #8fbf96 !important;
       border-radius: 10px !important;
+      color: #143d24 !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select {
-      background: #f4faf3 !important;
+      background: #ffffff !important;
       border-color: #2f7d46 !important;
       border-radius: 12px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .nr-report-ampm-btns .ant-btn-default {
+      background: #ffffff !important;
+      border-color: #8fbf96 !important;
+      color: #1a4d2e !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .nr-report-ampm-btns .ant-btn-primary {
@@ -545,7 +627,7 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
 
     /* Dropdown menus render on document.body — style them as app panels, not white sheets. */
     html:not([data-color-mode="dark"]) .ant-select-dropdown {
-      background: #f4faf3 !important;
+      background: #ffffff !important;
       border: 1px solid #b7d0b0 !important;
       border-radius: 12px !important;
       padding: 6px !important;
@@ -572,21 +654,32 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       color: #ffffff !important;
     }
 
-    /* Closed select boxes on the form (antd selector is more specific than .ant-select-selector). */
+    /* Closed select boxes on the form — white fields on colored cards */
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select:not(.ant-select-customize-input) .ant-select-selector,
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker {
-      background: #f7fbf6 !important;
+      background: #ffffff !important;
       border-color: #8fbf96 !important;
       color: #143d24 !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-item,
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-placeholder {
-      color: #1a4d2e !important;
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-placeholder,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker-input > input {
+      color: #143d24 !important;
+      background: transparent !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input-affix-wrapper,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input[readonly],
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input-disabled,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) input.ant-input {
+      background: #ffffff !important;
+      color: #143d24 !important;
     }
 
     html:not([data-color-mode="dark"]) .ant-picker-panel-container {
-      background: #f4faf3 !important;
+      background: #ffffff !important;
       border-radius: 12px !important;
     }
 
@@ -971,8 +1064,8 @@ const MobileReportCardHeadMain = styled.div`
 `;
 
 const MobileReportCardTitle = styled.div<MobileStyledDark>`
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1.35;
   color: ${(p) => (p.$dark ? "#ffffff" : "#143d24")};
   word-break: break-word;
@@ -980,7 +1073,7 @@ const MobileReportCardTitle = styled.div<MobileStyledDark>`
 
 const MobileReportCardSite = styled.div<MobileStyledDark>`
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.4;
   color: ${(p) => (p.$dark ? "#b0b0b0" : "#3d6b4a")};
   word-break: break-word;
@@ -1001,7 +1094,7 @@ const MobileReportCardDetailRow = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.4;
 `;
 
@@ -1009,7 +1102,7 @@ const MobileReportCardLabel = styled.span<MobileStyledDark>`
   flex-shrink: 0;
   color: ${(p) => (p.$dark ? "#d0d6de" : "#3d6b4a")};
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 `;
@@ -1018,6 +1111,7 @@ const MobileReportCardValue = styled.span<MobileStyledDark>`
   text-align: right;
   color: ${(p) => (p.$dark ? "#ffffff" : "#143d24")};
   font-weight: ${(p) => (p.$dark ? 600 : 600)};
+  font-size: 15px;
   word-break: break-word;
 `;
 
@@ -2225,42 +2319,38 @@ const NewReports: React.FC<{
   const applyTemplateFieldDefaults = useCallback(
     (tpl: { items?: TemplateItem[] } | null | undefined) => {
       if (!tpl?.items?.length || editing) return;
-      const patch: Record<string, string | moment.Moment | undefined> = {};
+      const patch: Record<string, string | moment.Moment> = {};
       const sorted = tpl.items
         .slice()
         .sort((a: TemplateItem, b: TemplateItem) => (+a.order || 0) - (+b.order || 0));
       const baseValues = form.getFieldsValue();
+      const isEmpty = (v: unknown) => v === undefined || v === null || v === "";
       sorted.forEach((it: TemplateItem, idx: number) => {
         if (isJunkTemplateField(it)) return;
         const fieldKey = getTemplateFieldKey(it, idx);
-        patch[fieldKey] = undefined;
         const fieldType = String(it.type || "").toUpperCase();
         if (fieldType === "YES_NO") {
           const preset = getYesNoPreset(it);
-          if (preset) patch[fieldKey] = preset;
+          if (preset && isEmpty(baseValues[fieldKey])) patch[fieldKey] = preset;
         } else if (
           fieldType === "DATE" ||
           fieldType === "DATE_PICKER" ||
           fieldType === "TIME" ||
           fieldType === "DATETIME"
         ) {
-          // Staff wants Date/Time prefilled with "now" on new reports (but never overwrite).
+          // Prefill with "now"; re-push existing moment so AM/PM selects pick it up after mount.
           const current = baseValues[fieldKey];
-          if (current === undefined || current === null || current === "") {
-            patch[fieldKey] = moment();
-          }
+          patch[fieldKey] = isEmpty(current) ? moment() : current;
         } else if (isAutoMergeTemplateField(it)) {
           if (autoMergeUsesPicker(it, isStaffUser)) {
             const current = baseValues[fieldKey];
-            if (current === undefined || current === null || current === "") {
-              patch[fieldKey] = moment();
-            }
+            patch[fieldKey] = isEmpty(current) ? moment() : current;
           } else {
             patch[fieldKey] = resolveAutoMergeFieldValue(it, baseValues, profile);
           }
         }
       });
-      form.setFieldsValue(patch);
+      if (Object.keys(patch).length) form.setFieldsValue(patch);
     },
     [form, editing, profile, isStaffUser],
   );
@@ -4292,9 +4382,14 @@ const NewReports: React.FC<{
             }
             options={filteredReportTemplates.map((t: any) => ({ value: t.id, label: t.name }))}
             onChange={(tplId) => {
+              const tpl = reportTemplates.find((t: any) => +t.id === +tplId);
+              // Re-apply after mount so DatePicker / AM-PM selects pick up "now"
+              // (same timing pattern as openEdit).
+              const seedDefaults = () => applyTemplateFieldDefaults(tpl);
+              seedDefaults();
+              setTimeout(seedDefaults, 0);
+              setTimeout(seedDefaults, 50);
               setTimeout(() => {
-                const tpl = reportTemplates.find((t: any) => +t.id === +tplId);
-                applyTemplateFieldDefaults(tpl);
                 if (useStaffStyleCreate) {
                   const siteId = form.getFieldValue("siteId");
                   if (siteId && tpl && !isOtherJobSite(siteId)) {
@@ -5471,7 +5566,8 @@ const NewReports: React.FC<{
               style={{ marginTop: 20 }}
             >
               <Row gutter={[16, 8]}>
-                {templateItemsForRender.map((it: TemplateItem, idx: number) => {
+                {templateItemsForSubmit.map((it: TemplateItem, idx: number) => {
+                  if (isStaffUser && isHiddenFromStaffCreate(it)) return null;
                   const required = !!it.required;
                   const fieldKey = getTemplateFieldKey(it, idx);
                   const key = fieldKey;

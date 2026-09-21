@@ -79,9 +79,10 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
 
     .nr-app-top-row .nr-app-filter-btn {
       flex: 1;
-      height: 44px !important;
+      height: 48px !important;
       border-radius: 12px !important;
       font-weight: 600;
+      font-size: 16px !important;
       background: var(--nr-app-field) !important;
       border-color: var(--nr-app-border) !important;
       color: var(--nr-app-text) !important;
@@ -89,10 +90,11 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
 
     .nr-app-fab {
       flex-shrink: 0;
-      height: 44px !important;
-      min-width: 44px !important;
+      height: 48px !important;
+      min-width: 48px !important;
       border-radius: 12px !important;
       font-weight: 700 !important;
+      font-size: 16px !important;
       background: var(--nr-app-accent) !important;
       border-color: var(--nr-app-accent) !important;
       box-shadow: 0 4px 14px rgba(31, 107, 58, 0.35) !important;
@@ -124,7 +126,7 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       flex: 1;
       justify-content: center;
       margin: 0 !important;
-      padding: 8px 6px !important;
+      padding: 10px 8px !important;
       border-radius: 10px !important;
       border: none !important;
       background: transparent !important;
@@ -134,6 +136,7 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
     .report-faults-list-wrap--mobile-portrait .new-reports-mobile-tabs .ant-tabs-tab .ant-tabs-tab-btn {
       color: var(--nr-app-muted) !important;
       font-weight: 600;
+      font-size: 15px !important;
     }
 
     .new-reports-list-wrap--mobile-portrait .new-reports-mobile-tabs .ant-tabs-tab-active,
@@ -169,7 +172,7 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       box-shadow: none !important;
     }
 
-    /* Search / filter inputs ó sage field, not pure white */
+    /* Search / filter inputs ù sage field, not pure white */
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-input,
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-input-affix-wrapper,
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-select-selector,
@@ -182,6 +185,25 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       border-color: var(--nr-app-border) !important;
       color: var(--nr-app-text) !important;
       border-radius: 12px !important;
+      font-size: 16px !important;
+      min-height: 48px;
+    }
+
+    .new-reports-list-wrap--mobile-portrait .ant-form-item-label > label,
+    .report-faults-list-wrap--mobile-portrait .ant-form-item-label > label {
+      font-size: 15px !important;
+      font-weight: 600 !important;
+    }
+
+    .new-reports-list-wrap--mobile-portrait .ant-btn,
+    .report-faults-list-wrap--mobile-portrait .ant-btn {
+      font-size: 16px !important;
+    }
+
+    .new-reports-list-wrap--mobile-portrait .nr-mobile-report-card .ant-btn,
+    .report-faults-list-wrap--mobile-portrait .nr-mobile-fault-card .ant-btn {
+      font-size: 15px !important;
+      height: 40px !important;
     }
 
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-btn-primary,
@@ -226,7 +248,7 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       background: transparent !important;
     }
 
-    /* Report / fault cards ó soft green border, sage meta strip */
+    /* Report / fault cards ù soft green border, sage meta strip */
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card,
     .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-fault-card {
       background: var(--nr-app-surface) !important;

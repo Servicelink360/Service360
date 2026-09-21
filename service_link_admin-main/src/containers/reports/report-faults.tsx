@@ -121,8 +121,8 @@ const MobileFaultCardHead = styled.div<MobileStyledDark>`
 `;
 
 const MobileFaultCardTitle = styled.div<MobileStyledDark>`
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   line-height: 1.35;
   color: ${(p) => (p.$dark ? "#f5f5f5" : "#143d24")};
   word-break: break-word;
@@ -130,7 +130,7 @@ const MobileFaultCardTitle = styled.div<MobileStyledDark>`
 
 const MobileFaultCardMeta = styled.div<MobileStyledDark>`
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.35;
   color: ${(p) => (p.$dark ? "#b0b0b0" : "#3d6b4a")};
 `;
@@ -138,7 +138,7 @@ const MobileFaultCardMeta = styled.div<MobileStyledDark>`
 const MobileFaultCardBody = styled.div<MobileStyledDark>`
   padding: 12px 14px;
   color: ${(p) => (p.$dark ? "#e8e8e8" : "#1a4d2e")};
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
