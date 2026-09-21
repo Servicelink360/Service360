@@ -296,10 +296,39 @@ function templateFieldNameKeys(it: TemplateItem): string[] {
   return [...keys];
 }
 
+const DATE_FIELD_TYPES = new Set(["DATE", "DATE_PICKER", "[REPORT_DATE]"]);
+const TIME_FIELD_TYPES = new Set(["TIME", "[REPORT_TIME]"]);
+const DATETIME_FIELD_TYPES = new Set(["DATETIME", "[REPORT_DATETIME]"]);
+const SITE_NAME_TYPES = new Set(["[SITE_NAME]"]);
+const SITE_ADDRESS_TYPES = new Set(["[SITE_ADDRESS]"]);
+
+/** Saved rows may use DATE while the template now uses [REPORT_DATE] (and vice versa). */
+export function reportFieldTypesCompatible(a?: string, b?: string): boolean {
+  const left = String(a || "").toUpperCase();
+  const right = String(b || "").toUpperCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (DATE_FIELD_TYPES.has(left) && DATE_FIELD_TYPES.has(right)) return true;
+  if (TIME_FIELD_TYPES.has(left) && TIME_FIELD_TYPES.has(right)) return true;
+  if (DATETIME_FIELD_TYPES.has(left) && DATETIME_FIELD_TYPES.has(right)) return true;
+  if (SITE_NAME_TYPES.has(left) && SITE_NAME_TYPES.has(right)) return true;
+  if (SITE_ADDRESS_TYPES.has(left) && SITE_ADDRESS_TYPES.has(right)) return true;
+  return false;
+}
+
+function isDateLikeFieldName(name?: string): boolean {
+  const n = reportFieldStorageKey(name || "");
+  return n === "date" || n.startsWith("date ") || n.endsWith(" date");
+}
+
+function isTimeLikeFieldNameOnly(name?: string): boolean {
+  const n = reportFieldStorageKey(name || "");
+  if (!n || n.includes("date")) return false;
+  return n === "time" || /\btime\b/.test(n);
+}
+
 function reportRowMatchesTemplateItem(rep: any, it: TemplateItem): boolean {
-  const typeMatch =
-    String(rep?.type || "").toUpperCase() === String(it?.type || "").toUpperCase();
-  if (!typeMatch) return false;
+  if (!reportFieldTypesCompatible(rep?.type, it?.type)) return false;
   const rowKey = reportFieldStorageKey(rep?.name);
   return templateFieldNameKeys(it).some((k) => k === rowKey);
 }
@@ -311,8 +340,7 @@ export function matchReportItemForTemplate(
 ): any | undefined {
   if (!Array.isArray(reports) || !reports.length) return undefined;
   const sorted = [...reports].sort((a, b) => (+a.order || 0) - (+b.order || 0));
-  const typeMatch = (rep: any) =>
-    String(rep.type || "").toUpperCase() === String(it.type || "").toUpperCase();
+  const typeMatch = (rep: any) => reportFieldTypesCompatible(rep?.type, it?.type);
   const matches = sorted.filter((rep) => reportRowMatchesTemplateItem(rep, it));
 
   if (matches.length > 1 && isJsonMediaFieldType(String(it.type || "").toUpperCase())) {
@@ -329,6 +357,13 @@ export function matchReportItemForTemplate(
   }
 
   if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    // Prefer exact type, then first by order.
+    const exact = matches.find(
+      (rep) => String(rep.type || "").toUpperCase() === String(it.type || "").toUpperCase(),
+    );
+    return exact || matches[0];
+  }
 
   const label = getTemplateLabel(it);
   const byName =
@@ -341,9 +376,20 @@ export function matchReportItemForTemplate(
     );
   if (byName) return byName;
 
-  // Unique type on the saved report (e.g. one [REPORT_DATE] after template renamed "Date:" → "Date")
+  // Unique compatible type on the saved report (e.g. DATE vs [REPORT_DATE])
   const sameType = sorted.filter(typeMatch);
   if (sameType.length === 1) return sameType[0];
+
+  // Name-only fallback for date/time after template type changed (DATE → [REPORT_DATE])
+  const tplType = String(it.type || "").toUpperCase();
+  if (DATE_FIELD_TYPES.has(tplType)) {
+    const byDateName = sorted.filter((rep) => isDateLikeFieldName(rep?.name));
+    if (byDateName.length === 1) return byDateName[0];
+  }
+  if (TIME_FIELD_TYPES.has(tplType)) {
+    const byTimeName = sorted.filter((rep) => isTimeLikeFieldNameOnly(rep?.name));
+    if (byTimeName.length === 1) return byTimeName[0];
+  }
 
   return sorted[idx] && typeMatch(sorted[idx]) ? sorted[idx] : undefined;
 }

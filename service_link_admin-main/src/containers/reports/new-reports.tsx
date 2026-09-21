@@ -1939,7 +1939,9 @@ const NewReports: React.FC<{
     setEditing({ ...editRow, reports: mergedReports });
     form.resetFields();
     const reportValues: Record<string, any> = {};
-    const editTpl = reportTemplates.find((t: any) => +t.id === +editRow.reportTemplateId);
+    const editTpl =
+      reportTemplates.find((t: any) => +t.id === +editRow.reportTemplateId) ||
+      (init.reportTemplates || []).find((t: any) => +t.id === +editRow.reportTemplateId);
     if (editTpl?.items?.length && mergedReports.length) {
       const sortedTpl = editTpl.items
         .slice()
@@ -1963,7 +1965,15 @@ const NewReports: React.FC<{
             }
           }
         }
-        if (parsed !== undefined) reportValues[fieldKey] = parsed;
+        // Site auto fields: fall back to task columns when report snapshot omitted them.
+        if (parsed === undefined || parsed === null || parsed === "") {
+          const t = String(it.type || "").toUpperCase();
+          if (t === "[SITE_NAME]" && editRow.siteName) parsed = String(editRow.siteName);
+          if (t === "[SITE_ADDRESS]" && editRow.siteAddress) parsed = String(editRow.siteAddress);
+        }
+        if (parsed !== undefined && parsed !== null && parsed !== "") {
+          reportValues[fieldKey] = parsed;
+        }
       });
 
       const coveredKeys = new Set<string>();
@@ -1973,6 +1983,7 @@ const NewReports: React.FC<{
       });
       mergedReports.forEach((r: any, idx: number) => {
         if (coveredKeys.has(reportFieldStorageKey(r.name))) return;
+        if (isObsoleteCombinedDateTimeRow(r, sortedTpl)) return;
         const parsed = parseReportItemValueForForm(r);
         if (parsed !== undefined) {
           reportValues[legacyFieldKey(r, idx)] = parsed;
@@ -2057,9 +2068,9 @@ const NewReports: React.FC<{
     setVisible(true);
     // DatePicker/TimePicker often miss values set before their Form.Items mount.
     if (Object.keys(reportValues).length) {
-      setTimeout(() => {
-        form.setFieldsValue(reportValues);
-      }, 0);
+      const reapply = () => form.setFieldsValue(reportValues);
+      setTimeout(reapply, 0);
+      setTimeout(reapply, 50);
     }
   }, [
     resetSubmitUi,
@@ -2069,6 +2080,7 @@ const NewReports: React.FC<{
     isStaffUser,
     applyStaffSiteAssignment,
     profile,
+    init.reportTemplates,
   ]);
 
   const onPickSite = async (siteId?: number | string) => {
