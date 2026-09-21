@@ -34,10 +34,45 @@ function getReportPdfSubmittedByLabel(row: any): string {
 /** Australian Eastern — matches admin list/modal display (report-faults, attendance). */
 const REPORT_PDF_AU_OFFSET = '+10:00';
 const REPORT_PDF_DATE_FORMAT = 'D MMM YYYY';
+/** Matches admin report form (ReportAmPmTime / DateTimePicker display). */
+const REPORT_PDF_TIME_FORMAT = 'hh:mm A';
+const REPORT_PDF_DATETIME_FORMAT = `${REPORT_PDF_DATE_FORMAT} ${REPORT_PDF_TIME_FORMAT}`;
 
 function reportPdfAuMoment(raw: unknown): moment.Moment {
     const m = moment(raw);
     return m.isValid() ? m.utcOffset(REPORT_PDF_AU_OFFSET) : moment().utcOffset(REPORT_PDF_AU_OFFSET);
+}
+
+/** Parse stored report date+time as wall-clock (as entered), never shift by timezone. */
+function parseReportPdfWallDateTime(val: unknown): moment.Moment | null {
+    const s = String(val ?? '').trim();
+    if (!s) return null;
+    const wall = moment(
+        s,
+        [
+            'YYYY-MM-DD HH:mm:ss',
+            'YYYY-MM-DD HH:mm',
+            'YYYY-MM-DDTHH:mm:ss',
+            'YYYY-MM-DDTHH:mm',
+            'YYYY MMM DD HH:mm:ss',
+            'YYYY MMM DD HH:mm',
+            'DD MMM YYYY HH:mm:ss',
+            'DD MMM YYYY HH:mm',
+            'YYYY MMM DD h:mm A',
+            'YYYY MMM DD h:mm a',
+            'DD MMM YYYY h:mm A',
+            'DD MMM YYYY h:mm a',
+            'YYYY-MM-DD h:mm A',
+            'YYYY-MM-DD h:mm a',
+            moment.ISO_8601,
+        ],
+        true,
+    );
+    if (wall.isValid()) return wall;
+    const loose = moment(s);
+    if (!loose.isValid()) return null;
+    // Keep clock face as stored (form saves AU wall time as plain string).
+    return loose.utcOffset(REPORT_PDF_AU_OFFSET, true);
 }
 
 function findReportDateInItems(reportItems: unknown): string | null {
@@ -123,11 +158,11 @@ function combineReportDateWithMoment(dateStr: string, ref: moment.Moment): momen
 function parseReportWallClockTime(raw: unknown): string | null {
     const v = String(raw ?? '').trim();
     if (!v || v === 'Invalid date') return null;
-    const strict = moment(v, ['HH:mm:ss', 'HH:mm'], true);
+    const strict = moment(v, ['HH:mm:ss', 'HH:mm', 'h:mm A', 'h:mm a'], true);
     if (strict.isValid()) return strict.format('HH:mm:ss');
     const loose = moment(v);
     if (loose.isValid() && !moment(v, 'YYYY-MM-DD', true).isValid()) {
-        return loose.utcOffset(REPORT_PDF_AU_OFFSET).format('HH:mm:ss');
+        return loose.utcOffset(REPORT_PDF_AU_OFFSET, true).format('HH:mm:ss');
     }
     return null;
 }
@@ -155,11 +190,17 @@ function formatReportPdfDateDisplay(raw: unknown): string {
 
 function formatReportPdfTimeDisplay(raw: unknown): string {
     const parsed = parseReportWallClockTime(raw);
-    if (parsed) return moment(parsed, 'HH:mm:ss', true).format('HH:mm');
+    if (parsed) {
+        const t = moment(parsed, ['HH:mm:ss', 'HH:mm'], true);
+        if (t.isValid()) return t.format(REPORT_PDF_TIME_FORMAT);
+    }
     const s = String(raw ?? '').trim();
     if (!s) return '';
-    const m = moment(s, ['HH:mm:ss', 'HH:mm'], true);
-    return m.isValid() ? m.format('HH:mm') : s;
+    const m = moment(s, ['HH:mm:ss', 'HH:mm', 'h:mm A', 'h:mm a'], true);
+    if (m.isValid()) return m.format(REPORT_PDF_TIME_FORMAT);
+    const wall = parseReportPdfWallDateTime(s);
+    if (wall) return wall.format(REPORT_PDF_TIME_FORMAT);
+    return s;
 }
 
 /** Admin uploads embed epoch ms in filenames; use when check_in predates actual submit. */
@@ -242,25 +283,23 @@ function getReportPdfReferenceMoment(row: any, reportItems?: unknown): moment.Mo
     return rowMoment;
 }
 
-/** PDF footer: "2 Jun 2026 14:30" (single separator before stamp is added by caller). */
+/** PDF footer: "2 Jun 2026 2:30 PM" (single separator before stamp is added by caller). */
 function formatReportPdfSubmittedStamp(row: any, reportItems?: unknown): string {
     const m = getReportPdfReferenceMoment(row, reportItems);
-    const stamp = m.format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
-    if (!stamp.endsWith(' 00:00')) return stamp;
+    const stamp = m.format(REPORT_PDF_DATETIME_FORMAT);
+    if (!stamp.endsWith(' 12:00 AM')) return stamp;
     const createdAt = row?.createdAt ?? row?.created_at;
     if (!createdAt) return stamp;
     const alt = reportPdfAuMoment(createdAt);
-    if (!alt.isValid() || alt.format('HH:mm') === '00:00') return stamp;
-    return alt.format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
+    if (!alt.isValid() || alt.format(REPORT_PDF_TIME_FORMAT) === '12:00 AM') return stamp;
+    return alt.format(REPORT_PDF_DATETIME_FORMAT);
 }
 
 function formatReportPdfDateTimeValue(val: unknown): string {
     const s = String(val ?? '').trim();
     if (!s) return '';
-    const custom = moment(s, ['YYYY MMM DD HH:mm:ss', 'YYYY MMM DD HH:mm', 'DD MMM YYYY HH:mm:ss', 'DD MMM YYYY HH:mm', 'YYYY MMM DD h:mm a', 'DD MMM YYYY h:mm a'], true);
-    if (custom.isValid()) return custom.format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
-    const loose = moment(s);
-    if (loose.isValid()) return reportPdfAuMoment(loose).format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
+    const wall = parseReportPdfWallDateTime(s);
+    if (wall) return wall.format(REPORT_PDF_DATETIME_FORMAT);
     return s;
 }
 
@@ -863,6 +902,109 @@ function formatChecklistForPdf(val: unknown): string {
     return escapeHtml(String(val ?? ''));
 }
 
+function pickTrimmed(...vals: unknown[]): string {
+    for (const v of vals) {
+        const s = String(v ?? '').trim();
+        if (s) return s;
+    }
+    return '';
+}
+
+function normalizePdfTaskSiteFields(row: any): void {
+    if (!row || typeof row !== 'object') return;
+    if (!row.siteName) row.siteName = row.site_name || '';
+    if (!row.siteAddress) row.siteAddress = row.site_address || '';
+    if (row.siteId == null && row.site_id != null) row.siteId = row.site_id;
+}
+
+function resolvePdfSiteName(row: any, it?: any): string {
+    return pickTrimmed(
+        it?.value,
+        row?.siteName,
+        row?.site_name,
+        row?.site?.name,
+        row?.jobSite?.name,
+    );
+}
+
+function resolvePdfSiteAddress(row: any, it?: any): string {
+    return pickTrimmed(
+        it?.value,
+        row?.siteAddress,
+        row?.site_address,
+        row?.site?.addressName,
+        row?.site?.address_name,
+        row?.jobSite?.addressName,
+    );
+}
+
+function isPdfSiteNameItem(it: any): boolean {
+    const t = String(it?.type || '').toUpperCase();
+    const n = String(it?.name || '').trim().toLowerCase();
+    return t === '[SITE_NAME]' || n === 'site name' || n === 'site name:';
+}
+
+function isPdfSiteAddressItem(it: any): boolean {
+    const t = String(it?.type || '').toUpperCase();
+    const n = String(it?.name || '').trim().toLowerCase().replace(/:$/, '');
+    return t === '[SITE_ADDRESS]' || n === 'site address';
+}
+
+/** Ensure Site Name / Site Address appear near the top of every report PDF. */
+function ensurePdfSiteReportItems(row: any, items: any[]): any[] {
+    const list = Array.isArray(items) ? [...items] : [];
+    const templateItems = Array.isArray(row?.reportTemplate?.items)
+        ? row.reportTemplate.items
+        : [];
+
+    const hasName = list.some(isPdfSiteNameItem);
+    const hasAddress = list.some(isPdfSiteAddressItem);
+
+    const templateName = templateItems.find(isPdfSiteNameItem);
+    const templateAddress = templateItems.find(isPdfSiteAddressItem);
+
+    const siteName = resolvePdfSiteName(row, list.find(isPdfSiteNameItem) || templateName);
+    const siteAddress = resolvePdfSiteAddress(
+        row,
+        list.find(isPdfSiteAddressItem) || templateAddress,
+    );
+
+    const inject: any[] = [];
+    if (!hasName) {
+        inject.push({
+            name: templateName?.name || 'Site Name',
+            type: '[SITE_NAME]',
+            value: siteName,
+            order: -20,
+        });
+    } else {
+        for (const it of list) {
+            if (isPdfSiteNameItem(it) && !String(it.value || '').trim()) {
+                it.value = siteName;
+            }
+        }
+    }
+    if (!hasAddress) {
+        inject.push({
+            name: templateAddress?.name || 'Site Address',
+            type: '[SITE_ADDRESS]',
+            value: siteAddress,
+            order: -19,
+        });
+    } else {
+        for (const it of list) {
+            if (isPdfSiteAddressItem(it) && !String(it.value || '').trim()) {
+                it.value = siteAddress;
+            }
+        }
+    }
+
+    if (!inject.length) return list;
+    return [...inject, ...list].sort(
+        (a, b) => (+a?.order || 0) - (+b?.order || 0) || (+a?.id || 0) - (+b?.id || 0),
+    );
+}
+
 async function buildImagesBlock(fieldName: string, value: unknown): Promise<string> {
     const urls = parseReportMediaList(value);
     const parts: string[] = [];
@@ -924,11 +1066,19 @@ async function renderReportField(
     }
 
     if (rawType === '[SITE_NAME]' || type === '[SITE_NAME]') {
-        return fieldRow(encName, `<span>${escapeHtml(row?.siteName ?? '')}</span>`);
+        const siteName = resolvePdfSiteName(row, it);
+        return fieldRow(
+            encName || 'Site Name',
+            `<span>${escapeHtml(siteName || '—')}</span>`,
+        );
     }
 
     if (rawType === '[SITE_ADDRESS]' || type === '[SITE_ADDRESS]') {
-        return fieldRow(encName, `<span>${escapeHtml(row?.siteAddress ?? '')}</span>`);
+        const siteAddress = resolvePdfSiteAddress(row, it);
+        return fieldRow(
+            encName || 'Site Address',
+            `<span>${escapeHtml(siteAddress || '—')}</span>`,
+        );
     }
 
     if (rawType === '[REPORT_BY]' || type === '[REPORT_BY]') {
@@ -951,7 +1101,7 @@ async function renderReportField(
         const storedTime = parseReportWallClockTime(valStr) ?? findReportTimeInItems(opts.reportItems);
         const display = storedTime
             ? formatReportPdfTimeDisplay(storedTime)
-            : getReportPdfReferenceMoment(row, opts.reportItems).format('HH:mm');
+            : getReportPdfReferenceMoment(row, opts.reportItems).format(REPORT_PDF_TIME_FORMAT);
         return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
     }
 
@@ -959,7 +1109,7 @@ async function renderReportField(
         const valStr = String(val ?? '').trim();
         const display = valStr
             ? formatReportPdfDateTimeValue(valStr)
-            : getReportPdfReferenceMoment(row, opts.reportItems).format(`${REPORT_PDF_DATE_FORMAT} HH:mm`);
+            : getReportPdfReferenceMoment(row, opts.reportItems).format(REPORT_PDF_DATETIME_FORMAT);
         return fieldRow(encName, `<span>${escapeHtml(display)}</span>`);
     }
 
@@ -1070,7 +1220,8 @@ async function renderReportField(
 }
 
 async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
-    const newItems = Array.isArray(rItems) ? rItems : [];
+    normalizePdfTaskSiteFields(row);
+    const newItems = ensurePdfSiteReportItems(row, Array.isArray(rItems) ? rItems : []);
     if (!row.reports?.length && newItems.length) {
         row.reports = newItems;
     }
