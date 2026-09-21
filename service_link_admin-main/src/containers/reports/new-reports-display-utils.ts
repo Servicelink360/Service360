@@ -109,9 +109,9 @@ export const REPORT_DISPLAY_DATE = "D MMM YYYY";
 export const REPORT_LIST_SEP = " · ";
 
 /** Form TimePicker display (12-hour with AM/PM). Stored values stay 24h HH:mm:ss. */
-export const REPORT_TIME_PICKER_FORMAT = "h:mm A";
+export const REPORT_TIME_PICKER_FORMAT = "hh:mm A";
 /** Form DatePicker+time display (12-hour with AM/PM). */
-export const REPORT_DATETIME_PICKER_FORMAT = "YYYY-MM-DD h:mm A";
+export const REPORT_DATETIME_PICKER_FORMAT = "YYYY-MM-DD hh:mm A";
 
 export function formatReportViewDate(raw: unknown): string {
   const s = String(raw ?? "").trim();

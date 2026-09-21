@@ -293,7 +293,7 @@ const ReportTimePickerPopupStyles = createGlobalStyle`
 
 const AMPM_HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const h = i + 1;
-  return { value: h, label: String(h) };
+  return { value: h, label: String(h).padStart(2, "0") };
 });
 const AMPM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
   value: i,
