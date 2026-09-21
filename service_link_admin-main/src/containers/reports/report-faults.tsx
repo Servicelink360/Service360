@@ -51,6 +51,7 @@ import { reportFaultSender, reportFaultStatus, userType } from "../../constants/
 import moment from "moment";
 import { Link } from "react-router-dom";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
+import { ReportsMobileAppShellStyles } from "./reports-mobile-app-shell";
 
 const { RangePicker } = DatePicker;
 
@@ -79,7 +80,7 @@ function isFaultReadForViewer(row: any, viewerType: number): boolean {
 
 type MobileStyledDark = { $dark?: boolean };
 
-const MobileFaultsList = styled.div<MobileStyledDark>`
+const MobileFaultsList = styled.div.attrs(() => ({ className: "nr-mobile-faults-list" }))<MobileStyledDark>`
   display: flex;
   flex-direction: column;
   gap: ${(p) => (p.$dark ? "18px" : "16px")};
@@ -88,17 +89,17 @@ const MobileFaultsList = styled.div<MobileStyledDark>`
   padding: 4px 0 12px;
 `;
 
-const MobileFaultCard = styled.article<MobileStyledDark & { $highlight?: boolean }>`
+const MobileFaultCard = styled.article.attrs(() => ({ className: "nr-mobile-fault-card" }))<MobileStyledDark & { $highlight?: boolean }>`
   display: block;
   width: 100%;
   box-sizing: border-box;
   background: ${(p) => (p.$dark ? "#1e1e1e" : "#ffffff")};
-  border: 2px solid ${(p) => (p.$dark ? "#525252" : "#c8c8c8")};
+  border: 2px solid ${(p) => (p.$dark ? "#525252" : "#b7d0b0")};
   border-radius: 12px;
   box-shadow: ${(p) =>
     p.$dark
       ? "0 0 0 1px #3d3d3d, 0 8px 28px rgba(0, 0, 0, 0.85)"
-      : "0 4px 14px rgba(0, 0, 0, 0.12)"};
+      : "0 4px 16px rgba(31, 107, 58, 0.12)"};
   overflow: hidden;
   cursor: pointer;
 
@@ -115,14 +116,15 @@ const MobileFaultCardHead = styled.div<MobileStyledDark>`
   align-items: flex-start;
   gap: 10px;
   padding: 14px 14px 10px;
-  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#e8e8e8")};
+  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
+  background: ${(p) => (p.$dark ? "#1e1e1e" : "#f4faf3")};
 `;
 
 const MobileFaultCardTitle = styled.div<MobileStyledDark>`
   font-size: 16px;
   font-weight: 600;
   line-height: 1.35;
-  color: ${(p) => (p.$dark ? "#f5f5f5" : "#262626")};
+  color: ${(p) => (p.$dark ? "#f5f5f5" : "#143d24")};
   word-break: break-word;
 `;
 
@@ -130,16 +132,17 @@ const MobileFaultCardMeta = styled.div<MobileStyledDark>`
   margin-top: 4px;
   font-size: 12px;
   line-height: 1.35;
-  color: ${(p) => (p.$dark ? "#b0b0b0" : "#595959")};
+  color: ${(p) => (p.$dark ? "#b0b0b0" : "#3d6b4a")};
 `;
 
 const MobileFaultCardBody = styled.div<MobileStyledDark>`
   padding: 12px 14px;
-  color: ${(p) => (p.$dark ? "#e8e8e8" : "#434343")};
+  color: ${(p) => (p.$dark ? "#e8e8e8" : "#1a4d2e")};
   font-size: 13px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
+  background: ${(p) => (p.$dark ? "transparent" : "#d7e8d2")};
 `;
 
 const MobileFaultCardActions = styled.div<MobileStyledDark>`
@@ -147,7 +150,8 @@ const MobileFaultCardActions = styled.div<MobileStyledDark>`
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 14px 14px;
-  border-top: 1px solid ${(p) => (p.$dark ? "#404040" : "#e8e8e8")};
+  border-top: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
+  background: ${(p) => (p.$dark ? "transparent" : "#f4faf3")};
 `;
 
 const UnreadBookIcon: React.FC = () => (
@@ -703,7 +707,6 @@ const ReportFaults: React.FC = () => {
                     key={record.listRowId}
                     $dark={mobileUiDark}
                     $highlight={highlighted}
-                    className={highlighted ? "report-fault-mobile-card--highlight" : undefined}
                     onClick={(e) => {
                         const el = e.target as HTMLElement;
                         if (
@@ -1733,6 +1736,7 @@ const ReportFaults: React.FC = () => {
                 onClick={() => handleOnClick(actionType.ADD)}
                 type="primary"
                 icon={<FileAddOutlined />}
+                className={isMobilePortrait ? "nr-app-fab" : undefined}
                 style={isMobilePortrait ? staffPrimaryGreen : undefined}
             >
                 {intl.formatMessage({ id: "sidebar.users.new" })}
@@ -1748,16 +1752,16 @@ const ReportFaults: React.FC = () => {
 
     const mobilePortraitBleed: React.CSSProperties = isMobilePortrait
         ? {
-              paddingTop: faultsPageDark ? 0 : 8,
-              paddingBottom: 16,
+              paddingTop: 0,
+              paddingBottom: 72,
               marginLeft: 0,
               marginRight: 0,
-              paddingLeft: 8,
-              paddingRight: 8,
+              paddingLeft: 12,
+              paddingRight: 12,
               width: "100%",
               maxWidth: "100%",
               boxSizing: "border-box",
-              background: faultsPageDark ? "#000000" : "#ffffff",
+              background: faultsPageDark ? "#000000" : "#e7f0e4",
           }
         : { paddingTop: 8 };
 
@@ -1790,7 +1794,7 @@ const ReportFaults: React.FC = () => {
                     search: search ? `?${search}` : "",
                 });
             }}
-            style={{ marginBottom: 12 }}
+            style={{ marginBottom: isMobilePortrait ? 0 : 12 }}
             items={[
                 { key: "list", label: "Report faults" },
                 { key: "urgent", label: "Urgent reports" },
@@ -1845,6 +1849,7 @@ const ReportFaults: React.FC = () => {
 
     return (
         <Layout title="sidebar.reportFaults">
+            {isMobilePortrait ? <ReportsMobileAppShellStyles /> : null}
             {faultsPageDark ? <ReportsMobileDarkPageStyles /> : null}
             <GlobalHotKeys
                 keyMap={{ SEARCH_REPORT_FAULTS: "ctrl+alt+f" }}
@@ -1866,6 +1871,8 @@ const ReportFaults: React.FC = () => {
                     <TasksFaultsPanel tabsAboveTable={reportFaultMainTabsEl} />
                 ) : (
                 <>
+                <div className={isMobilePortrait ? "nr-app-top nr-app-chrome" : undefined}>
+                {isMobilePortrait ? reportFaultMainTabsEl : null}
                 <div
                     className={`new-reports-list-filters${
                         mobileUiDark ? " new-reports-list-filters--dark" : ""
@@ -1873,20 +1880,13 @@ const ReportFaults: React.FC = () => {
                     style={{ width: "100%" }}
                 >
                     {isMobilePortrait ? (
-                        <div
-                            style={{
-                                display: "flex",
-                                gap: 8,
-                                alignItems: "center",
-                                marginBottom: listFiltersOpen ? 12 : 16,
-                            }}
-                        >
+                        <div className="nr-app-top-row">
                             <Button
                                 type="default"
-                                className={mobileUiDark ? "nr-mobile-btn-dark" : undefined}
+                                className={`nr-app-filter-btn${mobileUiDark ? " nr-mobile-btn-dark" : ""}`}
                                 icon={<FilterOutlined />}
                                 onClick={() => setListFiltersOpen((open) => !open)}
-                                style={{ flex: 1, ...mobileDarkBtnDefaultStyle }}
+                                style={mobileDarkBtnDefaultStyle}
                                 aria-expanded={listFiltersOpen}
                             >
                                 Filters {listFiltersOpen ? <UpOutlined /> : <DownOutlined />}
@@ -1898,14 +1898,17 @@ const ReportFaults: React.FC = () => {
                         form={form}
                         layout="vertical"
                         style={
-                            isMobilePortrait && !listFiltersOpen
-                                ? { display: "none", width: "100%", marginBottom: 0 }
+                            isMobilePortrait
+                                ? {
+                                      width: "100%",
+                                      marginBottom: 0,
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      gap: 0,
+                                  }
                                 : {
                                       width: "100%",
                                       marginBottom: 16,
-                                      ...(isMobilePortrait
-                                          ? { display: "flex", flexDirection: "column", gap: 0 }
-                                          : {}),
                                   }
                         }
                         className={[
@@ -1914,6 +1917,7 @@ const ReportFaults: React.FC = () => {
                                 : "",
                             mobileUiDark ? "new-reports-list-filters-form--dark" : "",
                             isMobilePortrait ? "report-faults-mobile-filters-form" : "",
+                            isMobilePortrait && listFiltersOpen ? "nr-app-filter-sheet" : "",
                         ]
                             .filter(Boolean)
                             .join(" ") || undefined}
@@ -1963,7 +1967,7 @@ const ReportFaults: React.FC = () => {
                                 <Form.Item
                                     name="keyword"
                                     label={intl.formatMessage({ id: "form.filter.keyword" })}
-                                    className="break-line report-faults-filter-keyword"
+                                    className="break-line report-faults-filter-keyword nr-keyword-row"
                                     style={{ width: "100%", marginBottom: 12 }}
                                 >
                                     <Input
@@ -1977,7 +1981,7 @@ const ReportFaults: React.FC = () => {
                                         style={{ width: "100%", ...mobileDarkFieldStyle }}
                                     />
                                 </Form.Item>
-                                <div className="report-faults-filter-search">{searchButton}</div>
+                                <div className="report-faults-filter-search nr-search-row">{searchButton}</div>
                             </>
                         ) : (
                             <StatusRow>
@@ -2055,18 +2059,22 @@ const ReportFaults: React.FC = () => {
                         )}
                     </Form>
                 </div>
+                </div>
                 {!isMobilePortrait ? <UsernameRow /> : null}
                 <InformationDiv style={isMobilePortrait ? { overflow: "visible" } : undefined}>
                     {searchResultsSummary}
-                    {canUseBulkDelete ? (
+                    {canUseBulkDelete && (!isMobilePortrait || selectedRowKeys.length > 0) ? (
                         <div
-                            className={
+                            className={[
                                 isMobilePortrait
                                     ? `new-reports-bulk-bar--mobile${mobileUiDark ? " new-reports-bulk-bar--dark" : ""}`
                                     : mobileUiDark
                                       ? "new-reports-bulk-bar--dark"
-                                      : undefined
-                            }
+                                      : "",
+                                isMobilePortrait ? "nr-app-bulk-sticky" : "",
+                            ]
+                                .filter(Boolean)
+                                .join(" ") || undefined}
                             style={{
                                 display: "flex",
                                 flexWrap: "wrap",
@@ -2221,7 +2229,7 @@ const ReportFaults: React.FC = () => {
                             </Popconfirm>
                         </div>
                     ) : null}
-                    {showReportFaultMainTabs ? reportFaultMainTabsEl : null}
+                    {showReportFaultMainTabs && !isMobilePortrait ? reportFaultMainTabsEl : null}
                     {showMobileFaultCards ? (
                         <Spin spinning={loading}>
                             {!loading && listRows.length === 0 ? (

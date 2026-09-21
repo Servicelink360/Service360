@@ -2048,7 +2048,7 @@ export class UserTasksService {
         siteName: data.siteName,
         serviceName: data.serviceName,
       });
-      return errorCode.SUCCESS;
+      return { ...errorCode.SUCCESS, data: { id: taskSaved.id } };
     } catch (error) {
       const { message: errMsg, details } = buildExceptionResult(error, 'createCustomerReports');
       console.error('[createCustomerReports]', errMsg);
@@ -2153,7 +2153,7 @@ export class UserTasksService {
       this.mergeChunkedReportsOnTask(ut);
       this.queueReportPdfGeneration(ut, 'updateCustomerReports');
 
-      return errorCode.SUCCESS;
+      return { ...errorCode.SUCCESS, data: { id: +id } };
     } catch (error) {
       const { message: errMsg, details } = buildExceptionResult(error, 'updateCustomerReports');
       console.error('[updateCustomerReports]', errMsg);

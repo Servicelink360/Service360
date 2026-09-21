@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { flushSync } from "react-dom";
 import styled, { createGlobalStyle, css } from "styled-components";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
+import { ReportsMobileAppShellStyles } from "./reports-mobile-app-shell";
 import MobileReportPdfOverlay from "@app/components/common/MobileReportPdfOverlay";
 import useMobilePortrait from "@app/lib/hooks/useMobilePortrait";
 import { useColorModeOptional } from "@app/context/ColorModeContext";
@@ -474,6 +475,124 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     .new-report-form-modal.new-report-form-modal--dark .nr-template-fields-mobile .ant-form-item-label > label {
       color: #f0f0f0 !important;
     }
+
+    /* Light mobile form: sage page, green header, white field cards (not a blank white sheet). */
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-content {
+      background: #e7f0e4 !important;
+      border-radius: 16px !important;
+      overflow: hidden;
+      border: 1px solid #c5d9bf;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-header {
+      background: #1f6b3a !important;
+      border-bottom: none !important;
+      padding: 14px 16px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-title,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-title span,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-title .anticon {
+      color: #ffffff !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-close {
+      color: #ffffff !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-body {
+      background: #e7f0e4 !important;
+      padding: 12px 12px 8px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-footer {
+      background: #d7e8d2 !important;
+      border-top: 1px solid #c5d9bf !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-form-item {
+      background: #ffffff;
+      border: 1px solid #d5e4cf;
+      border-radius: 12px;
+      padding: 10px 12px 6px;
+      margin-bottom: 10px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-form-item-label > label {
+      color: #1a4d2e !important;
+      font-weight: 600;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input-affix-wrapper,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selector,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker {
+      background: #f7fbf6 !important;
+      border-color: #b7d0b0 !important;
+      border-radius: 10px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select {
+      background: #f4faf3 !important;
+      border-color: #2f7d46 !important;
+      border-radius: 12px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .nr-report-ampm-btns .ant-btn-primary {
+      background: #1f6b3a !important;
+      border-color: #1f6b3a !important;
+    }
+
+    /* Dropdown menus render on document.body — style them as app panels, not white sheets. */
+    html:not([data-color-mode="dark"]) .ant-select-dropdown {
+      background: #f4faf3 !important;
+      border: 1px solid #b7d0b0 !important;
+      border-radius: 12px !important;
+      padding: 6px !important;
+      box-shadow: 0 10px 28px rgba(31, 107, 58, 0.18) !important;
+    }
+
+    html:not([data-color-mode="dark"]) .ant-select-item {
+      border-radius: 8px !important;
+      color: #1a4d2e !important;
+      font-weight: 600;
+    }
+
+    html:not([data-color-mode="dark"]) .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+      background: #d7e8d2 !important;
+    }
+
+    html:not([data-color-mode="dark"]) .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+      background: #1f6b3a !important;
+      color: #ffffff !important;
+      font-weight: 700;
+    }
+
+    html:not([data-color-mode="dark"]) .ant-select-item-option-selected .ant-select-item-option-state {
+      color: #ffffff !important;
+    }
+
+    /* Closed select boxes on the form (antd selector is more specific than .ant-select-selector). */
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker {
+      background: #f7fbf6 !important;
+      border-color: #8fbf96 !important;
+      color: #143d24 !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-item,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-placeholder {
+      color: #1a4d2e !important;
+    }
+
+    html:not([data-color-mode="dark"]) .ant-picker-panel-container {
+      background: #f4faf3 !important;
+      border-radius: 12px !important;
+    }
+
+    html:not([data-color-mode="dark"]) .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
+      background: #1f6b3a !important;
+    }
   }
 `;
 
@@ -488,6 +607,52 @@ const NewReportsListChromeStyles = createGlobalStyle`
     visibility: hidden !important;
     pointer-events: none !important;
   }
+
+  /* Upload / save progress — match report form app palette (not blank white). */
+  .ant-modal.new-report-progress-modal--app .ant-modal-content {
+    background: #e7f0e4 !important;
+    border-radius: 16px !important;
+    overflow: hidden;
+    border: 1px solid #c5d9bf;
+    box-shadow: 0 16px 40px rgba(31, 107, 58, 0.22) !important;
+  }
+  .ant-modal.new-report-progress-modal--app .ant-modal-header {
+    background: #1f6b3a !important;
+    border-bottom: none !important;
+    padding: 14px 16px !important;
+  }
+  .ant-modal.new-report-progress-modal--app .ant-modal-title {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-align: center;
+  }
+  .ant-modal.new-report-progress-modal--app .ant-modal-body {
+    background: #e7f0e4 !important;
+  }
+  .ant-modal.new-report-progress-modal--app .ant-progress-text {
+    color: #1a4d2e !important;
+    font-weight: 700 !important;
+  }
+  .ant-modal.new-report-progress-modal--app .ant-progress-inner {
+    background: #d7e8d2 !important;
+  }
+
+  .ant-modal.new-report-progress-modal--dark .ant-modal-content {
+    background: #1e1e1e !important;
+    border: 1px solid #444444;
+    border-radius: 16px !important;
+  }
+  .ant-modal.new-report-progress-modal--dark .ant-modal-header {
+    background: #141414 !important;
+    border-bottom: 1px solid #333333 !important;
+  }
+  .ant-modal.new-report-progress-modal--dark .ant-modal-title {
+    color: #ffffff !important;
+  }
+  .ant-modal.new-report-progress-modal--dark .ant-modal-body {
+    background: #1e1e1e !important;
+  }
+
   .nr-list-page {
     width: 100%;
     max-width: 100%;
@@ -756,30 +921,30 @@ const renderClamp2 = (text: unknown) => {
 };
 
 /** Mobile card list — $dark sets explicit colors (no CSS-variable fallbacks to white). */
-const MobileReportsList = styled.div<MobileStyledDark>`
+const MobileReportsList = styled.div.attrs(() => ({ className: "nr-mobile-reports-list" }))<MobileStyledDark>`
   display: flex;
   flex-direction: column;
   gap: ${(p) => (p.$dark ? "18px" : "16px")};
   width: 100%;
   box-sizing: border-box;
   padding: 12px;
-  background: ${(p) => (p.$dark ? "#000000" : "#e4e7eb")};
+  background: ${(p) => (p.$dark ? "#000000" : "#e7f0e4")};
   border: none;
   border-radius: 0;
 `;
 
-const MobileReportCardShell = styled.article<MobileStyledDark & { $highlight?: boolean }>`
+const MobileReportCardShell = styled.article.attrs(() => ({ className: "nr-mobile-report-card" }))<MobileStyledDark & { $highlight?: boolean }>`
   display: block;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
   background: ${(p) => (p.$dark ? "#1e1e1e" : "#ffffff")};
-  border: 2px solid ${(p) => (p.$dark ? "#525252" : "#c8c8c8")};
+  border: 2px solid ${(p) => (p.$dark ? "#525252" : "#b7d0b0")};
   border-radius: 12px;
   box-shadow: ${(p) =>
     p.$dark
       ? "0 0 0 1px #3d3d3d, 0 8px 28px rgba(0, 0, 0, 0.85)"
-      : "0 4px 14px rgba(0, 0, 0, 0.12)"};
+      : "0 4px 16px rgba(31, 107, 58, 0.12)"};
   overflow: hidden;
 
   ${(p) =>
@@ -796,8 +961,8 @@ const MobileReportCardHead = styled.div<MobileStyledDark>`
   align-items: flex-start;
   gap: 10px;
   padding: 14px 14px 12px;
-  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#e8e8e8")};
-  background: ${(p) => (p.$dark ? "#1e1e1e" : "#ffffff")};
+  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
+  background: ${(p) => (p.$dark ? "#1e1e1e" : "#f4faf3")};
 `;
 
 const MobileReportCardHeadMain = styled.div`
@@ -809,7 +974,7 @@ const MobileReportCardTitle = styled.div<MobileStyledDark>`
   font-size: 16px;
   font-weight: 600;
   line-height: 1.35;
-  color: ${(p) => (p.$dark ? "#ffffff" : "#141414")};
+  color: ${(p) => (p.$dark ? "#ffffff" : "#143d24")};
   word-break: break-word;
 `;
 
@@ -817,7 +982,7 @@ const MobileReportCardSite = styled.div<MobileStyledDark>`
   margin-top: 6px;
   font-size: 13px;
   line-height: 1.4;
-  color: ${(p) => (p.$dark ? "#b0b0b0" : "#595959")};
+  color: ${(p) => (p.$dark ? "#b0b0b0" : "#3d6b4a")};
   word-break: break-word;
 `;
 
@@ -826,9 +991,9 @@ const MobileReportCardDetails = styled.div<MobileStyledDark>`
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  background: ${(p) => (p.$dark ? "#141414" : "#f5f5f5")};
-  border-top: 1px solid ${(p) => (p.$dark ? "#404040" : "#ebebeb")};
-  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#ebebeb")};
+  background: ${(p) => (p.$dark ? "#141414" : "#d7e8d2")};
+  border-top: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
+  border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
 `;
 
 const MobileReportCardDetailRow = styled.div`
@@ -842,7 +1007,7 @@ const MobileReportCardDetailRow = styled.div`
 
 const MobileReportCardLabel = styled.span<MobileStyledDark>`
   flex-shrink: 0;
-  color: ${(p) => (p.$dark ? "#d0d6de" : "#8c8c8c")};
+  color: ${(p) => (p.$dark ? "#d0d6de" : "#3d6b4a")};
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
@@ -851,8 +1016,8 @@ const MobileReportCardLabel = styled.span<MobileStyledDark>`
 
 const MobileReportCardValue = styled.span<MobileStyledDark>`
   text-align: right;
-  color: ${(p) => (p.$dark ? "#ffffff" : "#262626")};
-  font-weight: ${(p) => (p.$dark ? 600 : 400)};
+  color: ${(p) => (p.$dark ? "#ffffff" : "#143d24")};
+  font-weight: ${(p) => (p.$dark ? 600 : 600)};
   word-break: break-word;
 `;
 
@@ -862,7 +1027,7 @@ const MobileReportCardActions = styled.div<MobileStyledDark>`
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  background: ${(p) => (p.$dark ? "#1e1e1e" : "#ffffff")};
+  background: ${(p) => (p.$dark ? "#1e1e1e" : "#f4faf3")};
 `;
 
 const MobileReportCardActionsIcons = styled.div<MobileStyledDark>`
@@ -1256,6 +1421,7 @@ const NewReports: React.FC<{
   const [loadingSiteServices, setLoadingSiteServices] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [mobilePdfUrl, setMobilePdfUrl] = useState<string | null>(null);
+  const [pendingPdfIds, setPendingPdfIds] = useState<Set<number>>(() => new Set());
   const isMobilePortrait = useMobilePortrait();
   const { isDark } = useColorModeOptional();
   const showMobileCards = useNarrowViewport();
@@ -1610,6 +1776,53 @@ const NewReports: React.FC<{
       lockedTemplateCategory,
     ],
   );
+
+  /** PDF is built after create/update returns — poll until the button can show. */
+  const pollReportPdfReady = useCallback(async (reportId: number) => {
+    const id = +reportId;
+    if (!Number.isFinite(id) || id <= 0) return;
+    setPendingPdfIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    try {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        await delay(1500);
+        const one = await fetchCustomReportById(id);
+        if (!one) continue;
+        const pdf = getReportPdfField(one);
+        if (!pdf) continue;
+        setRows((prev) =>
+          prev.map((r) =>
+            +r.id === id
+              ? {
+                  ...r,
+                  ...one,
+                  pdfFile: one.pdfFile ?? one.pdf_file ?? r.pdfFile,
+                }
+              : r,
+          ),
+        );
+        setViewRow((prev) =>
+          prev && +prev.id === id
+            ? {
+                ...prev,
+                ...one,
+                pdfFile: one.pdfFile ?? one.pdf_file ?? prev.pdfFile,
+              }
+            : prev,
+        );
+        break;
+      }
+    } finally {
+      setPendingPdfIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     loadInit();
@@ -2988,8 +3201,9 @@ const NewReports: React.FC<{
 
     startSaveProgressTicker();
     const wasEditing = !!editing?.id;
+    const editingId = editing?.id != null ? +editing.id : 0;
+    let res: any = null;
     try {
-      let res: any;
       if (editing?.id) {
         res = await updateCustomReport(+editing.id, payload);
       } else {
@@ -3023,6 +3237,9 @@ const NewReports: React.FC<{
       return;
     }
 
+    const savedReportId =
+      editingId > 0 ? editingId : Number(res?.data?.id ?? res?.data?.Id ?? 0) || 0;
+
     // Close overlays before toast — progress modal is zIndex 1100; ant-message defaults to ~1010.
     closeReportFormModal();
     await delay(150);
@@ -3037,6 +3254,18 @@ const NewReports: React.FC<{
       refreshDashboard();
       if (isMobilePortrait || showMobileCards) {
         window.scrollTo?.({ top: 0, behavior: "smooth" });
+      }
+      if (savedReportId > 0) {
+        void pollReportPdfReady(savedReportId);
+      } else {
+        // Fallback when older API doesn't return created id yet.
+        setTimeout(() => {
+          setRows((prev) => {
+            const missing = prev.find((r) => r?.id && !getReportPdfField(r));
+            if (missing?.id) void pollReportPdfReady(+missing.id);
+            return prev;
+          });
+        }, 0);
       }
     } catch (reloadErr) {
       console.error("Failed to refresh report list after save", reloadErr);
@@ -3681,6 +3910,18 @@ const NewReports: React.FC<{
               >
                 PDF
               </Button>
+            ) : pendingPdfIds.has(+r.id) ? (
+              <Button
+                size="small"
+                type="default"
+                className={mobileUiDark ? "nr-mobile-btn-dark nr-mobile-pdf-btn" : undefined}
+                icon={<FilePdfOutlined />}
+                style={mobileDarkBtnDefaultStyle}
+                loading
+                disabled
+              >
+                PDF
+              </Button>
             ) : null}
             <MobileReportCardActionsIcons $dark={mobileUiDark}>
               {renderReportActions(r)}
@@ -3703,6 +3944,7 @@ const NewReports: React.FC<{
       mobileDarkBtnDefaultStyle,
       handleOpenReportPdf,
       isIncidentReportMode,
+      pendingPdfIds,
     ],
   );
 
@@ -3787,6 +4029,19 @@ const NewReports: React.FC<{
       render: (_: unknown, r: any) => {
         const href = resolveReportPdfHref(getReportPdfField(r));
         if (!href) {
+          if (pendingPdfIds.has(+r.id)) {
+            return (
+              <Button
+                type="link"
+                size="small"
+                loading
+                disabled
+                icon={<FilePdfOutlined />}
+                aria-label="Preparing PDF"
+                style={tableLinkIconBtnStyle}
+              />
+            );
+          }
           return <span style={{ color: "#bfbfbf" }}>{EM_DASH}</span>;
         }
         const label = reportPdfLinkLabel(r, href);
@@ -4059,7 +4314,7 @@ const NewReports: React.FC<{
   const mobilePortraitBleed: React.CSSProperties = reportsPageDark
     ? {
         paddingTop: 0,
-        paddingBottom: 16,
+        paddingBottom: isMobilePortrait ? 72 : 16,
         paddingLeft: isMobilePortrait ? 12 : 0,
         paddingRight: isMobilePortrait ? 12 : 0,
         margin: 0,
@@ -4069,15 +4324,15 @@ const NewReports: React.FC<{
       }
     : isMobilePortrait
       ? {
-          paddingTop: 8,
-          paddingBottom: 16,
-          marginLeft: -20,
-          marginRight: -20,
-          paddingLeft: 20,
-          paddingRight: 20,
-          width: "calc(100% + 40px)",
+          paddingTop: 0,
+          paddingBottom: 72,
+          marginLeft: 0,
+          marginRight: 0,
+          paddingLeft: 12,
+          paddingRight: 12,
+          width: "100%",
           boxSizing: "border-box",
-          background: "#ffffff",
+          background: "#e7f0e4",
         }
       : { paddingTop: 8 };
 
@@ -4086,6 +4341,7 @@ const NewReports: React.FC<{
       <ReportTimePickerPopupStyles />
       <NewReportModalMobilePortraitStyles />
       <NewReportsListChromeStyles />
+      {isMobilePortrait ? <ReportsMobileAppShellStyles /> : null}
       {reportsPageDark ? <ReportsMobileDarkPageStyles /> : null}
       <UsersDiv
         style={mobilePortraitBleed}
@@ -4096,9 +4352,10 @@ const NewReports: React.FC<{
         <div className="nr-list-page">
         <div
           className={`nr-list-chrome${mobileUiDark ? " nr-list-chrome--dark" : ""}${
-            isMobilePortrait ? " nr-list-chrome--mobile" : ""
+            isMobilePortrait ? " nr-list-chrome--mobile nr-app-chrome" : ""
           }`}
         >
+        <div className={isMobilePortrait ? "nr-app-top" : undefined}>
         {showReportDeletedTabs ? (
           <div className={isMobilePortrait ? undefined : "nr-list-chrome-top"}>
             {!isMobilePortrait ? (
@@ -4127,7 +4384,7 @@ const NewReports: React.FC<{
                 setPage(1);
                 setSelectedRowKeys([]);
               }}
-              style={isMobilePortrait ? { marginBottom: 12 } : { marginBottom: 0 }}
+              style={{ marginBottom: 0 }}
               items={[
                 { key: "active", label: "Reports" },
                 { key: "deleted", label: `Deleted (${deletedReportCount})` },
@@ -4156,20 +4413,13 @@ const NewReports: React.FC<{
           }`}
         >
           {isMobilePortrait ? (
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                marginBottom: listFiltersOpen ? 12 : 16,
-              }}
-            >
+            <div className="nr-app-top-row">
               <Button
                 type="default"
-                className={mobileUiDark ? "nr-mobile-btn-dark" : undefined}
+                className={`nr-app-filter-btn${mobileUiDark ? " nr-mobile-btn-dark" : ""}`}
                 icon={<FilterOutlined />}
                 onClick={() => setListFiltersOpen((open) => !open)}
-                style={{ flex: 1, ...mobileDarkBtnDefaultStyle }}
+                style={mobileDarkBtnDefaultStyle}
                 aria-expanded={listFiltersOpen}
               >
                 Filters {listFiltersOpen ? <UpOutlined /> : <DownOutlined />}
@@ -4177,6 +4427,7 @@ const NewReports: React.FC<{
               {+profileType !== userType.CUSTOMER ? (
                 <Button
                   type="primary"
+                  className="nr-app-fab"
                   icon={<FileTextOutlined />}
                   style={staffPrimaryGreen}
                   onClick={openCreate}
@@ -4195,6 +4446,7 @@ const NewReports: React.FC<{
               !isMobilePortrait && isIncidentReportMode ? "nr-toolbar-form--no-service" : "",
               isMobilePortrait && !listFiltersOpen ? "new-reports-list-filters-form--collapsed" : "",
               mobileUiDark ? "new-reports-list-filters-form--dark" : "",
+              isMobilePortrait && listFiltersOpen ? "nr-app-filter-sheet" : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -4341,14 +4593,16 @@ const NewReports: React.FC<{
             )}
           </Form>
         </div>
+        </div>
 
-        {canUseBulkDelete ? (
+        {canUseBulkDelete && (!isMobilePortrait || selectedRowKeys.length > 0) ? (
           <div
             className={[
               showMobileCards
                 ? `new-reports-bulk-bar--mobile${mobileUiDark ? " new-reports-bulk-bar--dark" : ""}`
                 : "nr-bulk-bar--chrome",
               mobileUiDark && !showMobileCards ? "new-reports-bulk-bar--dark" : "",
+              isMobilePortrait ? "nr-app-bulk-sticky" : "",
             ]
               .filter(Boolean)
               .join(" ")}
@@ -4913,7 +5167,11 @@ const NewReports: React.FC<{
       </Modal>
 
       <Modal
-        className={mobileUiDark ? "new-report-progress-modal--dark" : undefined}
+        className={
+          mobileUiDark
+            ? "new-report-progress-modal new-report-progress-modal--dark"
+            : "new-report-progress-modal new-report-progress-modal--app"
+        }
         open={progressOpen}
         closable={false}
         maskClosable={false}
@@ -4921,7 +5179,9 @@ const NewReports: React.FC<{
         zIndex={1100}
         centered
         width={480}
-        maskStyle={{ backgroundColor: "rgba(0, 0, 0, 0.55)" }}
+        maskStyle={{
+          backgroundColor: mobileUiDark ? "rgba(0, 0, 0, 0.82)" : "rgba(20, 61, 36, 0.45)",
+        }}
         title={editing ? "Saving report" : "Uploading report"}
       >
         <div style={{ padding: "8px 4px 16px" }}>
@@ -4931,7 +5191,7 @@ const NewReports: React.FC<{
               marginBottom: 8,
               textAlign: "center",
               fontWeight: 600,
-              color: mobileUiDark ? "#ffffff" : undefined,
+              color: mobileUiDark ? "#ffffff" : "#1a4d2e",
             }}
           >
             {submitProgress.label}
@@ -4944,7 +5204,7 @@ const NewReports: React.FC<{
                 marginBottom: 20,
                 textAlign: "center",
                 fontSize: 16,
-                color: mobileUiDark ? "#85c179" : "#135200",
+                color: mobileUiDark ? "#85c179" : "#1f6b3a",
               }}
             >
               Photo {submitProgress.photoCurrent ?? 0} of {submitProgress.photoTotal}
@@ -4953,11 +5213,19 @@ const NewReports: React.FC<{
           <Progress
             percent={submitProgress.percent}
             status={submitProgress.percent >= 100 ? "success" : "active"}
-            strokeColor="#397d36"
+            strokeColor="#1f6b3a"
             strokeWidth={12}
             format={(pct) => `${pct}%`}
           />
-          <Typography.Text type="secondary" style={{ display: "block", marginTop: 16, textAlign: "center" }}>
+          <Typography.Text
+            type="secondary"
+            style={{
+              display: "block",
+              marginTop: 16,
+              textAlign: "center",
+              color: mobileUiDark ? undefined : "#3d6b4a",
+            }}
+          >
             {submitProgress.percent}% complete. Please keep this window open until finished.
           </Typography.Text>
         </div>

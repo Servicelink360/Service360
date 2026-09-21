@@ -1563,8 +1563,8 @@ body.new-reports-page-body-dark .isoBoxWrapper,
   border: 1px solid #2e2e2e !important;
 }
 
-/* Mobile: keep job-site/service search visible when other filters are collapsed */
-.new-reports-list-filters-form--collapsed .ant-form-item:not(.nr-search-row) {
+/* Mobile: keep keyword + search visible when other filters are collapsed */
+.new-reports-list-filters-form--collapsed .ant-form-item:not(.nr-search-row):not(.nr-keyword-row) {
   display: none !important;
 }
 
