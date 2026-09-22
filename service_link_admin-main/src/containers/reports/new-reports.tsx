@@ -276,6 +276,17 @@ const ReportTimePickerPopupStyles = createGlobalStyle`
   .nr-report-ampm-wrap .nr-report-ampm-minute .ant-select-selector {
     width: 100% !important;
   }
+  .new-report-form-modal--dark .nr-report-ampm-hour .ant-select-selection-item,
+  .new-report-form-modal--dark .nr-report-ampm-minute .ant-select-selection-item,
+  .new-report-form-modal--dark .nr-report-ampm-hour .ant-select-selector,
+  .new-report-form-modal--dark .nr-report-ampm-minute .ant-select-selector {
+    color: #ffffff !important;
+  }
+  .new-report-form-modal--dark .nr-report-ampm-btns .ant-btn-default {
+    background: #1a1a1a !important;
+    border-color: #555555 !important;
+    color: #ffffff !important;
+  }
   .nr-report-ampm-btns.ant-btn-group {
     display: inline-flex;
     flex: 0 0 auto;
@@ -343,7 +354,7 @@ type AmPmPickerSharedProps = {
   onChange?: (v: moment.Moment | null) => void;
   size?: "large" | "middle" | "small";
   className?: string;
-  popupClassName?: string;
+  dropdownClassName?: string;
   style?: React.CSSProperties;
   allowClear?: boolean;
 };
@@ -354,6 +365,7 @@ function ReportAmPmTimePicker({
   onChange,
   size = "large",
   className,
+  dropdownClassName,
 }: AmPmPickerSharedProps) {
   const m = normalizeAmPmMoment(value);
   const hour12 = m ? m.hour() % 12 || 12 : undefined;
@@ -369,6 +381,7 @@ function ReportAmPmTimePicker({
       <Select
         size={size}
         className={["nr-report-ampm-hour", className].filter(Boolean).join(" ")}
+        dropdownClassName={dropdownClassName}
         placeholder="Hour"
         value={hour12}
         options={AMPM_HOUR_OPTIONS}
@@ -379,6 +392,7 @@ function ReportAmPmTimePicker({
       <Select
         size={size}
         className={["nr-report-ampm-minute", className].filter(Boolean).join(" ")}
+        dropdownClassName={dropdownClassName}
         placeholder="Min"
         value={minute}
         options={AMPM_MINUTE_OPTIONS}
@@ -418,7 +432,7 @@ function ReportAmPmDateTimePicker({
   onChange,
   size = "large",
   className,
-  popupClassName,
+  dropdownClassName,
 }: AmPmPickerSharedProps) {
   const m = normalizeAmPmMoment(value);
 
@@ -442,11 +456,17 @@ function ReportAmPmDateTimePicker({
         allowClear
         size={size}
         className={["nr-report-ampm-date", className].filter(Boolean).join(" ")}
-        popupClassName={popupClassName}
+        dropdownClassName={dropdownClassName}
         style={{ width: "100%", borderRadius: 8 }}
         format="YYYY-MM-DD"
       />
-      <ReportAmPmTimePicker value={m} onChange={onChange} size={size} className={className} />
+      <ReportAmPmTimePicker
+        value={m}
+        onChange={onChange}
+        size={size}
+        className={className}
+        dropdownClassName={dropdownClassName}
+      />
     </div>
   );
 }
@@ -549,24 +569,30 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       font-size: 15px !important;
     }
 
-    /* Light mobile form: sage page, green header, white field cards (not a blank white sheet). */
+    /* Light mobile form — same layout as dark modal; sage/green palette only. */
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-content {
       background: #e7f0e4 !important;
-      border-radius: 16px !important;
+      color: #143d24 !important;
+      border: 2px solid #c5d9bf !important;
+      border-radius: 14px !important;
       overflow: hidden;
-      border: 1px solid #c5d9bf;
+      box-shadow:
+        0 0 0 1px rgba(31, 107, 58, 0.12),
+        0 28px 90px rgba(31, 107, 58, 0.18),
+        0 12px 40px rgba(31, 107, 58, 0.12) !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-header {
-      background: #1f6b3a !important;
+      background: linear-gradient(180deg, #397d36 0%, #2f6b2c 100%) !important;
       border-bottom: none !important;
-      padding: 14px 16px !important;
+      padding: 16px 48px 16px 24px !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-title,
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-title span,
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-title .anticon {
       color: #ffffff !important;
+      font-weight: 700 !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-close {
@@ -575,7 +601,7 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-body {
       background: #e7f0e4 !important;
-      padding: 12px 12px 8px !important;
+      color: #143d24 !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-modal-footer {
@@ -583,18 +609,8 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       border-top: 1px solid #c5d9bf !important;
     }
 
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-form-item {
-      background: #cfe5c8;
-      border: 1px solid #9fc49a;
-      border-radius: 12px;
-      padding: 12px 12px 8px;
-      margin-bottom: 12px !important;
-      box-shadow: 0 2px 8px rgba(31, 107, 58, 0.08);
-    }
-
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-form-item-label > label {
-      color: #143d24 !important;
-      font-weight: 700;
+      color: #3d6b4a !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-input,
@@ -604,14 +620,58 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) textarea.ant-input {
       background: #ffffff !important;
       border-color: #8fbf96 !important;
-      border-radius: 10px !important;
       color: #143d24 !important;
     }
 
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select {
-      background: #ffffff !important;
-      border-color: #2f7d46 !important;
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-placeholder,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-selection-item {
+      color: #143d24 !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-select-arrow,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-picker-suffix {
+      color: #3d6b4a !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload.ant-upload-select-picture-card,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .image-upload-grid-wrap .ant-upload.ant-upload-select-picture-card {
+      background: #f4faf3 !important;
+      border: 1.5px dashed #6b9e74 !important;
       border-radius: 12px !important;
+      color: #1a4d2e !important;
+      width: 100% !important;
+      margin: 0 !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload.ant-upload-select-picture-card:hover {
+      background: #e8f5e9 !important;
+      border-color: #1f6b3a !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload.ant-upload-select-picture-card .anticon-plus {
+      color: #1f6b3a !important;
+      font-size: 28px !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload.ant-upload-select-picture-card > .ant-upload > div {
+      color: #1a4d2e !important;
+      font-weight: 600 !important;
+    }
+
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select > button,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card) button {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 100% !important;
+      min-height: 88px !important;
+      padding: 16px 12px !important;
+      background: #f4faf3 !important;
+      border: 1.5px dashed #6b9e74 !important;
+      border-radius: 12px !important;
+      color: #1a4d2e !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .nr-report-ampm-btns .ant-btn-default {
@@ -1017,10 +1077,10 @@ const renderClamp2 = (text: unknown) => {
 const MobileReportsList = styled.div.attrs(() => ({ className: "nr-mobile-reports-list" }))<MobileStyledDark>`
   display: flex;
   flex-direction: column;
-  gap: ${(p) => (p.$dark ? "18px" : "16px")};
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
-  padding: 12px;
+  padding: 12px 0 24px;
   background: ${(p) => (p.$dark ? "#000000" : "#e7f0e4")};
   border: none;
   border-radius: 0;
@@ -4196,9 +4256,12 @@ const NewReports: React.FC<{
     size: controlSize,
     showSearch: true,
     optionFilterProp: "label" as const,
-    style: { borderRadius: 8, width: isMobilePortrait || mobileUiDark ? "100%" : undefined },
-    className: mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined,
-    popupClassName: mobileUiDark ? "nr-mobile-dark-dropdown" : undefined,
+    style: { borderRadius: 8, width: isMobilePortrait || modalUiDark ? "100%" : undefined },
+    className: modalUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined,
+    dropdownClassName: modalUiDark ? "nr-mobile-dark-dropdown" : undefined,
+    dropdownStyle: modalUiDark
+      ? { background: "#141414", borderColor: "#333333", color: "#ffffff" }
+      : undefined,
     getPopupContainer: (triggerNode: any) => triggerNode?.parentElement || document.body,
   };
 
@@ -4565,7 +4628,7 @@ const NewReports: React.FC<{
             >
               <RangePicker
                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                dropdownClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
                 format="DD/MM/YYYY"
                 style={{
                   width: "100%",
@@ -4580,7 +4643,7 @@ const NewReports: React.FC<{
               <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
                 <Select
                   className={mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined}
-                  popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
+                  dropdownClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
                   dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
                   allowClear
                   placeholder="All sites"
@@ -4601,7 +4664,7 @@ const NewReports: React.FC<{
               <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
                 <Select
                   className={mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined}
-                  popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
+                  dropdownClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
                   dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
                   allowClear
                   placeholder="All services"
@@ -4626,7 +4689,7 @@ const NewReports: React.FC<{
                 <div className={mobileUiDark ? "nr-dark-select-shell" : undefined}>
                   <Select
                     className={mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined}
-                    popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
+                    dropdownClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
                     dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
                     value={`${listSort.orderBy}:${listSort.orderValue}`}
                     options={reportSortOptions}
@@ -4711,7 +4774,7 @@ const NewReports: React.FC<{
                     marginTop: 10,
                     marginBottom: 0,
                     padding: "12px 14px",
-                    borderRadius: mobileUiDark ? 8 : 10,
+                    borderRadius: 8,
                     flexDirection: "column",
                     ...(mobileUiDark
                       ? {
@@ -4721,8 +4784,8 @@ const NewReports: React.FC<{
                         }
                       : {
                           background: "#ffffff",
-                          border: "2px solid #d9d9d9",
-                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                          border: "1px solid #b7d0b0",
+                          boxShadow: "none",
                         }),
                   }
                 : undefined
@@ -5592,13 +5655,13 @@ const NewReports: React.FC<{
                               <ReportAmPmDateTimePicker
                                 size={controlSize}
                                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                                popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                                dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                               />
                             ) : fieldType === "[REPORT_DATE]" ? (
                               <DatePicker
                                 size={controlSize}
                                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                                popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                                dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                                 style={{ width: "100%", borderRadius: 8 }}
                                 format="YYYY-MM-DD"
                               />
@@ -5606,7 +5669,7 @@ const NewReports: React.FC<{
                               <ReportAmPmTimePicker
                                 size={controlSize}
                                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                                popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                                dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                               />
                             )}
                           </Form.Item>
@@ -5645,7 +5708,7 @@ const NewReports: React.FC<{
                           <ReportAmPmDateTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                           />
                         </Form.Item>
                       </Col>
@@ -5661,7 +5724,7 @@ const NewReports: React.FC<{
                           <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                           />
                         </Form.Item>
                       </Col>
@@ -5675,7 +5738,7 @@ const NewReports: React.FC<{
                           <DatePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                             style={{ width: "100%", borderRadius: 8 }}
                             format="YYYY-MM-DD"
                           />
@@ -5691,7 +5754,7 @@ const NewReports: React.FC<{
                           <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                           />
                         </Form.Item>
                       </Col>
@@ -5715,7 +5778,7 @@ const NewReports: React.FC<{
                           <Select
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field nr-mobile-select-dark" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-dropdown" : undefined}
                             getPopupContainer={(node) => (node as any)?.parentElement || document.body}
                             style={{ borderRadius: 8, minWidth: 120, width: "100%" }}
                             placeholder="Choose yes or no"
@@ -6046,7 +6109,7 @@ const NewReports: React.FC<{
                           <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                           />
                         </Form.Item>
                       </Col>
@@ -6060,7 +6123,7 @@ const NewReports: React.FC<{
                           <DatePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                             style={{ width: "100%", borderRadius: 8 }}
                             format="YYYY-MM-DD"
                           />
@@ -6076,7 +6139,7 @@ const NewReports: React.FC<{
                           <ReportAmPmDateTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                           />
                         </Form.Item>
                       </Col>
@@ -6090,7 +6153,7 @@ const NewReports: React.FC<{
                           <ReportAmPmTimePicker
                             size={controlSize}
                             className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                            popupClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                            dropdownClassName={modalUiDark ? "nr-mobile-dark-calendar" : undefined}
                           />
                         </Form.Item>
                       </Col>

@@ -55,10 +55,19 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
   }
 
   .new-reports-theme-dark .nr-bulk-select-wrap .ant-select-selection-placeholder,
-  .new-reports-theme-dark .nr-bulk-select-wrap .ant-select-selection-item,
   .new-reports-theme-dark .nr-dark-select-shell .ant-select-selection-placeholder,
-  .new-reports-theme-dark .nr-dark-select-shell .ant-select-selection-item {
-    color: #9a9a9a !important;
+  .new-reports-theme-dark .new-reports-list-filters--dark .ant-select-selection-placeholder,
+  .new-reports-theme-dark .new-reports-list-filters-form--dark .ant-select-selection-placeholder {
+    color: #e0e0e0 !important;
+  }
+
+  .new-reports-theme-dark .nr-bulk-select-wrap .ant-select-selection-item,
+  .new-reports-theme-dark .nr-dark-select-shell .ant-select-selection-item,
+  .new-reports-theme-dark .new-reports-list-filters--dark .ant-select-selection-item,
+  .new-reports-theme-dark .new-reports-list-filters-form--dark .ant-select-selection-item,
+  .new-reports-theme-dark.new-reports-list-wrap .ant-select-selection-item,
+  .new-reports-theme-dark.report-faults-list-wrap .ant-select-selection-item {
+    color: #ffffff !important;
   }
 
   .new-reports-theme-dark .nr-bulk-select-wrap .ant-select-selection-search-input,
@@ -88,8 +97,11 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
   }
 
   .new-reports-theme-dark.new-reports-list-wrap .ant-picker-input > input::placeholder,
-  .new-reports-theme-dark.new-reports-list-wrap .ant-input::placeholder {
-    color: #737373 !important;
+  .new-reports-theme-dark.new-reports-list-wrap .ant-input::placeholder,
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters--dark .ant-input::placeholder,
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters--dark .ant-picker-input > input::placeholder {
+    color: #e0e0e0 !important;
+    opacity: 1 !important;
   }
 
   .new-reports-theme-dark.new-reports-list-wrap .ant-picker-suffix,
@@ -118,6 +130,15 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     background: #141414 !important;
     border-color: #444444 !important;
     color: #ffffff !important;
+  }
+
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters--dark .ant-form-item-label > label,
+  .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters-form--dark .ant-form-item-label > label,
+  .new-reports-theme-dark.report-faults-list-wrap .new-reports-list-filters--dark .ant-form-item-label > label,
+  .new-reports-theme-dark.report-faults-list-wrap .new-reports-list-filters-form--dark .ant-form-item-label > label {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
   }
 
   .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters-form--collapsed .nr-search-row .ant-input {
@@ -273,9 +294,15 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     color: #ffffff !important;
   }
 
-  .new-report-form-modal--dark .ant-select-selection-placeholder,
-  .new-report-form-modal--dark .ant-select-selection-item {
+  .new-report-form-modal--dark .ant-select-selection-placeholder {
     color: #9a9a9a !important;
+  }
+
+  .new-report-form-modal--dark .ant-select-selection-item,
+  .new-report-form-modal--dark .ant-select-selection-search-input,
+  .new-report-form-modal--dark .nr-report-ampm-hour .ant-select-selection-item,
+  .new-report-form-modal--dark .nr-report-ampm-minute .ant-select-selection-item {
+    color: #ffffff !important;
   }
 
   .new-report-form-modal--dark .ant-select-arrow,
@@ -283,12 +310,12 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     color: #9a9a9a !important;
   }
 
-  /* Media files / attachFiles upload (text list) */
   .new-report-form-modal--dark label,
   .new-report-form-modal--dark .ant-form label {
     color: #b0b0b0 !important;
   }
 
+  /* Media / photo upload — picture-card + button dropzones */
   .new-report-form-modal--dark .ant-upload {
     color: rgba(255, 255, 255, 0.88) !important;
     width: 100%;
@@ -299,8 +326,58 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     width: 100% !important;
   }
 
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card,
+  .new-report-form-modal--dark .image-upload-grid-wrap .ant-upload.ant-upload-select-picture-card {
+    background: #141414 !important;
+    background-color: #141414 !important;
+    border: 1.5px dashed #4a7c59 !important;
+    border-radius: 12px !important;
+    color: #e8e8e8 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card:hover {
+    background: #1a241c !important;
+    border-color: #6bb87a !important;
+    box-shadow: 0 0 0 1px rgba(107, 184, 122, 0.25);
+  }
+
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card > .ant-upload,
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card .ant-upload {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 12px 8px !important;
+    background: transparent !important;
+    color: #e8e8e8 !important;
+  }
+
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card .anticon,
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card .anticon-plus {
+    color: #85c179 !important;
+    font-size: 28px !important;
+    margin-bottom: 6px;
+  }
+
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card > .ant-upload > div,
+  .new-report-form-modal--dark .ant-upload.ant-upload-select-picture-card .ant-upload > div {
+    color: #f0f0f0 !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+  }
+
+  .new-report-form-modal--dark .image-upload-grid-wrap .ant-upload-list-picture-card .ant-upload-list-item {
+    background: #1a1a1a !important;
+    border: 1px solid #444444 !important;
+    border-radius: 10px !important;
+  }
+
   .new-report-form-modal--dark .ant-upload-select > button,
-  .new-report-form-modal--dark .ant-upload .ant-upload-select button {
+  .new-report-form-modal--dark .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card) button {
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
@@ -308,22 +385,23 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     width: 100% !important;
     min-height: 88px !important;
     padding: 16px 12px !important;
-    background: #1a1a1a !important;
-    background-color: #1a1a1a !important;
-    border: 1px dashed #555555 !important;
-    border-radius: 8px !important;
+    background: #141414 !important;
+    background-color: #141414 !important;
+    border: 1.5px dashed #4a7c59 !important;
+    border-radius: 12px !important;
     color: #f0f0f0 !important;
     cursor: pointer !important;
   }
 
   .new-report-form-modal--dark .ant-upload-select .anticon,
   .new-report-form-modal--dark .ant-upload-select button .anticon {
-    color: #9a9a9a !important;
+    color: #85c179 !important;
     font-size: 24px !important;
   }
 
   .new-report-form-modal--dark .ant-upload-select button div {
     color: #f0f0f0 !important;
+    font-weight: 600;
   }
 
   .new-report-form-modal--dark .ant-upload-list-item {

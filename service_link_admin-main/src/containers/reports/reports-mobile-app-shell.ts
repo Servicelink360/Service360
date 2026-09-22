@@ -2,10 +2,37 @@ import { createGlobalStyle } from "styled-components";
 
 /**
  * True app-style list shell for New Reports + Report Faults on mobile portrait.
- * Light mode matches report form sage/green palette (not blank white chrome).
+ * Structure (sizes, spacing, radii) is identical in light and dark; only palette differs.
  */
 export const ReportsMobileAppShellStyles = createGlobalStyle`
   @media (orientation: portrait) and (max-width: 768px) {
+    /* Same full-bleed shell as dark mode  no isoBoxWrapper card inset on mobile. */
+    body:has(.new-reports-list-wrap--mobile-portrait) .isoBoxWrapper,
+    body:has(.new-reports-list-wrap--mobile-portrait) .isoLayoutContentWrapper,
+    body:has(.new-reports-list-wrap--mobile-portrait) .isoExampleWrapper,
+    body:has(.new-reports-list-wrap--mobile-portrait) #main-content,
+    body:has(.new-reports-list-wrap--mobile-portrait) .isomorphicContent,
+    body:has(.report-faults-list-wrap--mobile-portrait) .isoBoxWrapper,
+    body:has(.report-faults-list-wrap--mobile-portrait) .isoLayoutContentWrapper,
+    body:has(.report-faults-list-wrap--mobile-portrait) .isoExampleWrapper,
+    body:has(.report-faults-list-wrap--mobile-portrait) #main-content,
+    body:has(.report-faults-list-wrap--mobile-portrait) .isomorphicContent {
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      -webkit-box-shadow: none !important;
+    }
+
+    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoBoxWrapper,
+    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoLayoutContentWrapper,
+    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoExampleWrapper,
+    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) #main-content,
+    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isomorphicContent {
+      background: #e7f0e4 !important;
+    }
+
     .new-reports-list-wrap--mobile-portrait,
     .report-faults-list-wrap--mobile-portrait {
       --nr-app-bg: #e7f0e4;
@@ -172,7 +199,20 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       box-shadow: none !important;
     }
 
-    /* Search / filter inputs  sage field, not pure white */
+    /* Search / filter inputs  same dimensions in light and dark */
+    .new-reports-list-wrap--mobile-portrait .ant-input,
+    .new-reports-list-wrap--mobile-portrait .ant-input-affix-wrapper,
+    .new-reports-list-wrap--mobile-portrait .ant-select-selector,
+    .new-reports-list-wrap--mobile-portrait .ant-picker,
+    .report-faults-list-wrap--mobile-portrait .ant-input,
+    .report-faults-list-wrap--mobile-portrait .ant-input-affix-wrapper,
+    .report-faults-list-wrap--mobile-portrait .ant-select-selector,
+    .report-faults-list-wrap--mobile-portrait .ant-picker {
+      border-radius: 12px !important;
+      font-size: 16px !important;
+      min-height: 48px;
+    }
+
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-input,
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-input-affix-wrapper,
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .ant-select-selector,
@@ -184,15 +224,39 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       background: var(--nr-app-field) !important;
       border-color: var(--nr-app-border) !important;
       color: var(--nr-app-text) !important;
-      border-radius: 12px !important;
-      font-size: 16px !important;
-      min-height: 48px;
     }
 
     .new-reports-list-wrap--mobile-portrait .ant-form-item-label > label,
     .report-faults-list-wrap--mobile-portrait .ant-form-item-label > label {
       font-size: 15px !important;
       font-weight: 600 !important;
+    }
+
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .ant-form-item-label > label,
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .nr-app-filter-sheet .ant-form-item-label > label,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .ant-form-item-label > label,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .nr-app-filter-sheet .ant-form-item-label > label {
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      opacity: 1 !important;
+    }
+
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .ant-select-selection-item,
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .nr-app-filter-sheet .ant-select-selection-item,
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .ant-picker-input > input,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .ant-select-selection-item,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .ant-picker-input > input {
+      color: #ffffff !important;
+    }
+
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .ant-select-selection-placeholder,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .ant-select-selection-placeholder,
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .ant-input::placeholder,
+    .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .ant-picker-input > input::placeholder,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .ant-input::placeholder,
+    .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .ant-picker-input > input::placeholder {
+      color: #e0e0e0 !important;
+      opacity: 1 !important;
     }
 
     .new-reports-list-wrap--mobile-portrait .ant-btn,
@@ -231,14 +295,10 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       z-index: 45;
       margin: 0 !important;
       padding: 12px !important;
-      border-radius: 14px !important;
+      border-radius: 8px !important;
       background: var(--nr-app-surface) !important;
       border: 1px solid var(--nr-app-border) !important;
-      box-shadow: 0 8px 28px rgba(31, 107, 58, 0.18) !important;
-    }
-
-    .new-reports-theme-dark .nr-app-bulk-sticky {
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.65) !important;
+      box-shadow: none !important;
     }
 
     .new-reports-list-wrap--mobile-portrait .nr-mobile-reports-list,
@@ -248,24 +308,26 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       background: transparent !important;
     }
 
-    /* Report / fault cards  soft green border, sage meta strip */
+    /* Report / fault cards  same structure in light and dark */
+    .new-reports-list-wrap--mobile-portrait .nr-mobile-report-card,
+    .report-faults-list-wrap--mobile-portrait .nr-mobile-fault-card {
+      border-radius: 12px !important;
+      border-width: 2px !important;
+      border-style: solid !important;
+      box-shadow: 0 0 0 1px #3d3d3d, 0 8px 28px rgba(0, 0, 0, 0.85) !important;
+    }
+
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card,
     .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-fault-card {
       background: var(--nr-app-surface) !important;
-      border: 1px solid var(--nr-app-border) !important;
-      border-radius: 14px !important;
-      box-shadow: 0 4px 16px rgba(31, 107, 58, 0.1) !important;
+      border-color: var(--nr-app-border) !important;
+      box-shadow: 0 0 0 1px #b7d0b0, 0 8px 28px rgba(31, 107, 58, 0.14) !important;
     }
 
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card > div:first-child,
     .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-fault-card > div:first-child {
       border-bottom-color: var(--nr-app-border) !important;
       background: #f4faf3 !important;
-    }
-
-    .new-reports-theme-dark .nr-mobile-report-card,
-    .new-reports-theme-dark .nr-mobile-fault-card {
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45) !important;
     }
 
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card button.ant-btn-default,

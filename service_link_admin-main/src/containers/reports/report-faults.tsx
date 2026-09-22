@@ -1935,7 +1935,7 @@ const ReportFaults: React.FC = () => {
                                             className={
                                                 mobileUiDark ? "nr-mobile-dark-field" : undefined
                                             }
-                                            popupClassName={
+                                            dropdownClassName={
                                                 mobileUiDark ? "nr-mobile-dark-calendar" : undefined
                                             }
                                             format="DD/MM/YYYY"
@@ -1955,7 +1955,7 @@ const ReportFaults: React.FC = () => {
                                             className={
                                                 mobileUiDark ? "nr-mobile-dark-field" : undefined
                                             }
-                                            popupClassName={
+                                            dropdownClassName={
                                                 mobileUiDark ? "nr-mobile-dark-calendar" : undefined
                                             }
                                             format="DD/MM/YYYY"
@@ -2000,7 +2000,7 @@ const ReportFaults: React.FC = () => {
                                                                 ? "range-picker nr-mobile-dark-field"
                                                                 : "range-picker"
                                                         }
-                                                        popupClassName={
+                                                        dropdownClassName={
                                                             mobileUiDark ? "nr-mobile-dark-calendar" : undefined
                                                         }
                                                         style={{
@@ -2131,7 +2131,7 @@ const ReportFaults: React.FC = () => {
                                             ? "nr-mobile-dark-field nr-mobile-select-dark nr-bulk-select-dark"
                                             : undefined
                                     }
-                                    popupClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
+                                    dropdownClassName={mobileUiDark ? "nr-mobile-dark-dropdown" : undefined}
                                     dropdownStyle={mobileUiDark ? { background: "#141414" } : undefined}
                                     maxTagCount="responsive"
                                     style={
