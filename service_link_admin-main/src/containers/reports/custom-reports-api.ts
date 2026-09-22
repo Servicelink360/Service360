@@ -28,6 +28,8 @@ export type CustomReportListParams = CustomReportListFilters & {
   staffId?: number;
   sort?: CustomReportListSort;
   templateCategory?: string;
+  /** When true, list completed + in-progress drafts (status=si). */
+  includeDrafts?: boolean;
 };
 
 function listQueryParams(input: CustomReportListParams): Record<string, unknown> {
@@ -42,7 +44,12 @@ function listQueryParams(input: CustomReportListParams): Record<string, unknown>
 
   const params: Record<string, unknown> = {
     type: CUSTOM_REPORT_TYPE,
-    status: input.tab === "deleted" ? "deleted" : "s",
+    status:
+      input.tab === "deleted"
+        ? "deleted"
+        : input.includeDrafts
+          ? "si"
+          : "s",
     page: input.page ?? 1,
     limit: input.limit ?? 100,
   };
@@ -130,11 +137,13 @@ export type BuildCustomReportSavePayloadInput = {
   staffId: number;
   editing?: any | null;
   templateLabel?: string;
+  /** Persist as in-progress draft (no PDF/email). */
+  draft?: boolean;
 };
 
 /** Maps report form values to the backend create/update DTO (task fields live here, not in UI). */
 export function buildCustomReportSavePayload(input: BuildCustomReportSavePayloadInput) {
-  const { values, items, profile, staffId, editing, templateLabel } = input;
+  const { values, items, profile, staffId, editing, templateLabel, draft } = input;
   const now = new Date();
   const startTime = editing?.startTime ? new Date(editing.startTime) : now;
   const endTime = editing?.endTime ? new Date(editing.endTime) : now;
@@ -145,10 +154,17 @@ export function buildCustomReportSavePayload(input: BuildCustomReportSavePayload
   const taskName =
     existingName || generateAutoReportInternalName(templateLabel);
 
+  const customerIdNum = Number(values.customerId);
+  const siteRaw = values.siteId;
+  const siteIdNum =
+    siteRaw === "__other__" || siteRaw === "other"
+      ? 0
+      : Number(siteRaw);
+
   return {
     taskName,
     description: values.description || "",
-    siteId: +values.siteId,
+    siteId: Number.isFinite(siteIdNum) && siteIdNum >= 0 ? siteIdNum : 0,
     siteName: values.siteName || "",
     siteLocation: values.siteLocation || "",
     siteAddress: values.siteAddress || "",
@@ -157,13 +173,13 @@ export function buildCustomReportSavePayload(input: BuildCustomReportSavePayload
     serviceName: values.serviceName || "",
     customerName: values.customerName || "",
     companyName: values.companyName || "",
-    customerId: +values.customerId,
+    customerId: Number.isFinite(customerIdNum) && customerIdNum > 0 ? customerIdNum : 0,
     startTime,
     endTime,
     checkIn,
     completed,
-    status: 1,
-    reportTemplateId: +values.reportTemplateId,
+    status: draft ? 3 : 1,
+    reportTemplateId: +values.reportTemplateId || 0,
     notifiesStaff: editing?.notifiesStaff != null ? +editing.notifiesStaff : 1,
     items,
   };

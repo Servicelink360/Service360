@@ -280,6 +280,46 @@
   color: #1f332b;
 }
 
+.training-figure {
+  margin: 0 0 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.training-figure img {
+  display: block;
+  width: auto;
+  max-width: min(100%, 520px);
+  height: auto;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.training-video {
+  position: relative;
+  width: 100%;
+  margin: 0 0 18px;
+  padding-top: 56.25%;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--tr-line);
+  background: #0f1a16;
+}
+
+.training-video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 .training-body p {
   margin: 0 0 14px;
 }
@@ -288,17 +328,35 @@
   margin-bottom: 0;
 }
 
+.training-list-lead {
+  margin: 0 0 8px !important;
+  font-weight: 600;
+  color: #1f332b;
+}
+
 .training-body ul {
-  margin: 0 0 14px;
+  margin: 0 0 16px;
   padding-left: 1.25em;
 }
 
 .training-body li {
   margin: 0 0 8px;
+  line-height: 1.55;
 }
 
 .training-body li:last-child {
   margin-bottom: 0;
+}
+
+a.training-video-link {
+  color: #1677ff;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a.training-video-link:hover {
+  color: #0958d9;
 }
 
 .training-actions {

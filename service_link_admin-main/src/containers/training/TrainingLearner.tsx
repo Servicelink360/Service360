@@ -13,6 +13,7 @@ import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync } from '../../library/helpers/api';
 import { formatTrainingBody } from './formatTrainingBody';
+import { topicImagesFor } from './trainingMedia';
 import './training.css';
 
 type ModuleListItem = {
@@ -43,6 +44,7 @@ type Topic = {
   id: number;
   title: string;
   body: string;
+  imageUrl?: string | null;
   order: number;
   completed: boolean;
 };
@@ -121,7 +123,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
   const [activeModuleId, setActiveModuleId] = useState<number | null>(null);
   const [moduleLoading, setModuleLoading] = useState(false);
   const [moduleTitle, setModuleTitle] = useState('');
-  const [moduleDesc, setModuleDesc] = useState('');
+  const [moduleCode, setModuleCode] = useState('');
   const [topics, setTopics] = useState<Topic[]>([]);
   const [quizUnlocked, setQuizUnlocked] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
@@ -193,7 +195,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
       }
       const data = res.data;
       setModuleTitle(data.module?.title || '');
-      setModuleDesc(data.module?.description || '');
+      setModuleCode(data.module?.code || '');
       const nextTopics: Topic[] = data.topics || [];
       setTopics(nextTopics);
       setQuizUnlocked(!!data.quiz?.unlocked);
@@ -498,10 +500,15 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                   ) : null}
                 </div>
                 <h1 title={currentTopic.title}>{clipText(currentTopic.title, 100)}</h1>
-                {moduleDesc ? (
-                  <p className="lead">{clipText(moduleDesc, 160)}</p>
-                ) : null}
-                <div className="training-body">{formatTrainingBody(currentTopic.body)}</div>
+                <div className="training-body">
+                  {formatTrainingBody(currentTopic.body, {
+                    imagesAfterIntro: topicImagesFor(
+                      moduleCode,
+                      currentTopic.order,
+                      currentTopic.imageUrl,
+                    ),
+                  })}
+                </div>
                 <div className="training-actions">
                   <Button
                     disabled={topicIndex <= 0}

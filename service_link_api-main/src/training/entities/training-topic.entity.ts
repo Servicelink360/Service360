@@ -25,6 +25,10 @@ export class TrainingTopic {
   @Column({ type: 'text' })
   body: string;
 
+  /** Optional topic illustration URL (S3 or site-relative /images/...). */
+  @Column({ name: 'image_url', type: 'varchar', length: 1000, nullable: true })
+  imageUrl?: string | null;
+
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number;
 }

@@ -1700,16 +1700,116 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
 .nr-mobile-dark-dropdown .ant-select-dropdown-menu,
 .nr-mobile-dark-dropdown.ant-picker-dropdown .ant-picker-panel-container,
 .nr-mobile-dark-dropdown .ant-picker-panel,
+.nr-mobile-dark-calendar.ant-picker-dropdown,
 .nr-mobile-dark-calendar.ant-picker-dropdown .ant-picker-panel-container,
+.nr-mobile-dark-calendar .ant-picker-panel-container,
 .nr-mobile-dark-calendar .ant-picker-panel,
 .nr-mobile-dark-calendar .ant-picker-header,
 .nr-mobile-dark-calendar .ant-picker-body,
 .nr-mobile-dark-calendar .ant-picker-content,
-.nr-mobile-dark-calendar .ant-picker-cell,
-.nr-mobile-dark-calendar .ant-picker-time-panel {
-  background: #141414 !important;
+.nr-mobile-dark-calendar .ant-picker-footer,
+.nr-mobile-dark-calendar .ant-picker-date-panel,
+.nr-mobile-dark-calendar .ant-picker-month-panel,
+.nr-mobile-dark-calendar .ant-picker-year-panel,
+.nr-mobile-dark-calendar .ant-picker-decade-panel,
+.nr-mobile-dark-calendar .ant-picker-time-panel,
+.nr-mobile-dark-calendar .ant-picker-datetime-panel {
+  background: #1a1a1a !important;
+  background-color: #1a1a1a !important;
   color: #ffffff !important;
   border-color: #333333 !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-header,
+.nr-mobile-dark-calendar .ant-picker-header button,
+.nr-mobile-dark-calendar .ant-picker-header-view,
+.nr-mobile-dark-calendar .ant-picker-header-view button {
+  color: #f0f0f0 !important;
+  background: transparent !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-content th {
+  color: #b0b0b0 !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell {
+  color: #8c8c8c !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell-in-view {
+  color: #f0f0f0 !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell:hover:not(.ant-picker-cell-selected):not(.ant-picker-cell-range-start):not(.ant-picker-cell-range-end) .ant-picker-cell-inner {
+  background: #2a2a2a !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before {
+  border-color: #52c41a !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
+.nr-mobile-dark-calendar .ant-picker-cell-in-view.ant-picker-cell-range-start .ant-picker-cell-inner,
+.nr-mobile-dark-calendar .ant-picker-cell-in-view.ant-picker-cell-range-end .ant-picker-cell-inner {
+  background: #1f6b3a !important;
+  color: #ffffff !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell-in-view.ant-picker-cell-in-range .ant-picker-cell-inner {
+  background: #243528 !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-cell-disabled .ant-picker-cell-inner {
+  color: #555555 !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-footer {
+  border-top-color: #333333 !important;
+}
+
+.nr-mobile-dark-calendar .ant-picker-ranges .ant-picker-preset > .ant-tag-blue {
+  background: #1f3d1f !important;
+  border-color: #389e0d !important;
+  color: #b7eb8f !important;
+}
+
+/* Mobile range calendar: one month wide (fits portrait), never overflow viewport */
+.nr-mobile-range-calendar.ant-picker-dropdown {
+  max-width: calc(100vw - 16px) !important;
+  left: 8px !important;
+  right: 8px !important;
+}
+
+.nr-mobile-range-calendar .ant-picker-panel-container {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+.nr-mobile-range-calendar .ant-picker-panels {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  max-width: 100% !important;
+}
+
+@media (orientation: portrait) and (max-width: 768px) {
+  .nr-mobile-range-calendar .ant-picker-panels .ant-picker-panel:nth-child(2) {
+    display: none !important;
+  }
+
+  .nr-mobile-range-calendar .ant-picker-panel,
+  .nr-mobile-range-calendar .ant-picker-date-panel {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .nr-mobile-range-calendar .ant-picker-content {
+    width: 100% !important;
+  }
+
+  .nr-mobile-range-calendar .ant-picker-body {
+    padding: 8px !important;
+  }
 }
 
 .nr-mobile-dark-dropdown .ant-select-item,
@@ -1741,14 +1841,6 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
 .nr-mobile-dark-dropdown .ant-select-item-empty,
 .nr-mobile-dark-dropdown .rc-virtual-list-holder-inner .ant-select-item {
   background: #141414 !important;
-  color: #f0f0f0 !important;
-}
-
-.nr-mobile-dark-calendar .ant-picker-cell-in-view {
-  color: #f0f0f0 !important;
-}
-
-.nr-mobile-dark-calendar .ant-picker-header button {
   color: #f0f0f0 !important;
 }
 

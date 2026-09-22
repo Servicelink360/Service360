@@ -105,6 +105,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureInvoicesTable();
     await this.ensureAssetsTable();
     await this.ensureTrainingTables();
+    await this.ensureReportTemplateSiteFields();
     await this.applyRenameDepartmentsToServices();
 
     try {
@@ -2177,8 +2178,13 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           module_id INTEGER NOT NULL REFERENCES public.training_modules(id) ON DELETE CASCADE,
           title VARCHAR(255) NOT NULL,
           body TEXT NOT NULL,
+          image_url VARCHAR(1000) NULL,
           sort_order INTEGER NOT NULL DEFAULT 0
         );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_topics
+          ADD COLUMN IF NOT EXISTS image_url VARCHAR(1000) NULL;
       `);
       await this.dataSource.query(`
         CREATE INDEX IF NOT EXISTS idx_training_topics_module
@@ -2280,6 +2286,88 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('training tables ensured');
     } catch (e) {
       this.logger.warn(`training tables patch: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Ensure common report templates (esp. Public Amenities) include Site Name / Site Address
+   * auto-merge fields, and backfill task site columns from sites master data.
+   */
+  private async ensureReportTemplateSiteFields(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        WITH targets AS (
+          SELECT id
+          FROM public.report_templates
+          WHERE status IS DISTINCT FROM 0
+            AND (
+              id IN (70, 72)
+              OR LOWER(COALESCE(name, '')) LIKE '%public amenities%'
+              OR LOWER(COALESCE(name, '')) LIKE '%amenities cleaning%'
+            )
+        ),
+        missing_name AS (
+          SELECT t.id AS template_id
+          FROM targets t
+          WHERE NOT EXISTS (
+            SELECT 1 FROM public.report_template_items i
+            WHERE i.report_template_id = t.id
+              AND (
+                UPPER(COALESCE(i.type, '')) = '[SITE_NAME]'
+                OR LOWER(TRIM(TRAILING ':' FROM COALESCE(i.name, ''))) = 'site name'
+              )
+          )
+        )
+        INSERT INTO public.report_template_items
+          (report_template_id, name, type, "order", required, config)
+        SELECT template_id, 'Site Name', '[SITE_NAME]', 1, false, '{}'::jsonb
+        FROM missing_name
+      `);
+      await this.dataSource.query(`
+        WITH targets AS (
+          SELECT id
+          FROM public.report_templates
+          WHERE status IS DISTINCT FROM 0
+            AND (
+              id IN (70, 72)
+              OR LOWER(COALESCE(name, '')) LIKE '%public amenities%'
+              OR LOWER(COALESCE(name, '')) LIKE '%amenities cleaning%'
+            )
+        ),
+        missing_addr AS (
+          SELECT t.id AS template_id
+          FROM targets t
+          WHERE NOT EXISTS (
+            SELECT 1 FROM public.report_template_items i
+            WHERE i.report_template_id = t.id
+              AND (
+                UPPER(COALESCE(i.type, '')) = '[SITE_ADDRESS]'
+                OR LOWER(TRIM(TRAILING ':' FROM COALESCE(i.name, ''))) = 'site address'
+              )
+          )
+        )
+        INSERT INTO public.report_template_items
+          (report_template_id, name, type, "order", required, config)
+        SELECT template_id, 'Site Address', '[SITE_ADDRESS]', 2, false, '{}'::jsonb
+        FROM missing_addr
+      `);
+      await this.dataSource.query(`
+        UPDATE public.user_tasks ut
+        SET
+          site_name = COALESCE(NULLIF(TRIM(ut.site_name), ''), s.name),
+          site_address = COALESCE(NULLIF(TRIM(ut.site_address), ''), s.address_name)
+        FROM public.sites s
+        WHERE ut.site_id = s.id
+          AND ut.site_id IS NOT NULL
+          AND ut.site_id > 0
+          AND (
+            NULLIF(TRIM(ut.site_name), '') IS NULL
+            OR NULLIF(TRIM(ut.site_address), '') IS NULL
+          )
+      `);
+      this.logger.log('report template site fields ensured');
+    } catch (e) {
+      this.logger.warn(`report template site fields patch: ${(e as Error).message}`);
     }
   }
 }

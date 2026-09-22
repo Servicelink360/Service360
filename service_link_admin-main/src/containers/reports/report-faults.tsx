@@ -1935,9 +1935,12 @@ const ReportFaults: React.FC = () => {
                                             className={
                                                 mobileUiDark ? "nr-mobile-dark-field" : undefined
                                             }
-                                            dropdownClassName={
-                                                mobileUiDark ? "nr-mobile-dark-calendar" : undefined
-                                            }
+                                            dropdownClassName={[
+                                              isMobilePortrait ? "nr-mobile-range-calendar" : "",
+                                              mobileUiDark ? "nr-mobile-dark-calendar" : "",
+                                            ]
+                                              .filter(Boolean)
+                                              .join(" ") || undefined}
                                             format="DD/MM/YYYY"
                                             placeholder="Start date"
                                             style={{ width: "100%", ...mobileDarkFieldStyle }}
@@ -1955,9 +1958,12 @@ const ReportFaults: React.FC = () => {
                                             className={
                                                 mobileUiDark ? "nr-mobile-dark-field" : undefined
                                             }
-                                            dropdownClassName={
-                                                mobileUiDark ? "nr-mobile-dark-calendar" : undefined
-                                            }
+                                            dropdownClassName={[
+                                              isMobilePortrait ? "nr-mobile-range-calendar" : "",
+                                              mobileUiDark ? "nr-mobile-dark-calendar" : "",
+                                            ]
+                                              .filter(Boolean)
+                                              .join(" ") || undefined}
                                             format="DD/MM/YYYY"
                                             placeholder="End date"
                                             style={{ width: "100%", ...mobileDarkFieldStyle }}
@@ -2000,9 +2006,15 @@ const ReportFaults: React.FC = () => {
                                                                 ? "range-picker nr-mobile-dark-field"
                                                                 : "range-picker"
                                                         }
-                                                        dropdownClassName={
-                                                            mobileUiDark ? "nr-mobile-dark-calendar" : undefined
-                                                        }
+                                                        dropdownClassName={[
+                                                            isMobilePortrait || showMobileFaultCards
+                                                                ? "nr-mobile-range-calendar"
+                                                                : "",
+                                                            mobileUiDark ? "nr-mobile-dark-calendar" : "",
+                                                        ]
+                                                            .filter(Boolean)
+                                                            .join(" ") || undefined}
+                                                        getPopupContainer={() => document.body}
                                                         style={{
                                                             width: "100%",
                                                             ...mobileDarkFieldStyle,

@@ -4,8 +4,10 @@ import {
   CheckOutlined,
   DeleteOutlined,
   EditOutlined,
+  FileTextOutlined,
   PlusOutlined,
   ReloadOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
 import {
   Button,
@@ -20,6 +22,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Upload,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -27,7 +30,7 @@ import moment from 'moment';
 import React, { useCallback, useEffect, useState } from 'react';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
-import { callAPIAsync } from '../../library/helpers/api';
+import { callAPIAsync, callAPIUploadAsync } from '../../library/helpers/api';
 
 const TrainingAdminPage: React.FC = () => {
   const [modules, setModules] = useState<any[]>([]);
@@ -46,9 +49,16 @@ const TrainingAdminPage: React.FC = () => {
   const [assignOpen, setAssignOpen] = useState(false);
   const [inductionOpen, setInductionOpen] = useState(false);
   const [editModule, setEditModule] = useState<any>(null);
+  const [contentModule, setContentModule] = useState<any>(null);
+  const [contentTopics, setContentTopics] = useState<any[]>([]);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [editTopic, setEditTopic] = useState<any>(null);
+  const [topicSaving, setTopicSaving] = useState(false);
+  const [topicImageUploading, setTopicImageUploading] = useState(false);
   const [form] = Form.useForm();
   const [indForm] = Form.useForm();
   const [modForm] = Form.useForm();
+  const [topicForm] = Form.useForm();
 
   const loadModules = useCallback(async () => {
     const res = await callAPIAsync(
@@ -175,6 +185,92 @@ const TrainingAdminPage: React.FC = () => {
     loadModules();
   };
 
+  const openContent = async (moduleRow: any) => {
+    setContentModule(moduleRow);
+    setContentLoading(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TRAINING}/admin/modules/${moduleRow.id}/topics`,
+        'GET',
+        null,
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not load topics');
+        setContentModule(null);
+        return;
+      }
+      setContentTopics(res.data?.topics || []);
+    } finally {
+      setContentLoading(false);
+    }
+  };
+
+  const openTopicEditor = (topic: any) => {
+    setEditTopic(topic);
+    topicForm.setFieldsValue({
+      title: topic.title || '',
+      body: topic.body || '',
+      imageUrl: topic.imageUrl || '',
+    });
+  };
+
+  const uploadTopicImage = async (file: File) => {
+    setTopicImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name || 'topic-image.png');
+      const res: any = await callAPIUploadAsync(
+        serviceType.COMMON,
+        endPoint.UPLOAD_FILE,
+        'POST',
+        formData,
+      );
+      const url =
+        typeof res?.data === 'string'
+          ? res.data
+          : res?.data?.url || res?.data?.Location || res?.data?.fileUrl || null;
+      if (res?.code !== 1 || !url) {
+        message.error(res?.message || 'Upload failed');
+        return;
+      }
+      topicForm.setFieldsValue({ imageUrl: String(url) });
+      message.success('Image uploaded');
+    } finally {
+      setTopicImageUploading(false);
+    }
+  };
+
+  const saveTopic = async () => {
+    if (!editTopic) return;
+    const v = await topicForm.validateFields();
+    setTopicSaving(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TRAINING}/admin/topics/${editTopic.id}`,
+        'PATCH',
+        {
+          title: String(v.title || '').trim(),
+          body: String(v.body || ''),
+          imageUrl: String(v.imageUrl || '').trim() || null,
+        },
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not save topic');
+        return;
+      }
+      message.success('Topic saved');
+      setContentTopics((prev) =>
+        prev.map((t) => (t.id === editTopic.id ? { ...t, ...res.data } : t)),
+      );
+      setEditTopic(null);
+      topicForm.resetFields();
+    } finally {
+      setTopicSaving(false);
+    }
+  };
+
   const moduleCols: ColumnsType<any> = [
     { title: 'Code', dataIndex: 'code', width: 110 },
     { title: 'Title', dataIndex: 'title' },
@@ -207,7 +303,11 @@ const TrainingAdminPage: React.FC = () => {
         <span>
           {r.questionReviewed}/{r.questionWithAnswer}
           {r.questionWithAnswer > r.questionReviewed ? (
-            <Tag color="orange" style={{ marginLeft: 6 }}>
+            <Tag
+              color="orange"
+              style={{ marginLeft: 6, cursor: 'pointer' }}
+              onClick={() => void openQuestions(r.id)}
+            >
               review
             </Tag>
           ) : null}
@@ -216,9 +316,12 @@ const TrainingAdminPage: React.FC = () => {
     },
     {
       title: '',
-      width: 220,
+      width: 300,
       render: (_, r) => (
-        <Space>
+        <Space wrap>
+          <Button size="small" icon={<FileTextOutlined />} onClick={() => void openContent(r)}>
+            Content
+          </Button>
           <Button size="small" onClick={() => openQuestions(r.id)}>
             Answers
           </Button>
@@ -686,6 +789,155 @@ const TrainingAdminPage: React.FC = () => {
             </Form.Item>
             <Form.Item name="passPercent" label="Pass mark %" rules={[{ required: true }]}>
               <InputNumber min={1} max={100} style={{ width: '100%' }} />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title={
+            contentModule
+              ? `Edit content · ${contentModule.code} · ${contentModule.title}`
+              : 'Edit content'
+          }
+          open={!!contentModule}
+          onCancel={() => {
+            setContentModule(null);
+            setContentTopics([]);
+            setEditTopic(null);
+          }}
+          footer={
+            <Button
+              onClick={() => {
+                setContentModule(null);
+                setContentTopics([]);
+                setEditTopic(null);
+              }}
+            >
+              Close
+            </Button>
+          }
+          width={860}
+          destroyOnClose
+        >
+          <Table
+            rowKey="id"
+            loading={contentLoading}
+            dataSource={contentTopics}
+            pagination={false}
+            size="small"
+            columns={[
+              { title: '#', dataIndex: 'order', width: 50 },
+              {
+                title: 'Image',
+                width: 90,
+                render: (_, t) =>
+                  t.imageUrl ? (
+                    <img
+                      src={t.imageUrl}
+                      alt=""
+                      style={{
+                        width: 64,
+                        height: 40,
+                        objectFit: 'contain',
+                        borderRadius: 6,
+                        border: '1px solid #e8e8e8',
+                        background: '#fff',
+                      }}
+                    />
+                  ) : (
+                    <span style={{ color: '#999' }}>—</span>
+                  ),
+              },
+              { title: 'Title', dataIndex: 'title', ellipsis: true },
+              {
+                title: '',
+                width: 90,
+                render: (_, t) => (
+                  <Button size="small" icon={<EditOutlined />} onClick={() => openTopicEditor(t)}>
+                    Edit
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        </Modal>
+
+        <Modal
+          title={editTopic ? `Edit topic #${editTopic.order}` : 'Edit topic'}
+          open={!!editTopic}
+          onCancel={() => {
+            setEditTopic(null);
+            topicForm.resetFields();
+          }}
+          onOk={() => void saveTopic()}
+          confirmLoading={topicSaving}
+          okText="Save topic"
+          width={720}
+          destroyOnClose
+        >
+          <Form form={topicForm} layout="vertical">
+            <Form.Item name="title" label="Title" rules={[{ required: true, message: 'Enter title' }]}>
+              <Input maxLength={255} />
+            </Form.Item>
+            <Form.Item name="body" label="Topic text" rules={[{ required: true, message: 'Enter text' }]}>
+              <Input.TextArea rows={12} placeholder="Learning content for this topic" />
+            </Form.Item>
+            <Form.Item name="imageUrl" label="Image URL" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item label="Topic image" extra="Upload a cartoon/illustration or clear to remove.">
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Form.Item noStyle shouldUpdate={(prev, next) => prev.imageUrl !== next.imageUrl}>
+                  {() => {
+                    const url = topicForm.getFieldValue('imageUrl');
+                    return url ? (
+                      <img
+                        src={url}
+                        alt=""
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: 200,
+                          objectFit: 'contain',
+                          borderRadius: 8,
+                          border: '1px solid #eee',
+                          background: '#fff',
+                        }}
+                      />
+                    ) : (
+                      <div style={{ color: '#999' }}>No image</div>
+                    );
+                  }}
+                </Form.Item>
+                <Space wrap>
+                  <Upload
+                    accept="image/*"
+                    showUploadList={false}
+                    customRequest={async ({ file, onSuccess, onError }) => {
+                      try {
+                        await uploadTopicImage(file as File);
+                        onSuccess?.({}, new XMLHttpRequest());
+                      } catch (e) {
+                        onError?.(e as Error);
+                      }
+                    }}
+                  >
+                    <Button icon={<UploadOutlined />} loading={topicImageUploading}>
+                      Upload image
+                    </Button>
+                  </Upload>
+                  <Form.Item noStyle shouldUpdate={(prev, next) => prev.imageUrl !== next.imageUrl}>
+                    {() => (
+                      <Button
+                        danger
+                        disabled={!topicForm.getFieldValue('imageUrl')}
+                        onClick={() => topicForm.setFieldsValue({ imageUrl: '' })}
+                      >
+                        Remove image
+                      </Button>
+                    )}
+                  </Form.Item>
+                </Space>
+              </Space>
             </Form.Item>
           </Form>
         </Modal>

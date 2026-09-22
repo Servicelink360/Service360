@@ -291,6 +291,7 @@ export class TrainingService {
           id: t.id,
           title: t.title,
           body: t.body,
+          imageUrl: t.imageUrl || null,
           order: t.sortOrder,
           completed: completed.has(+t.id),
         })),
@@ -835,6 +836,109 @@ export class TrainingService {
     return { ...errorCode.SUCCESS, data: module };
   }
 
+  async adminGetTopics(user: IUserInfo, moduleId: number) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const module = await this.modulesRepo.findOne({ where: { id: moduleId } });
+    if (!module) return errorCode.NOT_FOUND;
+    const topics = await this.topicsRepo.find({
+      where: { moduleId },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    return {
+      ...errorCode.SUCCESS,
+      data: {
+        module: {
+          id: module.id,
+          code: module.code,
+          title: module.title,
+        },
+        topics: topics.map((t) => ({
+          id: t.id,
+          title: t.title,
+          body: t.body,
+          imageUrl: t.imageUrl || null,
+          order: t.sortOrder,
+        })),
+      },
+    };
+  }
+
+  async adminUpdateTopic(
+    user: IUserInfo,
+    topicId: number,
+    body: { title?: string; body?: string; imageUrl?: string | null; sortOrder?: number },
+  ) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const topic = await this.topicsRepo.findOne({ where: { id: topicId } });
+    if (!topic) return errorCode.NOT_FOUND;
+    if (body.title !== undefined) {
+      const title = String(body.title || '').trim();
+      if (!title) {
+        return { ...errorCode.EXCEPTION, message: 'Title is required' };
+      }
+      topic.title = title.slice(0, 255);
+    }
+    if (body.body !== undefined) {
+      topic.body = String(body.body || '');
+    }
+    if (body.imageUrl !== undefined) {
+      const url = body.imageUrl == null ? null : String(body.imageUrl).trim();
+      topic.imageUrl = url || null;
+    }
+    if (body.sortOrder !== undefined && Number.isFinite(+body.sortOrder)) {
+      topic.sortOrder = +body.sortOrder;
+    }
+    await this.topicsRepo.save(topic);
+    return {
+      ...errorCode.SUCCESS,
+      data: {
+        id: topic.id,
+        title: topic.title,
+        body: topic.body,
+        imageUrl: topic.imageUrl || null,
+        order: topic.sortOrder,
+      },
+    };
+  }
+
+  /** One-time defaults for Gateway cartoon illustrations (site-relative public paths). */
+  async ensureDefaultGatewayImages(): Promise<void> {
+    try {
+      const gateway = await this.modulesRepo.findOne({ where: { code: 'GATEWAY' } });
+      if (!gateway) return;
+      const defaults: Record<number, string> = {
+        1: '/images/training/gateway/whs-responsibilities.png',
+        2: '/images/training/gateway/risk-management.png',
+        3: '/images/training/gateway/issue-resolution.png',
+        4: '/images/training/gateway/your-responsibility.png',
+        5: '/images/training/gateway/workplace-hazards.png',
+        6: '/images/training/gateway/manual-handling-awareness.png',
+        7: '/images/training/gateway/safe-lifting.png',
+        8: '/images/training/gateway/ergonomics.png',
+      };
+      const topics = await this.topicsRepo.find({
+        where: { moduleId: gateway.id },
+        order: { sortOrder: 'ASC' },
+      });
+      // Only seed defaults on first setup (no topic images yet). Never overwrite admin edits.
+      if (topics.some((t) => !!t.imageUrl)) return;
+      const updates = topics.filter((t) => defaults[t.sortOrder]);
+      for (const t of updates) {
+        t.imageUrl = defaults[t.sortOrder];
+      }
+      if (updates.length) {
+        await this.topicsRepo.save(updates);
+        this.logger.log(`training: set default Gateway images on ${updates.length} topics`);
+      }
+    } catch (e) {
+      this.logger.warn(`ensureDefaultGatewayImages: ${(e as Error).message}`);
+    }
+  }
+
   async adminCreateSiteInduction(
     user: IUserInfo,
     body: { siteId: number; siteName: string; title?: string; sourceModuleId?: number },
@@ -895,6 +999,7 @@ export class TrainingService {
               moduleId: saved.id,
               title: t.title,
               body: t.body,
+              imageUrl: t.imageUrl || null,
               sortOrder: t.sortOrder,
             }),
           ),

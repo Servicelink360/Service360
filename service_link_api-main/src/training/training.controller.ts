@@ -113,6 +113,31 @@ export class TrainingController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Get('admin/modules/:id/topics')
+  async adminTopics(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminGetTopics(req.user, +id),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('admin/topics/:id')
+  async adminUpdateTopic(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: any,
+    @Request() req,
+  ) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminUpdateTopic(req.user, +id, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Get('admin/modules/:id/questions')
   async adminQuestions(@Res() res, @Param('id') id: string, @Request() req) {
     return customHttpCode(

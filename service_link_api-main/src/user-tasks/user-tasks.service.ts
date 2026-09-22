@@ -1001,6 +1001,11 @@ export class UserTasksService {
           query.andWhere('usertasks.status = :completedStatus', {
             completedStatus: dJobStatus.COMPLETED,
           });
+        } else if (body.status === 'si' || body.status === 'active') {
+          // Completed + in-progress drafts (e.g. Safety Audit progress save)
+          query.andWhere('usertasks.status IN (:...activeStatuses)', {
+            activeStatuses: [dJobStatus.COMPLETED, dJobStatus.INPROGRESS],
+          });
         } else if (body.status === 'deleted' && isAdmin) {
           // Admin deleted filters already applied in listDeleted block above.
         } else {
@@ -1823,7 +1828,8 @@ export class UserTasksService {
       data.updatedAt = new Date();
       data.createdBy = userInfo.userId;
       data.updatedBy = userInfo.userId;
-      data.status = dJobStatus.COMPLETED;
+      const saveAsDraft = +body.status === dJobStatus.INPROGRESS;
+      data.status = saveAsDraft ? dJobStatus.INPROGRESS : dJobStatus.COMPLETED;
       data.type = "CUSTOM"
       // Server clock at save — client checkIn can be hours stale on long admin uploads.
       data.checkIn = new Date();
@@ -2039,16 +2045,20 @@ export class UserTasksService {
       const ut = await query.getOne();
       if (ut) {
         this.mergeChunkedReportsOnTask(ut);
-        this.queueReportPdfGeneration(ut, 'createCustomerReports');
+        if (!saveAsDraft) {
+          this.queueReportPdfGeneration(ut, 'createCustomerReports');
+        }
       }
-      this.maybeNotifyNewReportEmail(userInfo, {
-        id: taskSaved.id,
-        customerId: data.customerId,
-        taskName: data.taskName,
-        siteName: data.siteName,
-        serviceName: data.serviceName,
-      });
-      return { ...errorCode.SUCCESS, data: { id: taskSaved.id } };
+      if (!saveAsDraft) {
+        this.maybeNotifyNewReportEmail(userInfo, {
+          id: taskSaved.id,
+          customerId: data.customerId,
+          taskName: data.taskName,
+          siteName: data.siteName,
+          serviceName: data.serviceName,
+        });
+      }
+      return { ...errorCode.SUCCESS, data: { id: taskSaved.id, status: data.status } };
     } catch (error) {
       const { message: errMsg, details } = buildExceptionResult(error, 'createCustomerReports');
       console.error('[createCustomerReports]', errMsg);
@@ -2086,18 +2096,30 @@ export class UserTasksService {
         return { ...errorCode.EXCEPTION, message: 'You can only edit your own reports.' };
       }
 
+      const saveAsDraft = +body.status === dJobStatus.INPROGRESS;
       const customerId = Number(body.customerId);
       const siteId = Number(body.siteId);
-      if (!Number.isFinite(customerId) || customerId <= 0) {
-        return { ...errorCode.VALIDATION_ERROR, message: 'customerId is required' };
+      if (!saveAsDraft) {
+        if (!Number.isFinite(customerId) || customerId <= 0) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'customerId is required' };
+        }
+        // siteId 0 = Other (custom site) — allowed when site name/address are provided
+        if (!Number.isFinite(siteId) || siteId < 0) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'siteId is required' };
+        }
+        if (siteId === 0 && !String(body.siteName || '').trim()) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'siteName is required for custom sites' };
+        }
       }
-      if (!Number.isFinite(siteId) || siteId <= 0) {
-        return { ...errorCode.VALIDATION_ERROR, message: 'siteId is required' };
-      }
+
+      const resolvedCustomerId =
+        Number.isFinite(customerId) && customerId > 0 ? customerId : existing.customerId ?? 0;
+      const resolvedSiteId = Number.isFinite(siteId) && siteId >= 0 ? siteId : existing.siteId ?? 0;
+      const nextStatus = saveAsDraft ? dJobStatus.INPROGRESS : dJobStatus.COMPLETED;
 
       await this.userTasksRepository.manager.transaction(async (manager) => {
         const sitePatch = {
-          siteId,
+          siteId: resolvedSiteId,
           siteName: body.siteName ?? '',
           siteAddress: body.siteAddress ?? '',
         };
@@ -2105,8 +2127,8 @@ export class UserTasksService {
         await manager.update(UserTask, { id: +id }, {
           taskName: body.taskName,
           serviceId: body.serviceId ?? null,
-          customerId,
-          siteId,
+          customerId: resolvedCustomerId,
+          siteId: resolvedSiteId,
           siteName: sitePatch.siteName ?? '',
           siteLocation: body.siteLocation ?? '',
           siteAddress: sitePatch.siteAddress ?? '',
@@ -2120,7 +2142,7 @@ export class UserTasksService {
           description: body.description !== undefined ? body.description : existing.description,
           updatedAt: new Date(),
           updatedBy: userInfo.userId,
-          status: dJobStatus.COMPLETED,
+          status: nextStatus,
           type: 'CUSTOM',
           checkIn: body.checkIn ? new Date(body.checkIn) : existing.checkIn,
           checkOut: body.completed ? new Date(body.completed) : existing.checkOut,
@@ -2151,9 +2173,11 @@ export class UserTasksService {
       }
 
       this.mergeChunkedReportsOnTask(ut);
-      this.queueReportPdfGeneration(ut, 'updateCustomerReports');
+      if (!saveAsDraft) {
+        this.queueReportPdfGeneration(ut, 'updateCustomerReports');
+      }
 
-      return { ...errorCode.SUCCESS, data: { id: +id } };
+      return { ...errorCode.SUCCESS, data: { id: +id, status: nextStatus } };
     } catch (error) {
       const { message: errMsg, details } = buildExceptionResult(error, 'updateCustomerReports');
       console.error('[updateCustomerReports]', errMsg);

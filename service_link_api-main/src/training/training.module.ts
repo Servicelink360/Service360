@@ -32,6 +32,7 @@ export class TrainingModule implements OnModuleInit {
   async onModuleInit() {
     try {
       await this.trainingService.seedFromJsonIfEmpty();
+      await this.trainingService.ensureDefaultGatewayImages();
     } catch (e) {
       // schema may not exist yet
     }

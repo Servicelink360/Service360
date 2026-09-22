@@ -1881,6 +1881,7 @@ const NewReports: React.FC<{
             keyword: filters.keyword,
             sort: sort.orderBy ? sort : undefined,
             templateCategory: lockedTemplateCategory || undefined,
+            includeDrafts: isSafetyAuditMode && tab === "active",
           });
           list = listed.rows;
           total = listed.count;
@@ -1928,6 +1929,7 @@ const NewReports: React.FC<{
       safetyAuditTemplateIds,
       init.reportTemplates,
       lockedTemplateCategory,
+      isSafetyAuditMode,
     ],
   );
 
@@ -2300,9 +2302,13 @@ const NewReports: React.FC<{
   }, [isIncidentReportMode, isSafetyAuditMode, activeFormTemplate]);
 
   const formModalTitle = editing
-    ? formReportKindLabel
-      ? `Update ${formReportKindLabel}`
-      : "Update report"
+    ? +editing.status === dJobStatus.INPROGRESS
+      ? formReportKindLabel
+        ? `Continue ${formReportKindLabel} (draft)`
+        : "Continue draft"
+      : formReportKindLabel
+        ? `Update ${formReportKindLabel}`
+        : "Update report"
     : formReportKindLabel
       ? `New ${formReportKindLabel}`
       : "New report";
@@ -3347,6 +3353,7 @@ const NewReports: React.FC<{
       staffId: effectiveStaffId,
       editing,
       templateLabel: selectedTemplateName,
+      draft: false,
     });
 
     startSaveProgressTicker();
@@ -3420,6 +3427,112 @@ const NewReports: React.FC<{
     } catch (reloadErr) {
       console.error("Failed to refresh report list after save", reloadErr);
     }
+    } finally {
+      submitLockRef.current = false;
+    }
+  };
+
+  /** Safety Audit: persist filled fields as an in-progress draft (server-side, no PDF). */
+  const saveProgress = async () => {
+    if (!isSafetyAuditMode) return;
+    if (submitLockRef.current || progressOpen) return;
+    submitLockRef.current = true;
+    try {
+      let values = form.getFieldsValue(true);
+      if (!values.reportTemplateId && selectedTemplateId) {
+        values = { ...values, reportTemplateId: selectedTemplateId };
+      }
+      if (!values.reportTemplateId) {
+        message.warning("Select a report template before saving progress.");
+        return;
+      }
+
+      setProgressOpen(true);
+      setSubmitStep(10, "Saving progress");
+      const mediaOk = await uploadPendingMediaFields();
+      if (!mediaOk) {
+        resetSubmitUi();
+        return;
+      }
+      values = { ...values, ...form.getFieldsValue(true) };
+
+      if (isOtherJobSite(values.siteId)) {
+        values = { ...values, siteId: 0 };
+      }
+
+      if (isStaffUser && templateItemsForSubmit.length) {
+        const patch: Record<string, moment.Moment> = {};
+        templateItemsForSubmit.forEach((it, idx) => {
+          if (!isHiddenFromStaffCreate(it)) return;
+          const t = String(it?.type || "").toUpperCase();
+          if (
+            t !== "DATE" &&
+            t !== "DATE_PICKER" &&
+            t !== "TIME" &&
+            t !== "DATETIME" &&
+            t !== "[REPORT_DATE]" &&
+            t !== "[REPORT_TIME]" &&
+            t !== "[REPORT_DATETIME]"
+          ) {
+            return;
+          }
+          const fieldKey = getTemplateFieldKey(it, idx);
+          const current = values[fieldKey];
+          if (current === undefined || current === null || current === "") {
+            patch[fieldKey] = moment();
+          }
+        });
+        if (Object.keys(patch).length) {
+          form.setFieldsValue(patch);
+          values = { ...values, ...patch };
+        }
+      }
+
+      const items = ensureUniqueReportItemNames(buildReportItems(values) as any);
+      let effectiveStaffId = reportStaffId;
+      if ((!effectiveStaffId || effectiveStaffId <= 0) && isStaffUser && profile?.id) {
+        effectiveStaffId = +profile.id;
+      }
+
+      const payload = buildCustomReportSavePayload({
+        values,
+        items,
+        profile,
+        staffId: effectiveStaffId,
+        editing,
+        templateLabel: selectedTemplateName,
+        draft: true,
+      });
+
+      setSubmitStep(70, "Saving progress");
+      let res: any = null;
+      if (editing?.id) {
+        res = await updateCustomReport(+editing.id, payload);
+      } else {
+        res = await createCustomReport(payload);
+      }
+      resetSubmitUi();
+
+      if (res?.code !== 1) {
+        message.error(res?.message || "Could not save progress. Try again.");
+        return;
+      }
+
+      const savedId = Number(res?.data?.id ?? editing?.id ?? 0) || 0;
+      if (savedId > 0) {
+        const refreshed = await fetchCustomReportById(savedId);
+        setEditing(refreshed || { ...(editing || {}), id: savedId, status: dJobStatus.INPROGRESS });
+      }
+      message.success({
+        content: "Progress saved. You can continue later from the list.",
+        duration: 4,
+        key: "nr-safety-audit-draft-ok",
+      });
+      try {
+        await loadRows(page, limit, listFilters, listSort, reportListTab);
+      } catch {
+        /* list refresh is best-effort */
+      }
     } finally {
       submitLockRef.current = false;
     }
@@ -3929,7 +4042,14 @@ const NewReports: React.FC<{
               />
             ) : null}
             <MobileReportCardHeadMain>
-              <MobileReportCardTitle $dark={mobileUiDark}>{title}</MobileReportCardTitle>
+              <MobileReportCardTitle $dark={mobileUiDark}>
+                {title}
+                {+r.status === dJobStatus.INPROGRESS ? (
+                  <Tag color="orange" style={{ marginLeft: 8, verticalAlign: "middle" }}>
+                    Draft
+                  </Tag>
+                ) : null}
+              </MobileReportCardTitle>
               <MobileReportCardSite $dark={mobileUiDark}>{siteDept}</MobileReportCardSite>
             </MobileReportCardHeadMain>
             {(+profileType === userType.ADMIN || +profileType === userType.CUSTOMER) ? (
@@ -4044,6 +4164,11 @@ const NewReports: React.FC<{
                 className={mobileUiDark ? "nr-mobile-report-meta-value" : undefined}
               >
                 {submittedLabel}
+                {+r.status === dJobStatus.INPROGRESS ? (
+                  <Tag color="orange" style={{ marginLeft: 6 }}>
+                    Draft
+                  </Tag>
+                ) : null}
               </MobileReportCardValue>
             </MobileReportCardDetailRow>
           </MobileReportCardDetails>
@@ -4169,7 +4294,16 @@ const NewReports: React.FC<{
       width: 155,
       ...submittedColumnSorter,
       sortOrder: sortOrderFor("submittedAt"),
-      render: (_: unknown, r: any) => formatReportSubmittedAt(r),
+      render: (_: unknown, r: any) => (
+        <span>
+          {formatReportSubmittedAt(r)}
+          {+r.status === dJobStatus.INPROGRESS ? (
+            <Tag color="orange" style={{ marginLeft: 6 }}>
+              Draft
+            </Tag>
+          ) : null}
+        </span>
+      ),
     },
     {
       title: "Report file",
@@ -4628,12 +4762,18 @@ const NewReports: React.FC<{
             >
               <RangePicker
                 className={mobileUiDark ? "nr-mobile-dark-field" : undefined}
-                dropdownClassName={mobileUiDark ? "nr-mobile-dark-calendar" : undefined}
+                dropdownClassName={[
+                  isMobilePortrait || showMobileCards ? "nr-mobile-range-calendar" : "",
+                  mobileUiDark ? "nr-mobile-dark-calendar" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ") || undefined}
                 format="DD/MM/YYYY"
                 style={{
                   width: "100%",
                   ...mobileDarkFieldStyle,
                 }}
+                getPopupContainer={() => document.body}
                 onChange={() => {
                   setTimeout(() => void applyListFiltersFromForm(), 0);
                 }}
@@ -5418,29 +5558,90 @@ const NewReports: React.FC<{
           }
         }}
         footer={
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "center",
+              gap: 8,
+              width: "100%",
+            }}
+          >
             <Button
               size="large"
-              icon={<CloseOutlined />}
               onClick={() => closeReportFormModal()}
-                className={modalUiDark ? "nr-mobile-btn-dark" : undefined}
-              style={{ borderRadius: 8, ...mobileDarkBtnDefaultStyle }}
+              className={modalUiDark ? "nr-mobile-btn-dark" : undefined}
+              style={{ borderRadius: 8, flexShrink: 0, ...mobileDarkBtnDefaultStyle }}
               disabled={progressOpen}
             >
               {intl.formatMessage({ id: "button.Close" }, { defaultMessage: "Cancel" })}
             </Button>
-            <Button
-              type="primary"
-              size="large"
-              icon={<SaveOutlined />}
-              onClick={submit}
-              disabled={progressOpen}
-              style={{ borderRadius: 8, minWidth: 140, ...staffPrimaryGreen }}
-            >
-              {editing
-                ? intl.formatMessage({ id: "button.Save" }, { defaultMessage: "Save changes" })
-                : intl.formatMessage({ id: "button.Upload" }, { defaultMessage: "Upload" })}
-            </Button>
+            {isSafetyAuditMode ? (
+              <div
+                style={{
+                  display: "flex",
+                  flex: 1,
+                  gap: 8,
+                  minWidth: 0,
+                  justifyContent: "flex-end",
+                }}
+              >
+                <Button
+                  size="large"
+                  onClick={() => void saveProgress()}
+                  disabled={progressOpen}
+                  style={{
+                    borderRadius: 8,
+                    fontWeight: 700,
+                    flex: "1.4 1 auto",
+                    minWidth: 132,
+                    padding: "0 10px",
+                    whiteSpace: "nowrap",
+                    background: modalUiDark ? "#1a2e1a" : "#f6ffed",
+                    border: "2px solid #52c41a",
+                    color: modalUiDark ? "#95de64" : "#135200",
+                  }}
+                >
+                  Save Progress
+                </Button>
+                <Button
+                  type="primary"
+                  size="large"
+                  onClick={submit}
+                  disabled={progressOpen}
+                  style={{
+                    borderRadius: 8,
+                    flex: "1 1 auto",
+                    minWidth: 88,
+                    padding: "0 10px",
+                    whiteSpace: "nowrap",
+                    fontWeight: 700,
+                    ...staffPrimaryGreen,
+                  }}
+                >
+                  {editing && +editing.status !== dJobStatus.INPROGRESS
+                    ? intl.formatMessage({ id: "button.Save" }, { defaultMessage: "Save changes" })
+                    : "Submit"}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="primary"
+                size="large"
+                onClick={submit}
+                disabled={progressOpen}
+                style={{
+                  borderRadius: 8,
+                  minWidth: 140,
+                  fontWeight: 700,
+                  ...staffPrimaryGreen,
+                }}
+              >
+                {editing && +editing.status !== dJobStatus.INPROGRESS
+                  ? intl.formatMessage({ id: "button.Save" }, { defaultMessage: "Save changes" })
+                  : "Submit"}
+              </Button>
+            )}
           </div>
         }
         width={showMobileCards || isMobilePortrait ? "calc(100vw - 24px)" : 980}
