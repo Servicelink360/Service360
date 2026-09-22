@@ -473,6 +473,15 @@ function ReportAmPmDateTimePicker({
 
 /** Mobile portrait form typography + sage theme (readable app sizes, not tiny desktop scale). */
 const NewReportModalMobilePortraitStyles = createGlobalStyle`
+  /* Keep Ant Design "(optional)" mark intact — never mid-word wrap. */
+  .new-report-form-modal .ant-form-item-optional {
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
   @media (orientation: portrait) and (max-width: 768px) {
     .new-report-form-modal .ant-modal-title,
     .new-report-form-modal .ant-modal-title span {
@@ -485,8 +494,21 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       font-size: 16px !important;
       line-height: 1.4 !important;
       white-space: normal !important;
-      word-break: break-word;
+      word-break: normal;
+      overflow-wrap: anywhere;
       height: auto !important;
+      display: inline-flex !important;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: 6px;
+    }
+
+    .new-report-form-modal .ant-form-item-optional {
+      white-space: nowrap !important;
+      word-break: keep-all !important;
+      overflow-wrap: normal !important;
+      flex-shrink: 0;
+      display: inline-block;
     }
 
     .new-report-form-modal .nr-template-fields-mobile .ant-form-item-label {
@@ -503,7 +525,8 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       font-size: 16px !important;
       line-height: 1.4;
       white-space: normal;
-      word-break: break-word;
+      word-break: normal;
+      overflow-wrap: anywhere;
       height: auto;
     }
 
