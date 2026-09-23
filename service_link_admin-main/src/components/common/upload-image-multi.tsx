@@ -476,6 +476,10 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                             )
                         })}
                         {multiple || fileList.length === 0 ? (
+                            <div
+                                className="report-fault-media-tile-slot"
+                                style={{ width: 72, height: 72, flex: "0 0 72px" }}
+                            >
                             <Upload
                                 className="report-fault-media-tile"
                                 multiple={!!multiple}
@@ -490,28 +494,30 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                                     return true
                                 }}
                                 customRequest={deferUpload ? undefined : (options) => handleUpdaloadImage(options)}
-                                style={{ width: 104, height: 104 }}
+                                style={{ width: 72, height: 72 }}
                             >
                                 <div
                                     className="report-fault-media-tile__btn"
                                     role="button"
                                     aria-label="Upload"
                                     style={{
-                                        width: 104,
-                                        height: 104,
+                                        width: 72,
+                                        height: 72,
                                         display: "flex",
                                         alignItems: "center",
                                         justifyContent: "center",
-                                        background: "#f5f5f5",
-                                        border: "1px solid #d9d9d9",
-                                        borderRadius: 2,
+                                        background: "#ffffff",
+                                        border: "2px solid #1f6b3a",
+                                        borderRadius: 10,
                                         cursor: "pointer",
                                         boxSizing: "border-box",
+                                        boxShadow: "0 0 0 1px rgba(31, 107, 58, 0.12)",
                                     }}
                                 >
-                                    <PlusOutlined style={{ fontSize: 22, color: "#52c41a" }} />
+                                    <PlusOutlined style={{ fontSize: 20, color: "#52c41a" }} />
                                 </div>
                             </Upload>
+                            </div>
                         ) : null}
                     </div>
                 </div>

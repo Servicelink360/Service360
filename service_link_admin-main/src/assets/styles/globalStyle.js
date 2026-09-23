@@ -2836,17 +2836,21 @@ body.messages-page-body-dark .isoBoxWrapper {
   border: 1px solid #404040 !important;
 }
 
-.report-fault-media-grid > .ant-upload,
+.report-fault-media-grid > .ant-upload.report-fault-media-tile,
 .report-fault-media-grid .report-fault-media-tile.ant-upload,
 .report-fault-media-grid .ant-upload.report-fault-media-tile {
   display: inline-block !important;
-  width: 104px !important;
-  height: 104px !important;
-  max-width: 104px !important;
+  width: 72px !important;
+  height: 72px !important;
+  min-width: 72px !important;
+  min-height: 72px !important;
+  max-width: 72px !important;
+  flex: 0 0 72px !important;
+  aspect-ratio: auto !important;
   margin: 0 !important;
   float: none !important;
   border: 1px solid #d9d9d9 !important;
-  border-radius: 2px !important;
+  border-radius: 8px !important;
   background: #f5f5f5 !important;
   overflow: hidden !important;
   box-sizing: border-box !important;
@@ -2900,34 +2904,35 @@ body.messages-page-body-dark .isoBoxWrapper {
   color: #ffffff !important;
 }
 
-.report-fault-media-grid .ant-upload {
+.report-fault-media-grid .ant-upload:not(.report-fault-media-tile) {
   display: block !important;
   width: 100% !important;
   height: auto !important;
   max-width: 100% !important;
 }
 
-.report-fault-media-grid .ant-upload > .ant-upload {
+.report-fault-media-grid .ant-upload:not(.report-fault-media-tile) > .ant-upload {
   display: block !important;
   width: 100% !important;
   height: 100% !important;
 }
 
-.report-fault-media-grid > span.ant-upload,
-.report-fault-media-grid > .ant-upload {
+.report-fault-media-grid > span.ant-upload:not(.report-fault-media-tile) {
   width: 100% !important;
 }
 
-/* + upload tile sits in same grid cell */
-.report-fault-media-grid > .ant-upload-picture-card-wrapper,
-.report-fault-media-grid > span.ant-upload,
-.report-fault-media-grid > .report-fault-media-tile {
-  display: block !important;
+/* + upload tile stays a small square beside the photos */
+.report-fault-media-grid > .report-fault-media-tile,
+.report-fault-media-grid > span.report-fault-media-tile {
+  display: inline-block !important;
   float: none !important;
-  width: 100% !important;
-  max-width: none !important;
-  height: auto !important;
-  aspect-ratio: 1 / 1 !important;
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px !important;
+  height: 72px !important;
+  min-height: 72px !important;
+  flex: 0 0 72px !important;
+  aspect-ratio: auto !important;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -2962,9 +2967,11 @@ body.messages-page-body-dark .isoBoxWrapper {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 104px !important;
-  height: 104px !important;
-  min-height: 104px !important;
+  width: 72px !important;
+  height: 72px !important;
+  min-width: 72px !important;
+  min-height: 72px !important;
+  max-width: 72px !important;
   margin: 0 !important;
   padding: 0 !important;
   border: 1px solid #d9d9d9 !important;
@@ -2986,9 +2993,43 @@ body.messages-page-body-dark .isoBoxWrapper {
 .report-fault-media-tile__btn .anticon,
 .ant-modal.new-report-form-modal .report-fault-media-tile__btn .anticon,
 .new-report-form-modal--dark .report-fault-media-tile__btn .anticon {
-  font-size: 22px !important;
+  font-size: 20px !important;
   color: #52c41a !important;
   margin: 0 !important;
+}
+
+.report-fault-media-grid .ant-upload-select:has(.report-fault-media-tile__btn) {
+  width: 72px !important;
+  height: 72px !important;
+  min-width: 72px !important;
+  min-height: 72px !important;
+  max-width: 72px !important;
+  flex: 0 0 72px !important;
+  aspect-ratio: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.report-fault-media-tile-slot,
+.report-fault-media-tile-slot > .ant-upload,
+.report-fault-media-tile-slot .ant-upload-select,
+.ant-modal.new-report-form-modal .report-fault-media-tile-slot .ant-upload-select {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 72px !important;
+  height: 72px !important;
+  min-width: 72px !important;
+  min-height: 72px !important;
+  max-width: 72px !important;
+  max-height: 72px !important;
+  flex: 0 0 72px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
 }
 
 .report-fault-view-modal__title {

@@ -663,8 +663,8 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       color: #3d6b4a !important;
     }
 
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload.ant-upload-select-picture-card,
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .image-upload-grid-wrap .ant-upload.ant-upload-select-picture-card {
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload.ant-upload-select-picture-card:not(.report-fault-media-tile):not(:has(.report-fault-media-tile__btn)),
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .image-upload-grid-wrap .ant-upload.ant-upload-select-picture-card:not(:has(.report-fault-media-tile__btn)) {
       background: #f4faf3 !important;
       border: 1.5px dashed #6b9e74 !important;
       border-radius: 12px !important;
@@ -688,9 +688,9 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       font-weight: 600 !important;
     }
 
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select:not(.report-fault-media-tile),
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select:not(.report-fault-media-tile) > button,
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card):not(.report-fault-media-tile) button {
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select:not(.report-fault-media-tile):not(:has(.report-fault-media-tile__btn)),
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select:not(.report-fault-media-tile):not(:has(.report-fault-media-tile__btn)) > button,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card):not(.report-fault-media-tile):not(:has(.report-fault-media-tile__btn)) button {
       display: flex !important;
       flex-direction: column !important;
       align-items: center !important;
@@ -707,10 +707,13 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     .ant-modal.new-report-form-modal .report-fault-media-tile.ant-upload,
     .ant-modal.new-report-form-modal .report-fault-media-grid .ant-upload.report-fault-media-tile {
       display: inline-block !important;
-      width: 104px !important;
-      height: 104px !important;
-      min-height: 104px !important;
-      max-width: 104px !important;
+      width: 72px !important;
+      height: 72px !important;
+      min-width: 72px !important;
+      min-height: 72px !important;
+      max-width: 72px !important;
+      flex: 0 0 72px !important;
+      aspect-ratio: auto !important;
       margin: 0 !important;
       padding: 0 !important;
       background: transparent !important;
@@ -722,10 +725,11 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      width: 104px !important;
-      height: 104px !important;
-      min-width: 104px !important;
-      min-height: 104px !important;
+      width: 72px !important;
+      height: 72px !important;
+      min-width: 72px !important;
+      min-height: 72px !important;
+      max-width: 72px !important;
       padding: 0 !important;
       box-sizing: border-box !important;
       border: 2px solid #1f6b3a !important;
@@ -736,9 +740,33 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
     }
 
     .ant-modal.new-report-form-modal .report-fault-media-tile__btn .anticon {
-      font-size: 28px !important;
+      font-size: 20px !important;
       color: #52c41a !important;
       margin: 0 !important;
+    }
+
+    .ant-modal.new-report-form-modal .report-fault-media-tile-slot,
+    .ant-modal.new-report-form-modal .report-fault-media-tile-slot .ant-upload,
+    .ant-modal.new-report-form-modal .report-fault-media-tile-slot .ant-upload-select,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .report-fault-media-tile-slot .ant-upload-select,
+    .ant-modal.new-report-form-modal .report-fault-media-grid .ant-upload-select:has(.report-fault-media-tile__btn) {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 72px !important;
+      height: 72px !important;
+      min-width: 72px !important;
+      min-height: 72px !important;
+      max-width: 72px !important;
+      max-height: 72px !important;
+      flex: 0 0 72px !important;
+      aspect-ratio: auto !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+      background: transparent !important;
+      background-color: transparent !important;
+      box-shadow: none !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .nr-report-ampm-btns .ant-btn-default {

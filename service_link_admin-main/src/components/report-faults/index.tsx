@@ -990,15 +990,15 @@ const ReportFaultModal = (props: IProps) => {
                                                 showUploadList={false}
                                                 customRequest={handleUpdaloadImage}
                                                 onChange={handleChangeFile}
-                                                style={{ width: 104, height: 104 }}
+                                                style={{ width: 72, height: 72, flex: "0 0 72px" }}
                                             >
                                                 <div
                                                     className="report-fault-media-tile__btn"
                                                     role="button"
                                                     aria-label="Upload"
                                                     style={{
-                                                        width: 104,
-                                                        height: 104,
+                                                        width: 72,
+                                                        height: 72,
                                                         display: "flex",
                                                         alignItems: "center",
                                                         justifyContent: "center",
@@ -1009,7 +1009,7 @@ const ReportFaultModal = (props: IProps) => {
                                                         boxSizing: "border-box",
                                                     }}
                                                 >
-                                                    <PlusOutlined style={{ fontSize: 22, color: "#52c41a" }} />
+                                                    <PlusOutlined style={{ fontSize: 18, color: "#52c41a" }} />
                                                 </div>
                                             </Upload>
                                         </div>

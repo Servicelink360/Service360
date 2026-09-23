@@ -151,10 +151,11 @@ export const ReportsMobileFormModalStyles = createGlobalStyle`
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      width: 104px !important;
-      height: 104px !important;
-      min-width: 104px !important;
-      min-height: 104px !important;
+      width: 72px !important;
+      height: 72px !important;
+      min-width: 72px !important;
+      min-height: 72px !important;
+      max-width: 72px !important;
       padding: 0 !important;
       box-sizing: border-box !important;
       border: 2px solid #1f6b3a !important;
@@ -165,7 +166,7 @@ export const ReportsMobileFormModalStyles = createGlobalStyle`
     }
 
     .ant-modal.new-report-form-modal .report-fault-media-tile__btn .anticon {
-      font-size: 28px !important;
+      font-size: 20px !important;
       color: #52c41a !important;
     }
 
