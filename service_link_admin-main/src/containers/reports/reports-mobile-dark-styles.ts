@@ -96,6 +96,71 @@ export const ReportsMobileDarkPageStyles = createGlobalStyle`
     color: #ffffff !important;
   }
 
+  /* Job site or service — affix wrapper stays dark; inner input must not stay white */
+  html body .new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper,
+  html body .new-reports-theme-dark .report-faults-filter-keyword .ant-input-affix-wrapper,
+  html body .new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper > input.ant-input,
+  html body .new-reports-theme-dark .report-faults-filter-keyword .ant-input-affix-wrapper > input.ant-input,
+  html body .new-reports-theme-dark.report-faults-list-wrap .ant-input,
+  html body .new-reports-theme-dark.report-faults-list-wrap .ant-input-affix-wrapper,
+  html body .new-reports-theme-dark.report-faults-list-wrap input.ant-input {
+    background: #141414 !important;
+    background-color: #141414 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #444444 !important;
+    box-shadow: none !important;
+  }
+
+  html body .new-reports-theme-dark .nr-keyword-row input::placeholder,
+  html body .new-reports-theme-dark .report-faults-filter-keyword input::placeholder,
+  html body .new-reports-theme-dark.report-faults-list-wrap .ant-input::placeholder {
+    color: #e0e0e0 !important;
+    -webkit-text-fill-color: #e0e0e0 !important;
+    opacity: 1 !important;
+  }
+
+  html body .new-reports-theme-dark .nr-keyword-row .ant-input-clear-icon,
+  html body .new-reports-theme-dark .report-faults-filter-keyword .ant-input-clear-icon {
+    color: #b0b0b0 !important;
+  }
+
+  html[data-color-mode="dark"] .ant-message-notice-content {
+    background: #1e1e1e !important;
+    color: #f5f5f5 !important;
+    border: 1px solid #444444 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  html[data-color-mode="dark"] .ant-message-custom-content {
+    color: #f5f5f5 !important;
+  }
+
+  html[data-color-mode="dark"] .ant-message-success .anticon {
+    color: #52c41a !important;
+  }
+
+  html[data-color-mode="dark"] .ant-notification-notice {
+    background: #1e1e1e !important;
+    border: 1px solid #444444 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  html[data-color-mode="dark"] .ant-notification-notice-message,
+  html[data-color-mode="dark"] .ant-notification-notice-description {
+    color: #f5f5f5 !important;
+  }
+
+  html[data-color-mode="dark"] .ant-notification-notice-close {
+    color: #d0d0d0 !important;
+  }
+
+  html[data-color-mode="dark"] .ant-notification-notice-icon-success {
+    color: #52c41a !important;
+  }
+
   .new-reports-theme-dark.new-reports-list-wrap .ant-picker-input > input::placeholder,
   .new-reports-theme-dark.new-reports-list-wrap .ant-input::placeholder,
   .new-reports-theme-dark.new-reports-list-wrap .new-reports-list-filters--dark .ant-input::placeholder,

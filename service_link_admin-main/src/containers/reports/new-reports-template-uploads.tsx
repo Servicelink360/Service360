@@ -27,7 +27,7 @@ export const TemplateImageUpload = forwardRef<
       tileGrid
       multiple={multiple}
       isImage={true}
-      title=""
+      title="Media Files"
       files={files}
       onChange={(urls: string[]) => {
         const clean = (urls ?? []).filter(Boolean);
@@ -48,7 +48,7 @@ export const TemplateVideoUpload = forwardRef<
       deferUpload
       multiple={false}
       isImage={false}
-      title=""
+      title="Media Files"
       files={files}
       onChange={(urls: string[]) => {
         const clean = (urls ?? []).filter(Boolean);

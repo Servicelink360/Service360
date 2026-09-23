@@ -33,6 +33,7 @@ import {
     isPublicAmenitiesCleaningService,
     REPORT_FAULT_TOILET_AREA_OPTIONS,
 } from '../../constants/reportFaultToiletArea'
+import { FaultUploadProgressModal, useFaultUploadProgress } from './fault-upload-progress'
 
 type IssueOption = { id: string; name: string }
 
@@ -88,6 +89,7 @@ const ReportFaultModal = (props: IProps) => {
     const [files, setFiles] = useState<string[]>(data && data.attachFiles ? (() => {
         try { return JSON.parse(data.attachFiles); } catch { return []; }
     })() : [])
+    const uploadProgress = useFaultUploadProgress()
 
     const profileRaw = localStorage.getItem('profile');
     let profile: any = null;
@@ -184,6 +186,8 @@ const ReportFaultModal = (props: IProps) => {
     const handleUpdaloadImage = async (options: any) => {
         const { onSuccess, onError, onProgress, file } = options;
         const raw = file.originFileObj ?? file;
+        const jobId = String(file?.uid || `${raw?.name || "upload"}-${Date.now()}`);
+        uploadProgress.begin(jobId);
         try {
             const formData = new FormData();
             formData.append("file", raw, raw.name || "upload");
@@ -195,7 +199,9 @@ const ReportFaultModal = (props: IProps) => {
                 {
                     uploadFileSize: raw.size || 0,
                     onUploadProgress: (pct: number) => {
-                        onProgress?.({ percent: Math.min(100, Math.round(pct)) });
+                        const percent = Math.min(100, Math.round(pct));
+                        uploadProgress.update(jobId, percent);
+                        onProgress?.({ percent });
                     },
                 },
             );
@@ -212,6 +218,8 @@ const ReportFaultModal = (props: IProps) => {
         } catch (error: any) {
             notificationComponent("error", 3, "Upload failed", error?.message || "Upload failed");
             onError?.(error);
+        } finally {
+            uploadProgress.end(jobId);
         }
     };
 
@@ -648,6 +656,7 @@ const ReportFaultModal = (props: IProps) => {
     }, [sites, data]);
 
     return (
+        <>
         <Modal
             visible={open}
             open={open}
@@ -662,7 +671,10 @@ const ReportFaultModal = (props: IProps) => {
             className={`new-report-form-modal${uiDark ? " new-report-form-modal--dark" : ""}`}
             wrapClassName={uiDark ? "new-report-form-modal-wrap--dark" : undefined}
             maskStyle={uiDark ? { backgroundColor: "rgba(0, 0, 0, 0.82)" } : undefined}
-            style={mobileLayout ? { top: 8, maxWidth: "100vw", paddingBottom: 0 } : undefined}
+            style={{
+                ...(mobileLayout ? { top: 8, maxWidth: "100vw", paddingBottom: 0 } : {}),
+                ...(uploadProgress.ui.open ? { visibility: "hidden" as const } : {}),
+            }}
         >
             <BodyModalWrap>
                 <Form
@@ -1049,6 +1061,14 @@ const ReportFaultModal = (props: IProps) => {
                 </Row>
             </FooterModalWrap>
         </Modal>
+        <FaultUploadProgressModal
+            open={uploadProgress.ui.open}
+            percent={uploadProgress.ui.percent}
+            current={uploadProgress.ui.current}
+            total={uploadProgress.ui.total}
+            dark={uiDark}
+        />
+    </>
     )
 }
 

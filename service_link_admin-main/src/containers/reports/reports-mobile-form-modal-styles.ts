@@ -151,12 +151,17 @@ export const ReportsMobileFormModalStyles = createGlobalStyle`
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      width: 100% !important;
-      height: 100% !important;
-      min-height: 0 !important;
+      width: 104px !important;
+      height: 104px !important;
+      min-width: 104px !important;
+      min-height: 104px !important;
       padding: 0 !important;
-      border: none !important;
-      background: transparent !important;
+      box-sizing: border-box !important;
+      border: 2px solid #1f6b3a !important;
+      border-radius: 10px !important;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      box-shadow: 0 0 0 1px rgba(31, 107, 58, 0.12) !important;
     }
 
     .ant-modal.new-report-form-modal .report-fault-media-tile__btn .anticon {

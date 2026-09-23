@@ -13,6 +13,7 @@ import { dateTimeFormat } from '@app/config/data.config'
 import { getBase64, sprintf } from '@app/lib/helpers/utility'
 import actions from '@app/redux/report-faults/actions'
 import { Button, Col, Form, Modal, Row, Upload, Image } from 'antd'
+import { FaultUploadProgressModal, useFaultUploadProgress } from './fault-upload-progress'
 import moment from 'moment'
 import React, { useEffect, useState } from 'react'
 import { useIntl } from 'react-intl'
@@ -119,9 +120,13 @@ const ReportFaultAnswerModal = (props: IProps) => {
         setChanged(true);
     };
 
+    const uploadProgress = useFaultUploadProgress();
+
     const handleUpdaloadImage = async (options: any) => {
         const { onSuccess, onError, onProgress, file } = options;
         const raw = file.originFileObj ?? file;
+        const jobId = String(file?.uid || `${raw?.name || "upload"}-${Date.now()}`);
+        uploadProgress.begin(jobId);
         try {
             const formData = new FormData();
             formData.append("file", raw, raw.name || "upload");
@@ -133,7 +138,9 @@ const ReportFaultAnswerModal = (props: IProps) => {
                 {
                     uploadFileSize: raw.size || 0,
                     onUploadProgress: (pct: number) => {
-                        onProgress?.({ percent: Math.min(100, Math.round(pct)) });
+                        const percent = Math.min(100, Math.round(pct));
+                        uploadProgress.update(jobId, percent);
+                        onProgress?.({ percent });
                     },
                 },
             );
@@ -147,6 +154,8 @@ const ReportFaultAnswerModal = (props: IProps) => {
             }
         } catch (error: any) {
             onError?.(error);
+        } finally {
+            uploadProgress.end(jobId);
         }
     };
 
@@ -205,6 +214,7 @@ const ReportFaultAnswerModal = (props: IProps) => {
     );
 
     return (
+        <>
         <Modal
             visible={open}
             open={open}
@@ -216,6 +226,7 @@ const ReportFaultAnswerModal = (props: IProps) => {
             destroyOnClose
             maskClosable
             keyboard
+            style={uploadProgress.ui.open ? { visibility: "hidden" } : undefined}
         >
             <BodyModalWrap>
                 <Form
@@ -427,6 +438,13 @@ const ReportFaultAnswerModal = (props: IProps) => {
                 </Row>
             </FooterModalWrap>
         </Modal>
+        <FaultUploadProgressModal
+            open={uploadProgress.ui.open}
+            percent={uploadProgress.ui.percent}
+            current={uploadProgress.ui.current}
+            total={uploadProgress.ui.total}
+        />
+    </>
     )
 }
 

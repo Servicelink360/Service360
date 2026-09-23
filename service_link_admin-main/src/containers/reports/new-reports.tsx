@@ -688,9 +688,9 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       font-weight: 600 !important;
     }
 
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select,
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select > button,
-    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card) button {
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select:not(.report-fault-media-tile),
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload-select:not(.report-fault-media-tile) > button,
+    .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card):not(.report-fault-media-tile) button {
       display: flex !important;
       flex-direction: column !important;
       align-items: center !important;
@@ -702,6 +702,43 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       border: 1.5px dashed #6b9e74 !important;
       border-radius: 12px !important;
       color: #1a4d2e !important;
+    }
+
+    .ant-modal.new-report-form-modal .report-fault-media-tile.ant-upload,
+    .ant-modal.new-report-form-modal .report-fault-media-grid .ant-upload.report-fault-media-tile {
+      display: inline-block !important;
+      width: 104px !important;
+      height: 104px !important;
+      min-height: 104px !important;
+      max-width: 104px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    .ant-modal.new-report-form-modal .report-fault-media-tile__btn {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 104px !important;
+      height: 104px !important;
+      min-width: 104px !important;
+      min-height: 104px !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
+      border: 2px solid #1f6b3a !important;
+      border-radius: 10px !important;
+      background: #ffffff !important;
+      background-color: #ffffff !important;
+      box-shadow: 0 0 0 1px rgba(31, 107, 58, 0.12) !important;
+    }
+
+    .ant-modal.new-report-form-modal .report-fault-media-tile__btn .anticon {
+      font-size: 28px !important;
+      color: #52c41a !important;
+      margin: 0 !important;
     }
 
     .ant-modal.new-report-form-modal:not(.new-report-form-modal--dark) .nr-report-ampm-btns .ant-btn-default {
@@ -834,6 +871,17 @@ const NewReportsListChromeStyles = createGlobalStyle`
   }
   .ant-modal.new-report-progress-modal--dark .ant-modal-body {
     background: #1e1e1e !important;
+    color: #f0f0f0 !important;
+  }
+  .ant-modal.new-report-progress-modal--dark .ant-progress-text {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+  }
+  .ant-modal.new-report-progress-modal--dark .ant-progress-inner {
+    background: #333333 !important;
+  }
+  .ant-modal.new-report-progress-modal--dark .ant-progress-bg {
+    background: #52c41a !important;
   }
 
   .nr-list-page {
@@ -5541,17 +5589,17 @@ const NewReports: React.FC<{
           <Progress
             percent={submitProgress.percent}
             status={submitProgress.percent >= 100 ? "success" : "active"}
-            strokeColor="#1f6b3a"
+            strokeColor={mobileUiDark ? "#52c41a" : "#1f6b3a"}
+            trailColor={mobileUiDark ? "#333333" : "#d7e8d2"}
             strokeWidth={12}
             format={(pct) => `${pct}%`}
           />
           <Typography.Text
-            type="secondary"
             style={{
               display: "block",
               marginTop: 16,
               textAlign: "center",
-              color: mobileUiDark ? undefined : "#3d6b4a",
+              color: mobileUiDark ? "#b0b0b0" : "#3d6b4a",
             }}
           >
             {submitProgress.percent}% complete. Please keep this window open until finished.

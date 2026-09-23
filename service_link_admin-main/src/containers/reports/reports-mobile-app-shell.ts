@@ -270,6 +270,26 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       color: var(--nr-app-text) !important;
     }
 
+    html body .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper,
+    html body .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper > input.ant-input,
+    html body .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .report-faults-filter-keyword .ant-input-affix-wrapper,
+    html body .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .report-faults-filter-keyword .ant-input-affix-wrapper > input.ant-input,
+    html body .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .nr-keyword-row .ant-input,
+    html body .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .nr-keyword-row input.ant-input {
+      background: #141414 !important;
+      background-color: #141414 !important;
+      color: #ffffff !important;
+      -webkit-text-fill-color: #ffffff !important;
+      border-color: #444444 !important;
+    }
+
+    html body .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .report-faults-filter-keyword input::placeholder,
+    html body .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark .nr-keyword-row input::placeholder {
+      color: #e0e0e0 !important;
+      -webkit-text-fill-color: #e0e0e0 !important;
+      opacity: 1 !important;
+    }
+
     .new-reports-list-wrap--mobile-portrait .ant-form-item-label > label,
     .report-faults-list-wrap--mobile-portrait .ant-form-item-label > label {
       font-size: 15px !important;

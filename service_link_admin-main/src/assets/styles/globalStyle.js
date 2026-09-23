@@ -431,6 +431,42 @@ html[dir='rtl'] .ant-message .anticon {
   margin-right: 0;
 }
 
+html[data-color-mode="dark"] .ant-message-notice-content {
+  background: #1e1e1e !important;
+  color: #f5f5f5 !important;
+  border: 1px solid #444444 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+}
+
+html[data-color-mode="dark"] .ant-message-custom-content {
+  color: #f5f5f5 !important;
+}
+
+html[data-color-mode="dark"] .ant-message-success .anticon {
+  color: #52c41a !important;
+}
+
+html[data-color-mode="dark"] .ant-notification-notice {
+  background: #1e1e1e !important;
+  border: 1px solid #444444 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+}
+
+html[data-color-mode="dark"] .ant-notification-notice-message,
+html[data-color-mode="dark"] .ant-notification-notice-description {
+  color: #f5f5f5 !important;
+}
+
+html[data-color-mode="dark"] .ant-notification-notice-close {
+  color: #d0d0d0 !important;
+}
+
+html[data-color-mode="dark"] .ant-notification-notice-icon-success {
+  color: #52c41a !important;
+}
+
 /* Pop Confirm */
 
 html[dir='rtl'] .ant-popover-message-title {
@@ -2540,6 +2576,38 @@ body.dashboard-page-body-dark a.dashboard-messages-badge {
     border-radius: 12px !important;
     min-height: 48px !important;
     font-size: 16px !important;
+  }
+
+  .new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper,
+  .report-faults-list-wrap.new-reports-theme-dark .report-faults-filter-keyword .ant-input-affix-wrapper,
+  .new-reports-list-wrap.new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper {
+    background: #141414 !important;
+    background-color: #141414 !important;
+    border: 1px solid #444444 !important;
+    box-shadow: none !important;
+  }
+
+  .new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper > input.ant-input,
+  .report-faults-list-wrap.new-reports-theme-dark .report-faults-filter-keyword .ant-input-affix-wrapper > input.ant-input,
+  .new-reports-list-wrap.new-reports-theme-dark .nr-keyword-row .ant-input-affix-wrapper > input.ant-input {
+    background: #141414 !important;
+    background-color: #141414 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .new-reports-theme-dark .nr-keyword-row .ant-input::placeholder,
+  .new-reports-theme-dark .nr-keyword-row input::placeholder,
+  .report-faults-list-wrap.new-reports-theme-dark .report-faults-filter-keyword input::placeholder {
+    color: #e0e0e0 !important;
+    opacity: 1 !important;
+  }
+
+  .new-reports-theme-dark .nr-keyword-row .ant-input-clear-icon,
+  .report-faults-list-wrap.new-reports-theme-dark .report-faults-filter-keyword .ant-input-clear-icon {
+    color: #b0b0b0 !important;
   }
 
   html[data-color-mode="dark"]
