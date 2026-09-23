@@ -24,6 +24,7 @@ export const TemplateImageUpload = forwardRef<
     <UploadImageMultil
       ref={ref}
       deferUpload
+      tileGrid
       multiple={multiple}
       isImage={true}
       title=""

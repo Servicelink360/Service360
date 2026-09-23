@@ -1,4 +1,4 @@
-import { PlusOutlined } from '@ant-design/icons'
+import { CloseOutlined, PlusOutlined } from '@ant-design/icons'
 import {
     Fieldset,
     Label
@@ -78,6 +78,8 @@ type IProps = {
     isImage: boolean
     /** When true, files are staged locally until uploadAllPending() is called (no bar on attach). */
     deferUpload?: boolean
+    /** Same square photo tiles and boxed + as Report Faults. */
+    tileGrid?: boolean
 }
 
 const filesToUploadList = (files: string[]) => {
@@ -112,7 +114,7 @@ const getBase64 = (file): Promise<string> =>
     });
 
 const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref) => {
-    const { files, onChange, title, multiple = false, isImage, deferUpload = false } = props;
+    const { files, onChange, title, multiple = false, isImage, deferUpload = false, tileGrid = false } = props;
     const [fileList, setFileList] = useState<any[]>(() => filesToUploadList(files))
     const pendingFilesRef = useRef<Map<string, { file: File; preview?: string }>>(new Map())
     const [pendingCount, setPendingCount] = useState(0)
@@ -377,6 +379,143 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                     (large photos are resized automatically).
                 </Typography.Text>
             ) : null}
+            {tileGrid && isImage ? (
+                <div className="report-fault-media-tile-wrap">
+                    <div
+                        className="report-fault-media-grid"
+                        style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            alignItems: "flex-start",
+                            gap: 8,
+                            width: "100%",
+                        }}
+                    >
+                        {fileList.map((file) => {
+                            const src = file.thumbUrl || file.url || file.preview
+                            return (
+                                <div
+                                    key={file.uid}
+                                    className="report-fault-media-thumb"
+                                    style={{
+                                        position: "relative",
+                                        width: 104,
+                                        height: 104,
+                                        flex: "0 0 104px",
+                                        borderRadius: 8,
+                                        overflow: "hidden",
+                                        background: "#1a1a1a",
+                                        border: "1px solid #404040",
+                                    }}
+                                >
+                                    {src ? (
+                                        <img
+                                            src={src}
+                                            alt=""
+                                            className="report-fault-media-thumb__img"
+                                            style={{
+                                                display: "block",
+                                                width: "100%",
+                                                height: "100%",
+                                                objectFit: "cover",
+                                                cursor: "pointer",
+                                            }}
+                                            onClick={() => handlePreview(file)}
+                                        />
+                                    ) : (
+                                        <div
+                                            className="report-fault-media-thumb__fallback"
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                width: "100%",
+                                                height: "100%",
+                                                padding: 6,
+                                                color: "#d9d9d9",
+                                                fontSize: 11,
+                                                textAlign: "center",
+                                                overflow: "hidden",
+                                            }}
+                                        >
+                                            {file.name || "File"}
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="report-fault-media-thumb__x"
+                                        aria-label="Remove photo"
+                                        style={{
+                                            position: "absolute",
+                                            top: 4,
+                                            right: 4,
+                                            zIndex: 10,
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            width: 24,
+                                            height: 24,
+                                            margin: 0,
+                                            padding: 0,
+                                            border: "none",
+                                            borderRadius: "50%",
+                                            background: "rgba(0,0,0,0.78)",
+                                            color: "#fff",
+                                            fontSize: 11,
+                                            cursor: "pointer",
+                                        }}
+                                        onClick={(e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            removeEntry(file.uid)
+                                        }}
+                                    >
+                                        <CloseOutlined />
+                                    </button>
+                                </div>
+                            )
+                        })}
+                        {multiple || fileList.length === 0 ? (
+                            <Upload
+                                className="report-fault-media-tile"
+                                multiple={!!multiple}
+                                accept="image/*"
+                                fileList={fileList}
+                                showUploadList={false}
+                                beforeUpload={(file) => {
+                                    if (deferUpload) {
+                                        stagePendingFile(file as File)
+                                        return false
+                                    }
+                                    return true
+                                }}
+                                customRequest={deferUpload ? undefined : (options) => handleUpdaloadImage(options)}
+                                style={{ width: 104, height: 104 }}
+                            >
+                                <div
+                                    className="report-fault-media-tile__btn"
+                                    role="button"
+                                    aria-label="Upload"
+                                    style={{
+                                        width: 104,
+                                        height: 104,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        background: "#f5f5f5",
+                                        border: "1px solid #d9d9d9",
+                                        borderRadius: 2,
+                                        cursor: "pointer",
+                                        boxSizing: "border-box",
+                                    }}
+                                >
+                                    <PlusOutlined style={{ fontSize: 22, color: "#52c41a" }} />
+                                </div>
+                            </Upload>
+                        ) : null}
+                    </div>
+                </div>
+            ) : (
             <div className="image-upload-grid-wrap">
             <Upload
                 multiple={multiple ? true : false}
@@ -405,6 +544,7 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                 </button>
             </Upload>
             </div>
+            )}
             {previewImage && isImage && (
                 <Image
                     wrapperStyle={{ display: 'none' }}
