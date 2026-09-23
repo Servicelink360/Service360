@@ -548,6 +548,13 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       min-height: 44px;
     }
 
+    .new-report-form-modal textarea.report-fault-message-box,
+    .new-report-form-modal .report-fault-message-box.ant-input,
+    .new-report-form-modal .report-fault-message-item textarea.ant-input {
+      min-height: 104px !important;
+      height: 104px !important;
+    }
+
     .new-report-form-modal .ant-select-single:not(.ant-select-customize-input) .ant-select-selector {
       height: 44px !important;
       padding-top: 6px !important;

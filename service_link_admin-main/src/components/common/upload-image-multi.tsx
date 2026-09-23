@@ -373,7 +373,7 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
             <Label>{title ? title : 'Files'}</Label>
             {deferUpload && pendingCount > 0 ? (
                 <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-                    {pendingCount} file(s) attached — up to {UPLOAD_CONCURRENCY} upload at once when you click Upload below
+                    {pendingCount} file(s) attached — they will all upload when you click Upload
                     (large photos are resized automatically).
                 </Typography.Text>
             ) : null}

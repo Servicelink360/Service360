@@ -2198,8 +2198,8 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
   padding: 6px !important;
 }
 
-.new-report-form-modal--dark .ant-upload-select > button,
-.new-report-form-modal--dark .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card) button {
+.new-report-form-modal--dark .ant-upload-select > button:not(.report-fault-media-upload__trigger),
+.new-report-form-modal--dark .ant-upload .ant-upload-select:not(.ant-upload-select-picture-card) button:not(.report-fault-media-upload__trigger) {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
@@ -2332,14 +2332,7 @@ body.dashboard-page-body-dark .dashboard-messages-badge__label {
 @media (max-width: 768px) and (orientation: portrait) {
   .isoLayoutContentWrapper:has(.report-faults-list-wrap--mobile-portrait),
   .isoExampleWrapper:has(.report-faults-list-wrap--mobile-portrait) {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-  }
-
-  body.new-reports-page-body-dark .isoLayoutContentWrapper:has(.report-faults-list-wrap--mobile-portrait) {
-    padding-top: 0 !important;
+    padding: 0 !important;
   }
 
   .report-faults-list-wrap--mobile-portrait .report-faults-table--mobile-portrait table {
@@ -2487,7 +2480,10 @@ body.dashboard-page-body-dark .dashboard-messages-badge__label {
   }
 
   .report-faults-list-wrap--mobile-portrait .report-faults-filter-keyword .ant-input {
-    border: 1px solid #d9d9d9 !important;
+    border: 1px solid var(--nr-app-border, #b7d0b0) !important;
+    border-radius: 12px !important;
+    min-height: 48px !important;
+    font-size: 16px !important;
   }
 
   html[data-color-mode="dark"]
@@ -2665,6 +2661,210 @@ body.messages-page-body-dark .isoBoxWrapper {
 /* Fault report view modal — horizontal header + content left / status right */
 .report-fault-view-modal-wrap .ant-modal {
   max-width: calc(100vw - 32px);
+}
+
+/* Urgent — checkbox + label on one line */
+.ant-modal.new-report-form-modal .report-fault-urgent-row.ant-form-item {
+  margin-bottom: 12px !important;
+}
+
+.ant-modal.new-report-form-modal .report-fault-urgent-row .ant-form-item-control-input-content {
+  display: flex;
+  align-items: center;
+}
+
+.ant-modal.new-report-form-modal .report-fault-urgent-row .ant-checkbox-wrapper {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px;
+  font-size: 15px;
+}
+.ant-modal.new-report-form-modal textarea.report-fault-message-box,
+.ant-modal.new-report-form-modal .report-fault-message-box.ant-input,
+.ant-modal.new-report-form-modal .report-fault-message-item textarea.ant-input {
+  min-height: 104px !important;
+  height: 104px !important;
+  max-height: none !important;
+  resize: vertical !important;
+}
+
+/* Fault media — custom 3-col grid (no ant picture-card list layout) */
+.report-fault-media-tile-wrap {
+  width: 100%;
+}
+
+.report-fault-media-grid {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+.report-fault-media-grid .report-fault-media-thumb {
+  position: relative !important;
+  width: 104px !important;
+  height: 104px !important;
+  flex: 0 0 104px !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: #1a1a1a !important;
+  border: 1px solid #404040 !important;
+}
+
+.report-fault-media-grid > .ant-upload,
+.report-fault-media-grid .report-fault-media-tile.ant-upload,
+.report-fault-media-grid .ant-upload.report-fault-media-tile {
+  display: inline-block !important;
+  width: 104px !important;
+  height: 104px !important;
+  max-width: 104px !important;
+  margin: 0 !important;
+  float: none !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 2px !important;
+  background: #f5f5f5 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.report-fault-media-thumb__img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  cursor: pointer;
+}
+
+.report-fault-media-thumb__fallback {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 8px !important;
+  color: #d9d9d9 !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  word-break: break-word !important;
+}
+
+.report-fault-media-thumb__x {
+  position: absolute !important;
+  top: 4px !important;
+  right: 4px !important;
+  z-index: 10 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: rgba(0, 0, 0, 0.78) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+}
+
+.report-fault-media-thumb__x:hover {
+  background: #ff4d4f !important;
+  color: #ffffff !important;
+}
+
+.report-fault-media-grid .ant-upload {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100% !important;
+}
+
+.report-fault-media-grid .ant-upload > .ant-upload {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.report-fault-media-grid > span.ant-upload,
+.report-fault-media-grid > .ant-upload {
+  width: 100% !important;
+}
+
+/* + upload tile sits in same grid cell */
+.report-fault-media-grid > .ant-upload-picture-card-wrapper,
+.report-fault-media-grid > span.ant-upload,
+.report-fault-media-grid > .report-fault-media-tile {
+  display: block !important;
+  float: none !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.report-fault-media-grid .ant-upload.ant-upload-select-picture-card,
+.ant-modal.new-report-form-modal .report-fault-media-grid .ant-upload.ant-upload-select-picture-card {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  float: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  aspect-ratio: 1 / 1 !important;
+  background: #f0f0f0 !important;
+  border: 1px solid #bfbfbf !important;
+  border-style: solid !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.new-report-form-modal--dark .report-fault-media-grid .ant-upload.ant-upload-select-picture-card,
+.ant-modal.new-report-form-modal--dark .report-fault-media-grid .ant-upload.ant-upload-select-picture-card {
+  background: #f0f0f0 !important;
+  border: 1px solid #bfbfbf !important;
+}
+
+.report-fault-media-tile__btn,
+.ant-modal.new-report-form-modal .report-fault-media-tile__btn,
+.ant-modal.new-report-form-modal .report-fault-media-tile .report-fault-media-tile__btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 104px !important;
+  height: 104px !important;
+  min-height: 104px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 2px !important;
+  background: #f5f5f5 !important;
+  background-color: #f5f5f5 !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+  cursor: pointer;
+}
+
+.new-report-form-modal--dark .report-fault-media-tile__btn,
+.ant-modal.new-report-form-modal--dark .report-fault-media-tile__btn {
+  border: 1px solid #d9d9d9 !important;
+  background: #f5f5f5 !important;
+  background-color: #f5f5f5 !important;
+}
+
+.report-fault-media-tile__btn .anticon,
+.ant-modal.new-report-form-modal .report-fault-media-tile__btn .anticon,
+.new-report-form-modal--dark .report-fault-media-tile__btn .anticon {
+  font-size: 22px !important;
+  color: #52c41a !important;
+  margin: 0 !important;
 }
 
 .report-fault-view-modal__title {

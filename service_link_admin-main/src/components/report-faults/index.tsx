@@ -1,4 +1,4 @@
-﻿import { CloseCircleOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons'
+﻿import { CloseCircleOutlined, CloseOutlined, InfoCircleOutlined, PlusOutlined } from '@ant-design/icons'
 import {
     ActionBtn,
     ActionHeaderModalWrap,
@@ -12,18 +12,17 @@ import { BodyModalWrap } from '@app/components/common/modal.style'
 import { dateTimeFormat } from '@app/config/data.config'
 import { getBase64, sprintf } from '@app/lib/helpers/utility'
 import actions from '@app/redux/report-faults/actions'
-import { Button, Col, Form, Modal, Row, Upload, Image } from 'antd'
+import { Button, Col, Form, Modal, Row, Upload, Image, Tooltip, Checkbox } from 'antd'
 import moment from 'moment'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useIntl } from 'react-intl'
 import { useDispatch } from 'react-redux'
 import endPoint from '../../constants/endPoint'
 import serviceType from '../../constants/serviceType'
-import { callAPIAsync } from '../../library/helpers/api'
+import { callAPIAsync, callAPIUploadAsync } from '../../library/helpers/api'
 import { notificationComponent } from '@app/components/common/Notification/index'
 import { isFaultVideoUrl } from './fault-media'
 import FormSelect from "@app/components/common/FormItem/Select";
-import SvCheckBox from '../common/FormItem/Checkbox'
 import { userType } from '../../constants/statusUser'
 import {
     isOtherSiteId,
@@ -45,10 +44,12 @@ type IProps = {
     title: string
     sites: any[]
     uiDark?: boolean
+    mobilePortrait?: boolean
 }
 
 const ReportFaultModal = (props: IProps) => {
-    const { modalType, isSuccess, loadingAction, data, title, sites, uiDark } = props
+    const { modalType, isSuccess, loadingAction, data, title, sites, uiDark, mobilePortrait } = props
+    const mobileLayout = Boolean(mobilePortrait || uiDark)
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
@@ -151,35 +152,65 @@ const ReportFaultModal = (props: IProps) => {
         }
     }, [isSuccess, form])
 
-    const handleChangeFile = async ({ fileList: nextList }: any) => {
-        setFileList(nextList);
-        setChanged(true)
+    const enrichUploadFilesSync = (nextList: any[]) => {
+        return (nextList || []).map((f: any) => {
+            const serverUrl =
+                f.url ||
+                (typeof f.response === "string" ? f.response : undefined) ||
+                f.response?.data;
+            let thumb = f.thumbUrl || f.preview || serverUrl;
+            if (!thumb && f.originFileObj) {
+                try {
+                    thumb = URL.createObjectURL(f.originFileObj);
+                } catch {
+                    /* ignore */
+                }
+            }
+            return {
+                ...f,
+                url: serverUrl || f.url,
+                thumbUrl: thumb,
+                preview: thumb || f.preview,
+            };
+        });
+    };
+
+    const handleChangeFile = ({ fileList: nextList }: any) => {
+        // Must update fileList synchronously — async setState breaks Ant Upload
+        setFileList(enrichUploadFilesSync(nextList));
+        setChanged(true);
     };
 
     const handleUpdaloadImage = async (options: any) => {
         const { onSuccess, onError, onProgress, file } = options;
         const raw = file.originFileObj ?? file;
         try {
-            const response: any = await callAPIAsync(
+            const formData = new FormData();
+            formData.append("file", raw, raw.name || "upload");
+            const response: any = await callAPIUploadAsync(
                 serviceType.COMMON,
                 endPoint.UPLOAD_FILE,
                 "POST",
-                { file: raw },
+                formData,
                 {
+                    uploadFileSize: raw.size || 0,
                     onUploadProgress: (pct: number) => {
-                        onProgress?.({ percent: pct });
+                        onProgress?.({ percent: Math.min(100, Math.round(pct)) });
                     },
                 },
-                true,
             );
-            if (response?.code === 1) {
-                setFiles((prev) => [...prev, response?.data]);
+            if (response?.code === 1 && response?.data) {
+                const url = String(response.data);
+                setFiles((prev) => [...prev, url]);
                 setChanged(true);
-                onSuccess?.(response, file);
+                onSuccess?.(url, raw);
             } else {
-                onError?.(new Error(response?.message || "Upload failed"));
+                const err = new Error(response?.message || "Upload failed");
+                notificationComponent("error", 3, "Upload failed", err.message);
+                onError?.(err);
             }
         } catch (error: any) {
+            notificationComponent("error", 3, "Upload failed", error?.message || "Upload failed");
             onError?.(error);
         }
     };
@@ -216,7 +247,11 @@ const ReportFaultModal = (props: IProps) => {
 
     const loadServices = useCallback(async (siteId: number) => {
         const res = await callAPIAsync(serviceType.COMMON, `${endPoint.JOB_SITES}/getServicesBySite`, 'GET', { siteId });
-        const list = Array.isArray(res?.data) ? res.data : [];
+        const list = (Array.isArray(res?.data) ? res.data : []).map((s: any) => ({
+            ...s,
+            id: s?.id != null ? String(s.id) : s?.id,
+            name: s?.name || s?.serviceName || (s?.id != null ? `Service #${s.id}` : ''),
+        }));
         setServices(list);
         return list;
     }, []);
@@ -228,8 +263,16 @@ const ReportFaultModal = (props: IProps) => {
 
     const loadAllServices = useCallback(async () => {
         const res = await callAPIAsync(serviceType.COMMON, `${endPoint.SERVICES}/getAll`, 'GET', {});
-        const list = Array.isArray(res?.data) ? res.data : res?.data?.rows;
-        if (list) setServices(list);
+        const raw = Array.isArray(res?.data) ? res.data : res?.data?.rows;
+        if (Array.isArray(raw)) {
+            setServices(
+                raw.map((s: any) => ({
+                    ...s,
+                    id: s?.id != null ? String(s.id) : s?.id,
+                    name: s?.name || s?.serviceName || (s?.id != null ? `Service #${s.id}` : ''),
+                })),
+            );
+        }
     }, []);
 
     const loadCustomersForService = useCallback(async (serviceId: string | number) => {
@@ -560,19 +603,7 @@ const ReportFaultModal = (props: IProps) => {
     };
 
     const modalFooter = (
-        <ActionHeaderModalWrap>
-            {profile && +profile.type === userType.STAFF ? (
-                <ActionBtn
-                    type="primary"
-                    htmlType="button"
-                    icon={<SaveOutlined />}
-                    onClick={() => onFinishSave(false)}
-                    disabled={!changed}
-                    loading={loadingAction}
-                >
-                    {intl.formatMessage({ id: 'button.Save' })}
-                </ActionBtn>
-            ) : null}
+        <ActionHeaderModalWrap style={{ width: '100%', justifyContent: 'flex-end', gap: 8 }}>
             <Button
                 className="ant-btn ant-btn-secondary"
                 htmlType="button"
@@ -581,6 +612,17 @@ const ReportFaultModal = (props: IProps) => {
             >
                 {intl.formatMessage({ id: 'button.Close' })}
             </Button>
+            {profile && +profile.type === userType.STAFF ? (
+                <ActionBtn
+                    type="primary"
+                    htmlType="button"
+                    onClick={() => onFinishSave(false)}
+                    disabled={!changed}
+                    loading={loadingAction}
+                >
+                    Submit
+                </ActionBtn>
+            ) : null}
         </ActionHeaderModalWrap>
     );
 
@@ -612,7 +654,7 @@ const ReportFaultModal = (props: IProps) => {
             onCancel={handleClose}
             title={title}
             closable={false}
-            width={900}
+            width={mobileLayout ? "calc(100vw - 24px)" : 900}
             footer={modalFooter}
             destroyOnClose
             maskClosable
@@ -620,7 +662,7 @@ const ReportFaultModal = (props: IProps) => {
             className={`new-report-form-modal${uiDark ? " new-report-form-modal--dark" : ""}`}
             wrapClassName={uiDark ? "new-report-form-modal-wrap--dark" : undefined}
             maskStyle={uiDark ? { backgroundColor: "rgba(0, 0, 0, 0.82)" } : undefined}
-            style={uiDark ? { top: 8, maxWidth: "100vw", paddingBottom: 0 } : undefined}
+            style={mobileLayout ? { top: 8, maxWidth: "100vw", paddingBottom: 0 } : undefined}
         >
             <BodyModalWrap>
                 <Form
@@ -751,11 +793,13 @@ const ReportFaultModal = (props: IProps) => {
                         <Col md={24} sm={24} xs={24} className="padding-media-max-576">
                             <Fieldset>
                                 <TextArea
-                                    className="break-line"
+                                    className="break-line report-fault-message-item"
                                     name="message"
                                     label="Message"
                                     isRequired={false}
                                     Max={300}
+                                    rows={4}
+                                    classNameInput="report-fault-message-box"
                                 />
                             </Fieldset>
                         </Col>
@@ -763,12 +807,41 @@ const ReportFaultModal = (props: IProps) => {
                     <Row>
                         <Col md={24} sm={24} xs={24} className="padding-media-max-576">
                             <Fieldset>
-                                <SvCheckBox
-                                    className="break-line"
+                                <Form.Item
                                     name="priority"
-                                    label="Urgent"
-                                    isRequired={false}
-                                />
+                                    valuePropName="checked"
+                                    className="report-fault-urgent-row"
+                                    style={{ marginBottom: 12 }}
+                                >
+                                    <Checkbox>
+                                        <span
+                                            className="report-fault-urgent-label"
+                                            style={{
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                                color: uiDark ? "#f0f0f0" : "#143d24",
+                                                fontWeight: 600,
+                                                fontSize: 15,
+                                            }}
+                                        >
+                                            Mark as Urgent
+                                            <Tooltip title="Flags this fault as urgent for faster attention.">
+                                                <InfoCircleOutlined
+                                                    style={{
+                                                        color: uiDark ? "#85c179" : "#1f6b3a",
+                                                        fontSize: 15,
+                                                        cursor: "help",
+                                                    }}
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                    }}
+                                                />
+                                            </Tooltip>
+                                        </span>
+                                    </Checkbox>
+                                </Form.Item>
                             </Fieldset>
                         </Col>
                     </Row>
@@ -782,33 +855,153 @@ const ReportFaultModal = (props: IProps) => {
                                             <span style={{ color: uiDark ? "#ff7875" : "red" }}> *</span>
                                         ) : null}
                                     </Label>
-                                    <Upload
-                                        className={uiDark ? "report-fault-media-upload--dark" : undefined}
-                                        fileList={fileList}
-                                        multiple={true}
-                                        accept="image/jpeg,image/gif,image/png,application/pdf,image/x-eps,video/*"
-                                        listType="text"
-                                        onPreview={handlePreview}
-                                        onRemove={(value) => {
-                                            const nFiles = [...files].filter((c) => c !== value.url);
-                                            setFiles(nFiles)
-                                            setChanged(true)
-                                        }}
-                                        customRequest={handleUpdaloadImage}
-                                        onChange={handleChangeFile}
-                                    >
-                                        <button
-                                            type="button"
-                                            style={
-                                                uiDark
-                                                    ? undefined
-                                                    : { border: 0, background: "none" }
-                                            }
+                                    <div className="report-fault-media-tile-wrap">
+                                        <div
+                                            className="report-fault-media-grid"
+                                            style={{
+                                                display: "flex",
+                                                flexWrap: "wrap",
+                                                alignItems: "flex-start",
+                                                gap: 8,
+                                                width: "100%",
+                                            }}
                                         >
-                                            <PlusOutlined />
-                                            <div style={{ marginTop: 8 }}>Upload</div>
-                                        </button>
-                                    </Upload>
+                                            {fileList.map((file: any) => {
+                                                const src =
+                                                    file.thumbUrl ||
+                                                    file.url ||
+                                                    file.preview ||
+                                                    file.response?.data ||
+                                                    (typeof file.response === "string" ? file.response : undefined);
+                                                return (
+                                                    <div
+                                                        key={file.uid}
+                                                        className="report-fault-media-thumb"
+                                                        style={{
+                                                            position: "relative",
+                                                            width: 104,
+                                                            height: 104,
+                                                            flex: "0 0 104px",
+                                                            borderRadius: 8,
+                                                            overflow: "hidden",
+                                                            background: "#1a1a1a",
+                                                            border: "1px solid #404040",
+                                                        }}
+                                                    >
+                                                        {src ? (
+                                                            <img
+                                                                src={src}
+                                                                alt=""
+                                                                className="report-fault-media-thumb__img"
+                                                                style={{
+                                                                    display: "block",
+                                                                    width: "100%",
+                                                                    height: "100%",
+                                                                    objectFit: "cover",
+                                                                    cursor: "pointer",
+                                                                }}
+                                                                onClick={() => handlePreview(file)}
+                                                            />
+                                                        ) : (
+                                                            <div
+                                                                className="report-fault-media-thumb__fallback"
+                                                                style={{
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                    width: "100%",
+                                                                    height: "100%",
+                                                                    padding: 6,
+                                                                    color: "#d9d9d9",
+                                                                    fontSize: 11,
+                                                                    textAlign: "center",
+                                                                    overflow: "hidden",
+                                                                }}
+                                                            >
+                                                                {file.name || "File"}
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            className="report-fault-media-thumb__x"
+                                                            aria-label="Remove photo"
+                                                            style={{
+                                                                position: "absolute",
+                                                                top: 4,
+                                                                right: 4,
+                                                                zIndex: 10,
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                                width: 24,
+                                                                height: 24,
+                                                                margin: 0,
+                                                                padding: 0,
+                                                                border: "none",
+                                                                borderRadius: "50%",
+                                                                background: "rgba(0,0,0,0.78)",
+                                                                color: "#fff",
+                                                                fontSize: 11,
+                                                                cursor: "pointer",
+                                                            }}
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                const removedUrl =
+                                                                    file?.url ||
+                                                                    file?.response?.data ||
+                                                                    (typeof file?.response === "string"
+                                                                        ? file.response
+                                                                        : undefined) ||
+                                                                    file?.uid;
+                                                                setFiles((prev) =>
+                                                                    prev.filter(
+                                                                        (c) => c !== removedUrl && c !== file?.uid,
+                                                                    ),
+                                                                );
+                                                                setFileList((prev: any[]) =>
+                                                                    prev.filter((f) => f.uid !== file.uid),
+                                                                );
+                                                                setChanged(true);
+                                                            }}
+                                                        >
+                                                            <CloseOutlined />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                            <Upload
+                                                className={`report-fault-media-tile${uiDark ? " report-fault-media-tile--dark" : ""}`}
+                                                fileList={fileList}
+                                                multiple={true}
+                                                accept="image/jpeg,image/gif,image/png,application/pdf,image/x-eps,video/*"
+                                                showUploadList={false}
+                                                customRequest={handleUpdaloadImage}
+                                                onChange={handleChangeFile}
+                                                style={{ width: 104, height: 104 }}
+                                            >
+                                                <div
+                                                    className="report-fault-media-tile__btn"
+                                                    role="button"
+                                                    aria-label="Upload"
+                                                    style={{
+                                                        width: 104,
+                                                        height: 104,
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        background: "#f5f5f5",
+                                                        border: "1px solid #d9d9d9",
+                                                        borderRadius: 2,
+                                                        cursor: "pointer",
+                                                        boxSizing: "border-box",
+                                                    }}
+                                                >
+                                                    <PlusOutlined style={{ fontSize: 22, color: "#52c41a" }} />
+                                                </div>
+                                            </Upload>
+                                        </div>
+                                    </div>
                                     {previewImage ? (
                                         <Image
                                             wrapperStyle={{ display: 'none' }}

@@ -6,7 +6,7 @@ import { createGlobalStyle } from "styled-components";
  */
 export const ReportsMobileAppShellStyles = createGlobalStyle`
   @media (orientation: portrait) and (max-width: 768px) {
-    /* Same full-bleed shell as dark mode  no isoBoxWrapper card inset on mobile. */
+    /* Same full-bleed shell as dark mode ï¿½ no isoBoxWrapper card inset on mobile. */
     body:has(.new-reports-list-wrap--mobile-portrait) .isoBoxWrapper,
     body:has(.new-reports-list-wrap--mobile-portrait) .isoLayoutContentWrapper,
     body:has(.new-reports-list-wrap--mobile-portrait) .isoExampleWrapper,
@@ -29,7 +29,12 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
     body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoLayoutContentWrapper,
     body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoExampleWrapper,
     body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) #main-content,
-    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isomorphicContent {
+    body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isomorphicContent,
+    body:has(.report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoBoxWrapper,
+    body:has(.report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoLayoutContentWrapper,
+    body:has(.report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoExampleWrapper,
+    body:has(.report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) #main-content,
+    body:has(.report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isomorphicContent {
       background: #e7f0e4 !important;
     }
 
@@ -124,6 +129,11 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       font-size: 16px !important;
       background: var(--nr-app-accent) !important;
       border-color: var(--nr-app-accent) !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-app-fab,
+    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-app-fab {
       box-shadow: 0 4px 14px rgba(31, 107, 58, 0.35) !important;
     }
 
@@ -199,7 +209,7 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       box-shadow: none !important;
     }
 
-    /* Search / filter inputs  same dimensions in light and dark */
+    /* Search / filter inputs ï¿½ same dimensions in light and dark */
     .new-reports-list-wrap--mobile-portrait .ant-input,
     .new-reports-list-wrap--mobile-portrait .ant-input-affix-wrapper,
     .new-reports-list-wrap--mobile-portrait .ant-select-selector,
@@ -308,7 +318,7 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       background: transparent !important;
     }
 
-    /* Report / fault cards  same structure in light and dark */
+    /* Report / fault cards ï¿½ same structure in light and dark */
     .new-reports-list-wrap--mobile-portrait .nr-mobile-report-card,
     .report-faults-list-wrap--mobile-portrait .nr-mobile-fault-card {
       border-radius: 12px !important;
@@ -324,10 +334,20 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       box-shadow: 0 0 0 1px #b7d0b0, 0 8px 28px rgba(31, 107, 58, 0.14) !important;
     }
 
-    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card > div:first-child,
-    .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-fault-card > div:first-child {
+    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card > div:first-child {
       border-bottom-color: var(--nr-app-border) !important;
       background: #f4faf3 !important;
+    }
+
+    /* Fault cards: light head matches card surface (same structure as dark). */
+    .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-fault-card > div:first-child {
+      border-bottom-color: var(--nr-app-border) !important;
+      background: var(--nr-app-surface) !important;
+    }
+
+    .report-faults-list-wrap--mobile-portrait .nr-mobile-fault-card > div:last-child {
+      border-top: 1px solid var(--nr-app-border) !important;
+      background: transparent !important;
     }
 
     .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .nr-mobile-report-card button.ant-btn-default,
@@ -353,12 +373,14 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       margin: 0 !important;
     }
 
-    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .new-reports-mobile-pagination .ant-pagination-item-active {
+    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .new-reports-mobile-pagination .ant-pagination-item-active,
+    .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .new-reports-mobile-pagination .ant-pagination-item-active {
       background: var(--nr-app-accent) !important;
       border-color: var(--nr-app-accent) !important;
     }
 
-    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .new-reports-mobile-pagination .ant-pagination-item-active a {
+    .new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .new-reports-mobile-pagination .ant-pagination-item-active a,
+    .report-faults-list-wrap--mobile-portrait:not(.new-reports-theme-dark) .new-reports-mobile-pagination .ant-pagination-item-active a {
       color: #ffffff !important;
     }
 

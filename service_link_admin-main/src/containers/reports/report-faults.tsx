@@ -52,6 +52,7 @@ import moment from "moment";
 import { Link } from "react-router-dom";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
 import { ReportsMobileAppShellStyles } from "./reports-mobile-app-shell";
+import { ReportsMobileFormModalStyles } from "./reports-mobile-form-modal-styles";
 
 const { RangePicker } = DatePicker;
 
@@ -83,10 +84,10 @@ type MobileStyledDark = { $dark?: boolean };
 const MobileFaultsList = styled.div.attrs(() => ({ className: "nr-mobile-faults-list" }))<MobileStyledDark>`
   display: flex;
   flex-direction: column;
-  gap: ${(p) => (p.$dark ? "18px" : "16px")};
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
-  padding: 4px 0 12px;
+  padding: 12px 0 24px;
 `;
 
 const MobileFaultCard = styled.article.attrs(() => ({ className: "nr-mobile-fault-card" }))<MobileStyledDark & { $highlight?: boolean }>`
@@ -99,7 +100,7 @@ const MobileFaultCard = styled.article.attrs(() => ({ className: "nr-mobile-faul
   box-shadow: ${(p) =>
     p.$dark
       ? "0 0 0 1px #3d3d3d, 0 8px 28px rgba(0, 0, 0, 0.85)"
-      : "0 4px 16px rgba(31, 107, 58, 0.12)"};
+      : "0 0 0 1px #b7d0b0, 0 8px 28px rgba(31, 107, 58, 0.14)"};
   overflow: hidden;
   cursor: pointer;
 
@@ -117,7 +118,8 @@ const MobileFaultCardHead = styled.div<MobileStyledDark>`
   gap: 10px;
   padding: 14px 14px 10px;
   border-bottom: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
-  background: ${(p) => (p.$dark ? "#1e1e1e" : "#f4faf3")};
+  /* Same as card fill in both themes (dark: card color; light: white) */
+  background: ${(p) => (p.$dark ? "#1e1e1e" : "#ffffff")};
 `;
 
 const MobileFaultCardTitle = styled.div<MobileStyledDark>`
@@ -142,7 +144,7 @@ const MobileFaultCardBody = styled.div<MobileStyledDark>`
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-  background: ${(p) => (p.$dark ? "transparent" : "#d7e8d2")};
+  background: transparent;
 `;
 
 const MobileFaultCardActions = styled.div<MobileStyledDark>`
@@ -151,7 +153,7 @@ const MobileFaultCardActions = styled.div<MobileStyledDark>`
   gap: 8px;
   padding: 10px 14px 14px;
   border-top: 1px solid ${(p) => (p.$dark ? "#404040" : "#b7d0b0")};
-  background: ${(p) => (p.$dark ? "transparent" : "#f4faf3")};
+  background: transparent;
 `;
 
 const UnreadBookIcon: React.FC = () => (
@@ -1850,6 +1852,7 @@ const ReportFaults: React.FC = () => {
     return (
         <Layout title="sidebar.reportFaults">
             {isMobilePortrait ? <ReportsMobileAppShellStyles /> : null}
+            {isMobilePortrait ? <ReportsMobileFormModalStyles /> : null}
             {faultsPageDark ? <ReportsMobileDarkPageStyles /> : null}
             <GlobalHotKeys
                 keyMap={{ SEARCH_REPORT_FAULTS: "ctrl+alt+f" }}
@@ -2093,20 +2096,26 @@ const ReportFaults: React.FC = () => {
                                 alignItems: isMobilePortrait ? "stretch" : "center",
                                 flexDirection: isMobilePortrait ? "column" : undefined,
                                 gap: 12,
-                                marginBottom: 12,
+                                marginBottom: isMobilePortrait ? 0 : 12,
                                 padding: "12px 14px",
-                                borderRadius: mobileUiDark ? 8 : 10,
-                                ...(mobileUiDark
-                                    ? {
-                                          background: "#1a1a1a",
-                                          border: "1px solid #444444",
-                                          boxShadow: "none",
-                                      }
-                                    : isMobilePortrait
+                                borderRadius: 8,
+                                ...(isMobilePortrait
+                                    ? mobileUiDark
                                       ? {
+                                            background: "#1a1a1a",
+                                            border: "1px solid #444444",
+                                            boxShadow: "none",
+                                        }
+                                      : {
                                             background: "#ffffff",
-                                            border: "2px solid #d9d9d9",
-                                            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                                            border: "1px solid #b7d0b0",
+                                            boxShadow: "none",
+                                        }
+                                    : mobileUiDark
+                                      ? {
+                                            background: "#1a1a1a",
+                                            border: "1px solid #444444",
+                                            boxShadow: "none",
                                         }
                                       : {
                                             background: "#fafafa",
@@ -2335,6 +2344,7 @@ const ReportFaults: React.FC = () => {
                     isSuccess={success}
                     sites={sites}
                     uiDark={modalUiDark}
+                    mobilePortrait={isMobilePortrait}
                 />
             ) : null}
 
