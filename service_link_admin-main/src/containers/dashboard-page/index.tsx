@@ -67,6 +67,20 @@ const Dashboard: React.FC = () => {
   const isCustomer = profileType === userType.CUSTOMER;
   const showReportsSection = isStaff || isAdmin || isCustomer;
 
+  const darkLabelStyle: React.CSSProperties | undefined = dashboardDark
+    ? {
+        color: '#ffffff',
+        fontSize: 15,
+        fontWeight: 700,
+        lineHeight: 1.25,
+        marginTop: 8,
+        textAlign: 'center',
+      }
+    : undefined;
+  const darkHeadingStyle: React.CSSProperties | undefined = dashboardDark
+    ? { color: '#ffffff', fontWeight: 700 }
+    : undefined;
+
   const ticketsBadge = (to: string) => (
     <Link to={to} className="dashboard-report-badge">
       <span className="dashboard-report-badge__icon-wrap">
@@ -79,7 +93,7 @@ const Dashboard: React.FC = () => {
           </span>
         ) : null}
       </span>
-      <div className="dashboard-report-badge__label">
+      <div className="dashboard-report-badge__label" style={darkLabelStyle}>
         {intl.formatMessage({ id: 'sidebar.tickets' })}
       </div>
     </Link>
@@ -97,7 +111,7 @@ const Dashboard: React.FC = () => {
           </span>
         ) : null}
       </span>
-      <div className="dashboard-report-badge__label">New Report</div>
+      <div className="dashboard-report-badge__label" style={darkLabelStyle}>New Report</div>
     </Link>
   );
 
@@ -111,7 +125,7 @@ const Dashboard: React.FC = () => {
           </span>
         ) : null}
       </span>
-      <span className="dashboard-report-badge__label">{label}</span>
+      <span className="dashboard-report-badge__label" style={darkLabelStyle}>{label}</span>
     </Link>
   );
 
@@ -122,7 +136,7 @@ const Dashboard: React.FC = () => {
           <LoginOutlined />
         </div>
       </span>
-      <div className="dashboard-report-badge__label">
+      <div className="dashboard-report-badge__label" style={darkLabelStyle}>
         {intl.formatMessage({ id: 'sidebar.siteCheckIn' })}
       </div>
     </Link>
@@ -140,7 +154,7 @@ const Dashboard: React.FC = () => {
           </span>
         ) : null}
       </span>
-      <div className="dashboard-report-badge__label">
+      <div className="dashboard-report-badge__label" style={darkLabelStyle}>
         {intl.formatMessage({ id: 'sidebar.myTasks' })}
       </div>
     </Link>
@@ -154,7 +168,7 @@ const Dashboard: React.FC = () => {
           <span className="dashboard-messages-badge__count">{messagesUnreadCount}</span>
         ) : null}
       </span>
-      <span className="dashboard-messages-badge__label">Messages</span>
+      <span className="dashboard-messages-badge__label" style={darkLabelStyle}>Messages</span>
     </Link>
   ) : null;
 
@@ -173,7 +187,7 @@ const Dashboard: React.FC = () => {
           </span>
         ) : null}
       </span>
-      <div className="dashboard-report-badge__label">
+      <div className="dashboard-report-badge__label" style={darkLabelStyle}>
         {intl.formatMessage({ id: 'sidebar.invoices' })}
       </div>
     </Link>
@@ -200,15 +214,30 @@ const Dashboard: React.FC = () => {
   return (
     <Layout title="">
       <DashboardWarp className={dashboardDark ? 'dashboard-page--dark' : undefined}>
+        {dashboardDark ? (
+          <style>{`
+            .dashboard-page--dark .dashboard-report-badge__label,
+            .dashboard-page--dark .dashboard-messages-badge__label {
+              color: #ffffff !important;
+              font-size: 15px !important;
+              font-weight: 700 !important;
+              line-height: 1.25 !important;
+            }
+            .dashboard-page--dark .dashboard-section-heading {
+              color: #ffffff !important;
+              font-weight: 700 !important;
+            }
+          `}</style>
+        ) : null}
         {showReportsSection ? (
           <div className="dashboard-item dashboard-item--flush">
-            <h1 className="dashboard-section-heading">Reports</h1>
+            <h1 className="dashboard-section-heading" style={darkHeadingStyle}>Reports</h1>
             {dashboardReportBadges}
           </div>
         ) : null}
         {(isAdmin || isCustomer) ? (
           <div className="dashboard-item dashboard-item--flush" style={{ marginTop: 24 }}>
-            <h1 className="dashboard-section-heading">Invoices</h1>
+            <h1 className="dashboard-section-heading" style={darkHeadingStyle}>Invoices</h1>
             <div className="dashboard-report-badges">{invoicesBadge}</div>
           </div>
         ) : null}

@@ -2273,7 +2273,7 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
 .dashboard-content--dark .dashboard-title,
 .dashboard-content--dark .status-wrap .lable,
 .dashboard-content--dark .status-wrap .count {
-  color: #f5f5f5 !important;
+  color: #ffffff !important;
 }
 
 /* Dashboard page (mobile + desktop) dark mode */
@@ -2291,15 +2291,19 @@ body.dashboard-page-body-dark .isoBoxWrapper {
 
 body.dashboard-page-body-dark .dashboard-section-heading,
 body.dashboard-page-body-dark .dashboard-report-badge__label,
-body.dashboard-page-body-dark .dashboard-messages-badge__label {
-  color: #f5f5f5 !important;
+body.dashboard-page-body-dark .dashboard-messages-badge__label,
+body.dashboard-page-body-dark a.dashboard-report-badge,
+body.dashboard-page-body-dark a.dashboard-messages-badge {
+  color: #ffffff !important;
 }
 
 /* Extra specificity: DashboardWarp class */
 .dashboard-page--dark .dashboard-section-heading,
 .dashboard-page--dark .dashboard-report-badge__label,
-.dashboard-page--dark .dashboard-messages-badge__label {
-  color: #f5f5f5 !important;
+.dashboard-page--dark .dashboard-messages-badge__label,
+.dashboard-page--dark a.dashboard-report-badge,
+.dashboard-page--dark a.dashboard-messages-badge {
+  color: #ffffff !important;
 }
 
 .dashboard-page--dark {
@@ -2323,8 +2327,16 @@ body.dashboard-page-body-dark .dashboard-messages-badge__label {
 
   html[data-color-mode="dark"] body.dashboard-page-body-dark #main-content .dashboard-section-heading,
   html[data-color-mode="dark"] body.dashboard-page-body-dark #main-content .dashboard-report-badge__label,
-  html[data-color-mode="dark"] body.dashboard-page-body-dark #main-content .dashboard-messages-badge__label {
-    color: #f5f5f5 !important;
+  html[data-color-mode="dark"] body.dashboard-page-body-dark #main-content .dashboard-messages-badge__label,
+  body.dashboard-page-body-dark .dashboard-report-badge__label,
+  body.dashboard-page-body-dark .dashboard-messages-badge__label,
+  .dashboard-page--dark .dashboard-report-badge__label,
+  .dashboard-page--dark .dashboard-messages-badge__label {
+    color: #ffffff !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
   }
 }
 
