@@ -5,6 +5,7 @@ import {
     EditOutlined,
     EyeOutlined,
     FileAddOutlined,
+    FileTextOutlined,
     MailOutlined,
     MessageOutlined,
     SearchOutlined,
@@ -1732,17 +1733,45 @@ const ReportFaults: React.FC = () => {
         ? { background: "#141414", borderColor: "#333333", color: "#ffffff" }
         : undefined;
 
+    const canCreateFault =
+        +profile?.type === userType.STAFF ||
+        +profile?.type === userType.ADMIN ||
+        +profile?.type === userType.CUSTOMER;
     const newFaultButton =
-        +profile?.type === userType.STAFF && !isDeletedFaultTab ? (
-            <ActionListBtn
-                onClick={() => handleOnClick(actionType.ADD)}
-                type="primary"
-                icon={<FileAddOutlined />}
-                className={isMobilePortrait ? "nr-app-fab" : undefined}
-                style={isMobilePortrait ? staffPrimaryGreen : undefined}
-            >
-                {intl.formatMessage({ id: "sidebar.users.new" })}
-            </ActionListBtn>
+        canCreateFault && !isDeletedFaultTab ? (
+            showMobileFaultCards ? (
+                <Button
+                    type="primary"
+                    className="report-faults-mobile-toolbar__new"
+                    icon={<FileTextOutlined />}
+                    onClick={() => handleOnClick(actionType.ADD)}
+                    style={{
+                        flex: "0 0 auto",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: 48,
+                        minWidth: 96,
+                        borderRadius: 12,
+                        fontWeight: 700,
+                        fontSize: 16,
+                        background: "#1f6b3a",
+                        borderColor: "#1f6b3a",
+                        color: "#ffffff",
+                        boxShadow: "0 4px 14px rgba(31, 107, 58, 0.35)",
+                    }}
+                >
+                    New
+                </Button>
+            ) : (
+                <ActionListBtn
+                    onClick={() => handleOnClick(actionType.ADD)}
+                    type="primary"
+                    icon={<FileAddOutlined />}
+                >
+                    {intl.formatMessage({ id: "sidebar.users.new" })}
+                </ActionListBtn>
+            )
         ) : null;
 
     const ActionBTN = () => (
@@ -1763,6 +1792,8 @@ const ReportFaults: React.FC = () => {
               width: "100%",
               maxWidth: "100%",
               boxSizing: "border-box",
+              alignItems: "stretch",
+              overflow: "visible",
               background: faultsPageDark ? "#000000" : "#e7f0e4",
           }
         : { paddingTop: 8 };
@@ -1874,23 +1905,57 @@ const ReportFaults: React.FC = () => {
                     <TasksFaultsPanel tabsAboveTable={reportFaultMainTabsEl} />
                 ) : (
                 <>
-                <div className={isMobilePortrait ? "nr-app-top nr-app-chrome" : undefined}>
-                {isMobilePortrait ? reportFaultMainTabsEl : null}
+                <div
+                    className={showMobileFaultCards ? "nr-list-page" : undefined}
+                    style={showMobileFaultCards ? { width: "100%", alignSelf: "stretch" } : undefined}
+                >
+                <div
+                    className={showMobileFaultCards ? "nr-app-top" : undefined}
+                    style={
+                        showMobileFaultCards
+                            ? { width: "100%", alignSelf: "stretch", position: "relative" }
+                            : undefined
+                    }
+                >
+                {showMobileFaultCards ? reportFaultMainTabsEl : null}
                 <div
                     className={`new-reports-list-filters${
                         mobileUiDark ? " new-reports-list-filters--dark" : ""
-                    }`}
-                    style={{ width: "100%" }}
+                    }${showMobileFaultCards ? " report-faults-mobile-toolbar" : ""}`}
+                    style={{ width: "100%", alignSelf: "stretch" }}
                 >
-                    {isMobilePortrait ? (
-                        <div className="nr-app-top-row">
+                    {showMobileFaultCards ? (
+                        <div
+                            className="report-faults-mobile-toolbar__row"
+                            style={{
+                                display: "flex",
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 8,
+                                width: "100%",
+                                marginBottom: 8,
+                                minHeight: 48,
+                            }}
+                        >
                             <Button
                                 type="default"
-                                className={`nr-app-filter-btn${mobileUiDark ? " nr-mobile-btn-dark" : ""}`}
+                                className="report-faults-mobile-toolbar__filters"
                                 icon={<FilterOutlined />}
                                 onClick={() => setListFiltersOpen((open) => !open)}
-                                style={mobileDarkBtnDefaultStyle}
                                 aria-expanded={listFiltersOpen}
+                                style={{
+                                    flex: 1,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    height: 48,
+                                    borderRadius: 12,
+                                    fontWeight: 600,
+                                    fontSize: 16,
+                                    background: mobileUiDark ? "#141414" : "#ffffff",
+                                    borderColor: mobileUiDark ? "#444444" : "#b7d0b0",
+                                    color: mobileUiDark ? "#ffffff" : "#143d24",
+                                }}
                             >
                                 Filters {listFiltersOpen ? <UpOutlined /> : <DownOutlined />}
                             </Button>
@@ -1901,7 +1966,7 @@ const ReportFaults: React.FC = () => {
                         form={form}
                         layout="vertical"
                         style={
-                            isMobilePortrait
+                            showMobileFaultCards
                                 ? {
                                       width: "100%",
                                       marginBottom: 0,
@@ -1915,18 +1980,17 @@ const ReportFaults: React.FC = () => {
                                   }
                         }
                         className={[
-                            isMobilePortrait && !listFiltersOpen
-                                ? "new-reports-list-filters-form--collapsed"
-                                : "",
                             mobileUiDark ? "new-reports-list-filters-form--dark" : "",
-                            isMobilePortrait ? "report-faults-mobile-filters-form" : "",
-                            isMobilePortrait && listFiltersOpen ? "nr-app-filter-sheet" : "",
+                            showMobileFaultCards ? "report-faults-mobile-filters-form" : "",
+                            showMobileFaultCards && listFiltersOpen ? "nr-app-filter-sheet" : "",
                         ]
                             .filter(Boolean)
                             .join(" ") || undefined}
                     >
-                        {isMobilePortrait ? (
+                        {showMobileFaultCards ? (
                             <>
+                                {listFiltersOpen ? (
+                                <>
                                 <Form.Item
                                     name={["rangeDate", 0]}
                                     label="Date from"
@@ -1973,24 +2037,54 @@ const ReportFaults: React.FC = () => {
                                         />
                                     </div>
                                 </Form.Item>
+                                </>
+                                ) : null}
                                 <Form.Item
                                     name="keyword"
-                                    label={intl.formatMessage({ id: "form.filter.keyword" })}
-                                    className="break-line report-faults-filter-keyword nr-keyword-row"
-                                    style={{ width: "100%", marginBottom: 12 }}
+                                    className="report-faults-filter-keyword nr-keyword-row"
+                                    style={{ width: "100%", marginBottom: 8 }}
                                 >
                                     <Input
                                         className={
                                             mobileUiDark ? "nr-mobile-dark-field" : undefined
                                         }
                                         maxLength={200}
-                                        allowClear={false}
+                                        allowClear
                                         autoComplete="off"
-                                        placeholder={intl.formatMessage({ id: "form.filter.keyword" })}
-                                        style={{ width: "100%", ...mobileDarkFieldStyle }}
+                                        placeholder="Job site or service"
+                                        style={{
+                                            width: "100%",
+                                            minHeight: 48,
+                                            borderRadius: 12,
+                                            fontSize: 16,
+                                            background: mobileUiDark ? "#141414" : "#ffffff",
+                                            borderColor: mobileUiDark ? "#444444" : "#b7d0b0",
+                                            color: mobileUiDark ? "#ffffff" : "#143d24",
+                                        }}
                                     />
                                 </Form.Item>
-                                <div className="report-faults-filter-search nr-search-row">{searchButton}</div>
+                                <Form.Item className="nr-search-row report-faults-filter-search" style={{ width: "100%", marginBottom: 0 }}>
+                                    <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
+                                        <Button
+                                            type="primary"
+                                            className="report-faults-mobile-toolbar__search"
+                                            icon={<SearchOutlined />}
+                                            loading={loading}
+                                            onClick={() => handleOnClick(actionType.SEARCH)}
+                                            style={{
+                                                height: 44,
+                                                borderRadius: 10,
+                                                fontWeight: 700,
+                                                padding: "0 18px",
+                                                background: "#1f6b3a",
+                                                borderColor: "#1f6b3a",
+                                                color: "#ffffff",
+                                            }}
+                                        >
+                                            Search
+                                        </Button>
+                                    </div>
+                                </Form.Item>
                             </>
                         ) : (
                             <StatusRow>
@@ -2331,6 +2425,7 @@ const ReportFaults: React.FC = () => {
                     />
                     )}
                 </InformationDiv>
+                </div>
                 </>
                 )}
             </UsersDiv>

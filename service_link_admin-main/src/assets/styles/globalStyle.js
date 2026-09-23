@@ -2412,15 +2412,65 @@ body.dashboard-page-body-dark a.dashboard-messages-badge {
     background: transparent !important;
   }
 
-  .report-faults-list-wrap--mobile-portrait .report-faults-filter-search {
-    width: 100%;
-    margin-top: 4px;
-    margin-bottom: 0;
-    background: transparent !important;
+  .report-faults-list-wrap--mobile-portrait .report-faults-mobile-toolbar {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
+    width: 100% !important;
+    min-height: 112px !important;
+    gap: 8px !important;
+    margin: 0 0 12px !important;
+    position: sticky !important;
+    top: 72px !important;
+    z-index: 30 !important;
+    background: #e7f0e4 !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 
-  .report-faults-list-wrap--mobile-portrait .report-faults-filter-search .ant-btn {
-    width: 100%;
+  .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .report-faults-mobile-toolbar {
+    background: #000000 !important;
+  }
+
+  .report-faults-list-wrap--mobile-portrait .report-faults-mobile-toolbar__row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+    width: 100% !important;
+    min-height: 48px !important;
+    gap: 8px !important;
+    overflow: visible !important;
+  }
+
+  .report-faults-list-wrap--mobile-portrait .report-faults-mobile-toolbar__filters.ant-btn {
+    display: inline-flex !important;
+    flex: 1 1 auto !important;
+    height: 48px !important;
+    background: #ffffff !important;
+    border: 1px solid #b7d0b0 !important;
+    color: #143d24 !important;
+  }
+
+  .report-faults-list-wrap--mobile-portrait.new-reports-theme-dark .report-faults-mobile-toolbar__filters.ant-btn {
+    background: #141414 !important;
+    border-color: #444444 !important;
+    color: #ffffff !important;
+  }
+
+  .report-faults-list-wrap--mobile-portrait .report-faults-mobile-toolbar__new.ant-btn,
+  .report-faults-list-wrap--mobile-portrait .report-faults-mobile-toolbar__search.ant-btn {
+    display: inline-flex !important;
+    height: 48px !important;
+    background: #1f6b3a !important;
+    border-color: #1f6b3a !important;
+    color: #ffffff !important;
+  }
+
+  .report-faults-list-wrap--mobile-portrait .report-faults-mobile-toolbar__search.ant-btn {
+    height: 44px !important;
+    margin-left: auto !important;
   }
 
   /* RangePicker active bar / wrapper bleed (white strip) */
@@ -2484,13 +2534,7 @@ body.dashboard-page-body-dark a.dashboard-messages-badge {
     border-bottom-color: #333333 !important;
   }
 
-  .report-faults-list-wrap--mobile-portrait .report-faults-filter-keyword .ant-input-affix-wrapper {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-  }
-
+  .report-faults-list-wrap--mobile-portrait .report-faults-filter-keyword .ant-input-affix-wrapper,
   .report-faults-list-wrap--mobile-portrait .report-faults-filter-keyword .ant-input {
     border: 1px solid var(--nr-app-border, #b7d0b0) !important;
     border-radius: 12px !important;

@@ -25,6 +25,11 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       -webkit-box-shadow: none !important;
     }
 
+    /* Fixed top bar sits over the first row. Keep Filters / New / search below it. */
+    body:has(.report-faults-list-wrap--mobile-portrait) #main-content {
+      padding-top: 72px !important;
+    }
+
     body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoBoxWrapper,
     body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoLayoutContentWrapper,
     body:has(.new-reports-list-wrap--mobile-portrait:not(.new-reports-theme-dark)) .isoExampleWrapper,
@@ -50,8 +55,17 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       --nr-app-header: #1f6b3a;
       --nr-app-meta: #d7e8d2;
       max-width: 100vw !important;
-      overflow-x: hidden !important;
       background: var(--nr-app-bg) !important;
+    }
+
+    .new-reports-list-wrap--mobile-portrait {
+      overflow-x: hidden !important;
+    }
+
+    /* Faults: overflow-x hidden on this flex column collapses the toolbar to 0. */
+    .report-faults-list-wrap--mobile-portrait {
+      overflow: visible !important;
+      align-items: stretch !important;
     }
 
     .new-reports-list-wrap--mobile-portrait.new-reports-theme-dark,
@@ -71,8 +85,14 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
     .report-faults-list-wrap--mobile-portrait .nr-list-page {
       display: flex;
       flex-direction: column;
+      width: 100%;
+      align-self: stretch;
       min-height: calc(100vh - 56px);
       background: var(--nr-app-bg);
+    }
+
+    .report-faults-list-wrap--mobile-portrait .nr-list-page > .nr-app-top {
+      flex: 0 0 auto;
     }
 
     .nr-list-chrome--mobile,
@@ -100,6 +120,20 @@ export const ReportsMobileAppShellStyles = createGlobalStyle`
       padding: 8px 0 10px;
       border-bottom: 1px solid var(--nr-app-border);
       margin-bottom: 0;
+    }
+
+    .report-faults-list-wrap--mobile-portrait .nr-app-top {
+      position: relative !important;
+      top: auto !important;
+      display: block !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: 0 !important;
+      height: auto !important;
+      flex: 0 0 auto !important;
+      overflow: visible !important;
+      align-self: stretch !important;
+      z-index: 2 !important;
     }
 
     .nr-app-top-row {
