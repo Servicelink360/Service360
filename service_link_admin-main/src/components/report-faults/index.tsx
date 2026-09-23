@@ -98,6 +98,11 @@ const ReportFaultModal = (props: IProps) => {
     }
 
     const isStaffUser = profile && +profile.type === userType.STAFF
+    const canSubmitFault =
+        !profile ||
+        +profile.type === userType.STAFF ||
+        +profile.type === userType.ADMIN ||
+        +profile.type === userType.CUSTOMER
     const hideDeptCustomerForStaff = isStaffUser && !data
 
     const activeServiceName = useMemo(() => {
@@ -620,7 +625,7 @@ const ReportFaultModal = (props: IProps) => {
             >
                 {intl.formatMessage({ id: 'button.Close' })}
             </Button>
-            {profile && +profile.type === userType.STAFF ? (
+            {canSubmitFault ? (
                 <ActionBtn
                     type="primary"
                     htmlType="button"
