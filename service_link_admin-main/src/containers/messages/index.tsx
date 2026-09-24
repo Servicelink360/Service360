@@ -298,6 +298,11 @@ const MessageBubble: React.FC<{
     .map((label) => ccPeerShortName(label))
     .filter(Boolean);
 
+  const cardBorder = darkMode ? '#3a3a3a' : '#e4e4e4';
+  const cardBg = darkMode ? '#1c1c1c' : '#ffffff';
+  const footerBg = darkMode ? '#141414' : '#f7f7f7';
+  const footerText = darkMode ? '#b0b0b0' : '#8c8c8c';
+
   return (
     <div
       className="message-bubble-row"
@@ -311,106 +316,116 @@ const MessageBubble: React.FC<{
       }}
     >
       <div
+        className="message-card"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          marginBottom: 4,
-          flexWrap: 'wrap',
-          justifyContent: msg.isMine ? 'flex-end' : 'flex-start',
-        }}
-      >
-        <Text strong style={{ fontSize: 13, margin: 0, color: darkMode ? '#f0f0f0' : undefined }}>
-          {displayName}
-        </Text>
-        <Tag color={senderRoleColor(msg.senderType)} style={{ margin: 0, fontSize: 10 }}>
-          {roleLabel}
-        </Tag>
-      </div>
-      {ccLabels.length > 0 ? (
-        <Text
-          type="secondary"
-          style={{
-            fontSize: 12,
-            marginBottom: 4,
-            display: 'block',
-            textAlign: msg.isMine ? 'right' : 'left',
-            maxWidth: 'min(520px, 92%)',
-          }}
-        >
-          Cc: {ccLabels.join(', ')}
-        </Text>
-      ) : null}
-      <div
-        style={{
-          maxWidth: 'min(520px, 92%)',
-          padding: '10px 14px',
+          width: 'min(520px, 100%)',
+          border: `1px solid ${cardBorder}`,
           borderRadius: 12,
-          background: msg.isMine ? '#1677ff' : darkMode ? '#2a2a2a' : '#f5f5f5',
-          color: msg.isMine ? '#fff' : darkMode ? '#f0f0f0' : 'inherit',
-          border: msg.isMine ? 'none' : `1px solid ${darkMode ? '#444444' : '#d9d9d9'}`,
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-          fontSize: 14,
-          lineHeight: 1.5,
+          background: cardBg,
+          overflow: 'hidden',
         }}
       >
-        {bodyText ? <div>{msg.body}</div> : null}
-        <MessageAttachments urls={attachments} isMine={msg.isMine} />
-      </div>
-      {timestamp ? (
-        <Text
-          type="secondary"
+        <div style={{ padding: '10px 12px 12px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginBottom: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Text strong style={{ fontSize: 13, margin: 0, color: darkMode ? '#f0f0f0' : undefined }}>
+              {displayName}
+            </Text>
+            <Tag color={senderRoleColor(msg.senderType)} style={{ margin: 0, fontSize: 10 }}>
+              {roleLabel}
+            </Tag>
+          </div>
+          {ccLabels.length > 0 ? (
+            <Text
+              type="secondary"
+              style={{
+                fontSize: 12,
+                marginBottom: 8,
+                display: 'block',
+                color: darkMode ? '#b0b0b0' : undefined,
+              }}
+            >
+              Cc: {ccLabels.join(', ')}
+            </Text>
+          ) : null}
+          <div
+            style={{
+              padding: '10px 12px',
+              borderRadius: 8,
+              background: msg.isMine ? '#1677ff' : darkMode ? '#2a2a2a' : '#f5f5f5',
+              color: msg.isMine ? '#fff' : darkMode ? '#f0f0f0' : 'inherit',
+              border: msg.isMine ? 'none' : `1px solid ${darkMode ? '#444444' : '#e8e8e8'}`,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            {bodyText ? <div>{msg.body}</div> : null}
+            <MessageAttachments urls={attachments} isMine={msg.isMine} />
+          </div>
+        </div>
+        <div
+          className="message-card-footer"
           style={{
-            marginTop: 4,
-            fontSize: 12,
-            display: 'block',
-            textAlign: msg.isMine ? 'right' : 'left',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '6px 14px',
+            padding: '8px 12px',
+            borderTop: `1px solid ${cardBorder}`,
+            background: footerBg,
           }}
         >
-          {timestamp}
-        </Text>
-      ) : null}
-      {reportLink ? (
-        <Link
-          to={reportLink}
-          style={{ marginTop: 6, fontSize: 13, color: msg.isMine ? '#69b1ff' : '#1677ff' }}
-        >
-          Open linked report →
-        </Link>
-      ) : null}
-      <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-        {isDeletedTab && onRestore ? (
-          <Button
-            type="link"
-            size="small"
-            icon={<UndoOutlined />}
-            loading={actionLoading}
-            onClick={() => onRestore(msg.id)}
-            style={{ padding: 0, height: 'auto', fontSize: 12 }}
-          >
-            Restore
-          </Button>
-        ) : null}
-        {!isDeletedTab && onDelete ? (
-          <Popconfirm
-            title="Move this message to Deleted?"
-            okText="Delete"
-            cancelText="Cancel"
-            onConfirm={() => onDelete(msg.id)}
-          >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              loading={actionLoading}
-              style={{ padding: 0, height: 'auto', fontSize: 12 }}
-            >
-              Delete
-            </Button>
-          </Popconfirm>
-        ) : null}
+          {timestamp ? (
+            <Text style={{ fontSize: 12, margin: 0, color: footerText }}>{timestamp}</Text>
+          ) : null}
+          {reportLink ? (
+            <Link to={reportLink} style={{ fontSize: 13, color: '#1677ff' }}>
+              Open linked report →
+            </Link>
+          ) : null}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+            {isDeletedTab && onRestore ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<UndoOutlined />}
+                loading={actionLoading}
+                onClick={() => onRestore(msg.id)}
+                style={{ padding: 0, height: 'auto', fontSize: 12 }}
+              >
+                Restore
+              </Button>
+            ) : null}
+            {!isDeletedTab && onDelete ? (
+              <Popconfirm
+                title="Move this message to Deleted?"
+                okText="Delete"
+                cancelText="Cancel"
+                onConfirm={() => onDelete(msg.id)}
+              >
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={actionLoading}
+                  style={{ padding: 0, height: 'auto', fontSize: 12 }}
+                >
+                  Delete
+                </Button>
+              </Popconfirm>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );
