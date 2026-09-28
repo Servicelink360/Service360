@@ -701,8 +701,9 @@ export class TrainingService {
       for (const p of moduleProgress) {
         const status = this.effectiveStatus(p, m);
         const assign = assignments
-          .filter((a) => +a.moduleId === +m.id && (!a.staffId || +a.staffId === +p.userId))
+          .filter((a) => +a.moduleId === +m.id && a.staffId && +a.staffId === +p.userId)
           .sort((a, b) => +new Date(a.dueAt || 0) - +new Date(b.dueAt || 0))[0];
+        if (!assign) continue;
         const dueAt = assign?.dueAt || null;
         const overdue =
           !!dueAt && status !== 'passed' && new Date(dueAt).getTime() < Date.now();
@@ -746,6 +747,18 @@ export class TrainingService {
       ...errorCode.SUCCESS,
       data: { summary, rows, modules: filterModules },
     };
+  }
+
+  private async clearProgressIfUnassigned(staffId: number | null | undefined, moduleId: number) {
+    const userId = +staffId;
+    const modId = +moduleId;
+    if (!Number.isFinite(userId) || userId <= 0 || !Number.isFinite(modId) || modId <= 0) return;
+    const stillAssigned = await this.assignmentsRepo.count({
+      where: { staffId: userId, moduleId: modId },
+    });
+    if (stillAssigned > 0) return;
+    await this.attemptsRepo.delete({ userId, moduleId: modId });
+    await this.progressRepo.delete({ userId, moduleId: modId });
   }
 
   async adminResetProgress(
@@ -979,6 +992,7 @@ export class TrainingService {
       if (!selected.has(+row.moduleId)) {
         await this.assignmentsRepo.delete({ id: row.id });
         if (byModule.get(+row.moduleId)?.id === row.id) byModule.delete(+row.moduleId);
+        await this.clearProgressIfUnassigned(originalStaffId, +row.moduleId);
         continue;
       }
       const other = byModule.get(+row.moduleId);
@@ -989,6 +1003,7 @@ export class TrainingService {
         other.siteName = body.siteName || null;
         await this.assignmentsRepo.save(other);
         await this.assignmentsRepo.delete({ id: row.id });
+        await this.clearProgressIfUnassigned(originalStaffId, +row.moduleId);
         continue;
       }
       row.staffId = newStaffId;
@@ -997,6 +1012,9 @@ export class TrainingService {
       row.dueAt = dueAt;
       row.notes = notes;
       byModule.set(+row.moduleId, await this.assignmentsRepo.save(row));
+      if (newStaffId !== originalStaffId) {
+        await this.clearProgressIfUnassigned(originalStaffId, +row.moduleId);
+      }
     }
 
     for (const moduleId of moduleIds) {
@@ -1021,7 +1039,10 @@ export class TrainingService {
     if (!this.isAdmin(user)) {
       return { ...errorCode.EXCEPTION, message: 'Admin only' };
     }
+    const row = await this.assignmentsRepo.findOne({ where: { id } });
+    if (!row) return errorCode.NOT_FOUND;
     await this.assignmentsRepo.delete({ id });
+    await this.clearProgressIfUnassigned(row.staffId, +row.moduleId);
     return errorCode.SUCCESS;
   }
 
