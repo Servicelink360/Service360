@@ -58,6 +58,20 @@ export class TrainingService {
     return (rows || []).map((r: any) => +r.siteId).filter((n: number) => Number.isFinite(n));
   }
 
+  /** Staff only see and complete training modules an admin assigned to them. */
+  private async staffMayTakeModule(user: IUserInfo, module: TrainingModule): Promise<boolean> {
+    if (+user.type !== userType.STAFF) return true;
+    if (String(module.moduleKind || 'TRAINING').toUpperCase() === 'INDUCTION') return true;
+    const siteIds = await this.staffSiteIds(+user.userId);
+    const rows = await this.assignmentsRepo.find({ where: { moduleId: module.id } });
+    return rows.some((a) => {
+      if (a.staffId && +a.staffId === +user.userId) return true;
+      if (!a.staffId && a.siteId && siteIds.includes(+a.siteId)) return true;
+      if (!a.staffId && !a.siteId) return true;
+      return false;
+    });
+  }
+
   private effectiveStatus(progress: TrainingProgress | undefined | null, module: TrainingModule) {
     if (!progress) return 'not_started';
     if (progress.status === 'passed' && progress.expiresAt) {
@@ -194,18 +208,21 @@ export class TrainingService {
       });
     }
 
+    const visible =
+      isStaff && kind === 'TRAINING' ? data.filter((d) => d.assignment) : data;
+
     return {
       ...errorCode.SUCCESS,
       data: {
-        modules: data,
+        modules: visible,
         summary: {
-          total: data.length,
-          passed: data.filter((d) => d.progress.status === 'passed').length,
-          inProgress: data.filter((d) =>
+          total: visible.length,
+          passed: visible.filter((d) => d.progress.status === 'passed').length,
+          inProgress: visible.filter((d) =>
             ['in_progress', 'topics_done', 'failed'].includes(d.progress.status),
           ).length,
-          overdue: data.filter((d) => d.assignment?.overdue).length,
-          expired: data.filter((d) => d.progress.status === 'expired').length,
+          overdue: visible.filter((d) => d.assignment?.overdue).length,
+          expired: visible.filter((d) => d.progress.status === 'expired').length,
         },
       },
     };
@@ -225,6 +242,9 @@ export class TrainingService {
       if (!siteIds.includes(+module.siteId)) {
         return { ...errorCode.EXCEPTION, message: 'This induction is for another site' };
       }
+    }
+    if (!(await this.staffMayTakeModule(user, module))) {
+      return { ...errorCode.EXCEPTION, message: 'This module is not assigned to you' };
     }
 
     const topics = await this.topicsRepo.find({
@@ -326,6 +346,9 @@ export class TrainingService {
       where: { id: moduleId, status: 1 },
     });
     if (!module) return errorCode.NOT_FOUND;
+    if (!(await this.staffMayTakeModule(user, module))) {
+      return { ...errorCode.EXCEPTION, message: 'This module is not assigned to you' };
+    }
 
     let progress = await this.progressRepo.findOne({
       where: { userId: +user.userId, moduleId },
@@ -366,6 +389,9 @@ export class TrainingService {
     if (!topic) return errorCode.NOT_FOUND;
     const module = await this.modulesRepo.findOne({ where: { id: moduleId } });
     if (!module) return errorCode.NOT_FOUND;
+    if (!(await this.staffMayTakeModule(user, module))) {
+      return { ...errorCode.EXCEPTION, message: 'This module is not assigned to you' };
+    }
 
     let progress = await this.progressRepo.findOne({
       where: { userId: +user.userId, moduleId },
@@ -424,6 +450,9 @@ export class TrainingService {
       where: { id: moduleId, status: 1 },
     });
     if (!module) return errorCode.NOT_FOUND;
+    if (!(await this.staffMayTakeModule(user, module))) {
+      return { ...errorCode.EXCEPTION, message: 'This module is not assigned to you' };
+    }
 
     let progress = await this.progressRepo.findOne({
       where: { userId: +user.userId, moduleId },
@@ -678,6 +707,7 @@ export class TrainingService {
         const overdue =
           !!dueAt && status !== 'passed' && new Date(dueAt).getTime() < Date.now();
         const u = staffMap.get(+p.userId);
+        if (!u || +u.type !== userType.STAFF) continue;
         rows.push({
           moduleId: m.id,
           moduleCode: m.code,
@@ -718,6 +748,23 @@ export class TrainingService {
     };
   }
 
+  async adminResetProgress(
+    user: IUserInfo,
+    body: { staffId?: number; moduleId?: number },
+  ) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const staffId = +body.staffId;
+    const moduleId = +body.moduleId;
+    if (!Number.isFinite(staffId) || staffId <= 0 || !Number.isFinite(moduleId) || moduleId <= 0) {
+      return { ...errorCode.EXCEPTION, message: 'Choose a staff member and module' };
+    }
+    await this.attemptsRepo.delete({ userId: staffId, moduleId });
+    await this.progressRepo.delete({ userId: staffId, moduleId });
+    return errorCode.SUCCESS;
+  }
+
   // ??? Admin: assignments ???????????????????????????????????????????
 
   async adminListAssignments(user: IUserInfo, moduleId?: number) {
@@ -739,25 +786,70 @@ export class TrainingService {
       ? await this.usersRepo.find({ where: { id: In(staffIds) } })
       : [];
     const staffMap = new Map(staff.map((s) => [+s.id!, s]));
+    const topicCounts = moduleIds.length
+      ? await this.topicsRepo
+          .createQueryBuilder('t')
+          .select('t.module_id', 'moduleId')
+          .addSelect('COUNT(*)', 'count')
+          .where('t.module_id IN (:...moduleIds)', { moduleIds })
+          .groupBy('t.module_id')
+          .getRawMany()
+      : [];
+    const topicCountMap = new Map(topicCounts.map((r) => [+r.moduleId, +r.count]));
+    const progressRows = staffIds.length
+      ? await this.progressRepo.find({ where: { userId: In([...new Set(staffIds)]) } })
+      : [];
 
     return {
       ...errorCode.SUCCESS,
-      data: rows.map((a) => ({
-        ...a,
-        moduleTitle: modMap.get(+a.moduleId)?.title,
-        moduleCode: modMap.get(+a.moduleId)?.code,
-        staffName: a.staffId ? staffMap.get(+a.staffId)?.fullName : 'All staff',
-        overdue:
-          !!a.dueAt &&
-          new Date(a.dueAt).getTime() < Date.now(),
-      })),
+      data: rows.map((a) => {
+        const module = modMap.get(+a.moduleId);
+        const progress = a.staffId
+          ? progressRows.find(
+              (p) => +p.userId === +a.staffId! && +p.moduleId === +a.moduleId,
+            )
+          : undefined;
+        const topicTotal = topicCountMap.get(+a.moduleId) || 0;
+        const completedTopics = Array.isArray(progress?.completedTopicIds)
+          ? progress!.completedTopicIds.length
+          : 0;
+        const progressStatus = module
+          ? this.effectiveStatus(progress, module)
+          : progress?.status || 'not_started';
+        const progressPercent =
+          progressStatus === 'passed'
+            ? 100
+            : topicTotal > 0
+              ? Math.round((completedTopics / topicTotal) * 100)
+              : 0;
+        return {
+          ...a,
+          moduleTitle: module?.title,
+          moduleCode: module?.code,
+          staffName: a.staffId ? staffMap.get(+a.staffId)?.fullName : 'All staff',
+          overdue:
+            !!a.dueAt &&
+            new Date(a.dueAt).getTime() < Date.now(),
+          progressStatus,
+          completedTopics,
+          topicTotal,
+          progressPercent,
+          startedAt: progress?.startedAt || null,
+          finishedAt:
+            progress?.passedAt ||
+            (completedTopics > 0 && completedTopics >= topicTotal
+              ? progress?.topicsCompletedAt || null
+              : null),
+        };
+      }),
     };
   }
 
   async adminCreateAssignment(
     user: IUserInfo,
     body: {
-      moduleId: number;
+      moduleId?: number;
+      moduleIds?: number[];
       staffId?: number | null;
       siteId?: number | null;
       siteName?: string | null;
@@ -768,21 +860,161 @@ export class TrainingService {
     if (!this.isAdmin(user)) {
       return { ...errorCode.EXCEPTION, message: 'Admin only' };
     }
-    const module = await this.modulesRepo.findOne({
-      where: { id: +body.moduleId },
+    if (!body.staffId) {
+      return { ...errorCode.EXCEPTION, message: 'Choose a staff member' };
+    }
+    const moduleIds = [
+      ...new Set(
+        (Array.isArray(body.moduleIds) && body.moduleIds.length
+          ? body.moduleIds
+          : [body.moduleId]
+        )
+          .map((id) => +id)
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+    ];
+    if (!moduleIds.length) {
+      return { ...errorCode.EXCEPTION, message: 'Choose at least one module' };
+    }
+    const modules = await this.modulesRepo.find({ where: { id: In(moduleIds) } });
+    const byId = new Map(modules.map((m) => [+m.id, m]));
+    for (const id of moduleIds) {
+      const module = byId.get(id);
+      if (!module) return errorCode.NOT_FOUND;
+      if (
+        +module.status !== 1 ||
+        String(module.moduleKind || 'TRAINING').toUpperCase() !== 'TRAINING'
+      ) {
+        return { ...errorCode.EXCEPTION, message: 'Choose an active training module' };
+      }
+    }
+    const existing = await this.assignmentsRepo.find({
+      where: { staffId: +body.staffId },
     });
-    if (!module) return errorCode.NOT_FOUND;
-    const row = this.assignmentsRepo.create({
-      moduleId: +body.moduleId,
-      staffId: body.staffId ? +body.staffId : null,
-      siteId: body.siteId ? +body.siteId : null,
-      siteName: body.siteName || null,
-      dueAt: body.dueAt ? new Date(body.dueAt) : null,
-      notes: body.notes || null,
-      assignedBy: +user.userId,
+    const already = new Set(existing.map((a) => +a.moduleId));
+    const freshIds = moduleIds.filter((id) => !already.has(id));
+    if (!freshIds.length) {
+      return {
+        ...errorCode.EXCEPTION,
+        message: 'Those modules are already assigned to this staff member',
+      };
+    }
+    const rows = freshIds.map((moduleId) =>
+      this.assignmentsRepo.create({
+        moduleId,
+        staffId: +body.staffId,
+        siteId: body.siteId ? +body.siteId : null,
+        siteName: body.siteName || null,
+        dueAt: body.dueAt ? new Date(body.dueAt) : null,
+        notes: body.notes || null,
+        assignedBy: +user.userId,
+      }),
+    );
+    const saved = await this.assignmentsRepo.save(rows);
+    return { ...errorCode.SUCCESS, data: saved };
+  }
+
+  async adminUpdateAssignment(
+    user: IUserInfo,
+    id: number,
+    body: {
+      moduleId?: number;
+      moduleIds?: number[];
+      staffId?: number | null;
+      siteId?: number | null;
+      siteName?: string | null;
+      dueAt?: string | null;
+      notes?: string | null;
+    },
+  ) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const anchor = await this.assignmentsRepo.findOne({ where: { id } });
+    if (!anchor) return errorCode.NOT_FOUND;
+    if (!body.staffId) {
+      return { ...errorCode.EXCEPTION, message: 'Choose a staff member' };
+    }
+    const moduleIds = [
+      ...new Set(
+        (Array.isArray(body.moduleIds) && body.moduleIds.length
+          ? body.moduleIds
+          : [body.moduleId]
+        )
+          .map((moduleId) => +moduleId)
+          .filter((moduleId) => Number.isFinite(moduleId) && moduleId > 0),
+      ),
+    ];
+    if (!moduleIds.length) {
+      return { ...errorCode.EXCEPTION, message: 'Choose at least one module' };
+    }
+    const modules = await this.modulesRepo.find({ where: { id: In(moduleIds) } });
+    const byId = new Map(modules.map((m) => [+m.id, m]));
+    for (const moduleId of moduleIds) {
+      const module = byId.get(moduleId);
+      if (!module) return errorCode.NOT_FOUND;
+      if (
+        +module.status !== 1 ||
+        String(module.moduleKind || 'TRAINING').toUpperCase() !== 'TRAINING'
+      ) {
+        return { ...errorCode.EXCEPTION, message: 'Choose an active training module' };
+      }
+    }
+
+    const originalStaffId = +anchor.staffId;
+    const newStaffId = +body.staffId;
+    const dueAt = body.dueAt ? new Date(body.dueAt) : null;
+    const notes = body.notes || null;
+    const selected = new Set(moduleIds);
+    const existing = await this.assignmentsRepo.find({
+      where: { staffId: originalStaffId },
     });
-    await this.assignmentsRepo.save(row);
-    return { ...errorCode.SUCCESS, data: row };
+    const onTarget =
+      newStaffId === originalStaffId
+        ? existing
+        : await this.assignmentsRepo.find({ where: { staffId: newStaffId } });
+    const byModule = new Map(onTarget.map((row) => [+row.moduleId, row]));
+
+    for (const row of existing) {
+      if (!selected.has(+row.moduleId)) {
+        await this.assignmentsRepo.delete({ id: row.id });
+        if (byModule.get(+row.moduleId)?.id === row.id) byModule.delete(+row.moduleId);
+        continue;
+      }
+      const other = byModule.get(+row.moduleId);
+      if (other && other.id !== row.id) {
+        other.dueAt = dueAt;
+        other.notes = notes;
+        other.siteId = body.siteId ? +body.siteId : null;
+        other.siteName = body.siteName || null;
+        await this.assignmentsRepo.save(other);
+        await this.assignmentsRepo.delete({ id: row.id });
+        continue;
+      }
+      row.staffId = newStaffId;
+      row.siteId = body.siteId ? +body.siteId : null;
+      row.siteName = body.siteName || null;
+      row.dueAt = dueAt;
+      row.notes = notes;
+      byModule.set(+row.moduleId, await this.assignmentsRepo.save(row));
+    }
+
+    for (const moduleId of moduleIds) {
+      if (byModule.has(moduleId)) continue;
+      const created = await this.assignmentsRepo.save(
+        this.assignmentsRepo.create({
+          moduleId,
+          staffId: newStaffId,
+          siteId: body.siteId ? +body.siteId : null,
+          siteName: body.siteName || null,
+          dueAt,
+          notes,
+          assignedBy: +user.userId,
+        }),
+      );
+      byModule.set(moduleId, created);
+    }
+    return errorCode.SUCCESS;
   }
 
   async adminDeleteAssignment(user: IUserInfo, id: number) {
@@ -794,6 +1026,70 @@ export class TrainingService {
   }
 
   // ??? Admin: module settings (validity, kind, site induction) ??????
+
+  async adminCreateModule(
+    user: IUserInfo,
+    body: {
+      code?: string;
+      title?: string;
+      description?: string;
+      moduleKind?: string;
+      siteId?: number | null;
+      siteName?: string | null;
+      validityDays?: number | null;
+      passPercent?: number;
+    },
+  ) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const code = String(body.code || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '-');
+    const title = String(body.title || '').trim();
+    if (!code || !title) {
+      return { ...errorCode.EXCEPTION, message: 'Code and title are required' };
+    }
+    const existing = await this.modulesRepo.findOne({ where: { code } });
+    if (existing) {
+      return { ...errorCode.EXCEPTION, message: 'That module code is already used' };
+    }
+    const last = await this.modulesRepo
+      .createQueryBuilder('m')
+      .select('MAX(m.sort_order)', 'max')
+      .getRawOne();
+    const saved = await this.modulesRepo.save(
+      this.modulesRepo.create({
+        code: code.slice(0, 40),
+        title: title.slice(0, 255),
+        description: String(body.description || '').trim(),
+        durationMins: 20,
+        sortOrder: (+last?.max || 0) + 1,
+        status: 1,
+        moduleKind:
+          String(body.moduleKind || 'TRAINING').toUpperCase() === 'INDUCTION'
+            ? 'INDUCTION'
+            : 'TRAINING',
+        siteId: body.siteId ? +body.siteId : null,
+        siteName: body.siteName || null,
+        validityDays:
+          body.validityDays == null || Number.isNaN(+body.validityDays)
+            ? 365
+            : +body.validityDays,
+        passPercent: +body.passPercent || 80,
+      }),
+    );
+    await this.topicsRepo.save(
+      this.topicsRepo.create({
+        moduleId: saved.id,
+        title: 'Welcome',
+        body: 'Add the learning topics for this module.',
+        sortOrder: 1,
+      }),
+    );
+    return { ...errorCode.SUCCESS, data: saved };
+  }
 
   async adminUpdateModule(
     user: IUserInfo,
@@ -919,6 +1215,17 @@ export class TrainingService {
         6: '/images/training/gateway/manual-handling-awareness.png',
         7: '/images/training/gateway/safe-lifting.png',
         8: '/images/training/gateway/ergonomics.png',
+        9: '/images/training/gateway/workplace-stress.png',
+        10: '/images/training/gateway/stress-tips.png',
+        11: '/images/training/gateway/discrimination.png',
+        12: '/images/training/gateway/discrimination-law.png',
+        13: '/images/training/gateway/sexual-harassment.png',
+        14: '/images/training/gateway/sexual-harassment-law.png',
+        15: '/images/training/gateway/workplace-harassment.png',
+        16: '/images/training/gateway/respond-harassment.png',
+        17: '/images/training/gateway/bullying.png',
+        18: '/images/training/gateway/not-bullying.png',
+        19: '/images/training/gateway/module-complete.png',
       };
       const topics = await this.topicsRepo.find({
         where: { moduleId: gateway.id },
@@ -1142,6 +1449,479 @@ export class TrainingService {
       if (questions.length) await this.questionsRepo.save(questions);
     }
     this.logger.log(`Seeded ${payload.modules.length} training modules`);
+  }
+
+  /**
+   * Keep the crew catalogue, hide unrelated job modules,
+   * and add cleaner, gardener, and roof and gutter training once.
+   */
+  async ensureCrewTrainingCatalogue(): Promise<void> {
+    const hideCodes = ['M7', 'M8', 'M11', 'M13', 'M15', 'M16', 'M17'];
+    const keepCodes = [
+      'GATEWAY', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'CLEAN', 'GARDEN', 'ROOF',
+    ];
+    await this.modulesRepo
+      .createQueryBuilder()
+      .update()
+      .set({ status: 0 })
+      .where('code IN (:...codes)', { codes: hideCodes })
+      .execute();
+    await this.modulesRepo
+      .createQueryBuilder()
+      .update()
+      .set({ status: 1 })
+      .where('code IN (:...codes)', { codes: keepCodes })
+      .execute();
+
+    const catalogue: {
+      code: string;
+      title: string;
+      description: string;
+      durationMins: number;
+      sortOrder: number;
+      topics: { title: string; body: string }[];
+      questions: { prompt: string; options: { key: string; text: string }[]; correctKey: string }[];
+    }[] = [
+      {
+        code: 'CLEAN',
+        title: 'Cleaner Safety',
+        description:
+          'Safety for cleaners: chemicals, wet floors, manual handling, sharps, electrical equipment, and working alone.',
+        durationMins: 20,
+        sortOrder: 30,
+        topics: [
+          {
+            title: 'Welcome to cleaner safety',
+            body: 'This module is for people who clean buildings, amenities, and work sites. Complete the generic Gateway training as well. This module covers the hazards you meet most often on a cleaning job.',
+          },
+          {
+            title: 'Chemicals and safety data sheets',
+            body: 'Use only the cleaning products supplied for the job. Read the label and the safety data sheet before you use a chemical. Wear the gloves and eye protection the sheet asks for. Never mix chemicals, especially bleach and anything acidic. Store chemicals upright, closed, and away from food. If you are splashed, follow the first-aid instructions on the sheet and tell your supervisor.',
+          },
+          {
+            title: 'Wet floors, slips and trips',
+            body: 'Wet floors are the most common cleaner injury. Put out warning signs before you mop, and leave them until the floor is dry. Keep leads, hoses, and buckets out of walkways. Mop towards an exit so you are not walking back over wet floor. Report torn mats, loose tiles, and poor lighting.',
+          },
+          {
+            title: 'Manual handling and safe lifting',
+            body: 'Buckets, bins, and vacuums are heavy when full. Do not fill a bucket more than you can carry comfortably. Bend your knees, keep the load close, and do not twist. Use a trolley for rubbish and linen. Ask for help with anything awkward, and empty bins before they overflow.',
+          },
+          {
+            title: 'Sharps and biological waste',
+            body: 'Do not pick up needles, glass, or unknown waste with bare hands. Use tongs or a dustpan and place sharps in a sharps container, never in a plastic rubbish bag. Wash your hands after cleaning toilets and amenities. Report blood or body-fluid spills and follow the site cleanup method. Cover cuts before you start work.',
+          },
+          {
+            title: 'Electrical equipment',
+            body: 'Check vacuums, polishers, and leads before you plug them in. Do not use equipment with a cut lead, cracked plug, or missing guard. Keep electrical equipment away from water unless it is rated for wet use. Unplug it before you change a bag or pad. Tell your supervisor and tag out anything that smells, sparks, or trips a safety switch.',
+          },
+          {
+            title: 'Working alone on a site',
+            body: 'If you are the only person on site, tell your supervisor when you arrive and when you leave. Keep your phone charged. Know the site exits and who to call in an emergency. Do not enter a locked or poorly lit area if you feel unsafe. Stop work and call if a person on site is threatening.',
+          },
+          {
+            title: 'If you are injured',
+            body: 'Stop work, get first aid, and tell your supervisor the same day, including near misses. Do not keep working through a back, wrist, or chemical injury. Note what you were doing and which product or area was involved.',
+          },
+          {
+            title: 'Completion of Learning Section',
+            body: 'You have covered the main hazards for cleaning work. Pass the short quiz to finish this module. On every job, look for wet floors, chemicals, sharps, and damaged equipment before you start.',
+          },
+        ],
+        questions: [
+          {
+            prompt: 'When can you mix two cleaning chemicals together?',
+            options: [
+              { key: 'a', text: 'Whenever it cleans better' },
+              { key: 'b', text: 'Never, unless the safety data sheet says that mix is safe' },
+              { key: 'c', text: 'Only bleach and toilet cleaner' },
+              { key: 'd', text: 'If you are wearing gloves' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'When should wet-floor signs be taken away?',
+            options: [
+              { key: 'a', text: 'As soon as you finish mopping' },
+              { key: 'b', text: 'When the floor is dry' },
+              { key: 'c', text: 'At the end of the shift only' },
+              { key: 'd', text: 'They are optional' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'What do you do with a needle found while cleaning?',
+            options: [
+              { key: 'a', text: 'Put it in a plastic rubbish bag' },
+              { key: 'b', text: 'Pick it up with your hands and wrap it' },
+              { key: 'c', text: 'Use tongs or a dustpan and place it in a sharps container' },
+              { key: 'd', text: 'Flush it down the toilet' },
+            ],
+            correctKey: 'c',
+          },
+          {
+            prompt: 'A vacuum lead is cut. What should you do?',
+            options: [
+              { key: 'a', text: 'Tape it and keep using it' },
+              { key: 'b', text: 'Stop using it, unplug it, and report it' },
+              { key: 'c', text: 'Use it only on a dry floor' },
+              { key: 'd', text: 'Hide it so the next shift can decide' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'You are working alone and feel unsafe. What should you do?',
+            options: [
+              { key: 'a', text: 'Finish the job quickly' },
+              { key: 'b', text: 'Stop work and contact your supervisor' },
+              { key: 'c', text: 'Wait until the next day to mention it' },
+              { key: 'd', text: 'Only leave if someone tells you to' },
+            ],
+            correctKey: 'b',
+          },
+        ],
+      },
+      {
+        code: 'GARDEN',
+        title: 'Gardener Safety',
+        description:
+          'Safety for gardeners: sun and heat, manual handling, outdoor slips, sprays, and hand tools and mowers.',
+        durationMins: 20,
+        sortOrder: 31,
+        topics: [
+          {
+            title: 'Welcome to gardener safety',
+            body: 'This module is for people who maintain gardens, lawns, and outdoor areas. Complete the generic Gateway training as well. Outdoor work adds sun, uneven ground, tools, and sprays.',
+          },
+          {
+            title: 'Sun, heat and outdoor work',
+            body: 'Wear a hat, sunglasses, long sleeves where you can, and sunscreen. Drink water through the shift, not only when you feel thirsty. Take shade breaks in hot weather. Stop and tell your supervisor if you feel dizzy, sick, or confused. Cold and wet weather needs layers and footwear with grip.',
+          },
+          {
+            title: 'Manual handling in the garden',
+            body: 'Soil, green waste, and equipment are heavy when wet. Move smaller loads and use a barrow. Keep your back straight and the load close. Do not yank stuck hoses or lift above shoulder height if you can lower the job instead.',
+          },
+          {
+            title: 'Slips, trips and uneven ground',
+            body: 'Watch for wet grass, moss, hoses, and holes. Wear boots with grip. Do not run a mower or blower while walking backwards towards an edge. Coil hoses and leads out of paths when you finish.',
+          },
+          {
+            title: 'Chemicals, sprays and fertilisers',
+            body: 'Only use products you have been shown how to use. Read the label and safety data sheet. Wear the gloves, mask, and eye protection listed. Spray when the wind is light so the product does not drift onto people, food, or stormwater. Wash your hands before you eat.',
+          },
+          {
+            title: 'Hand tools and mowers',
+            body: 'Check blades, guards, and leads before you start. Keep hands and feet clear of blades. Stop the machine and wait until it is still before you clear a jam. Do not remove a guard. Wear hearing and eye protection for mowers, blowers, and line trimmers. Refuel only when the engine is off and cool.',
+          },
+          {
+            title: 'Bites, stings and first aid',
+            body: 'Look before you reach into shrubs, drains, and leaf piles. If you are stung or bitten, stop work and use the site first-aid steps. Tell your supervisor the same day if you feel unwell. Know if you have an allergy and carry the treatment you have been given.',
+          },
+          {
+            title: 'Completion of Learning Section',
+            body: 'You have covered sun, handling, slips, chemicals, and powered garden tools. Pass the short quiz to finish. Check the weather, your boots, and the guards on tools before you start.',
+          },
+        ],
+        questions: [
+          {
+            prompt: 'What is the best way to reduce heat illness outdoors?',
+            options: [
+              { key: 'a', text: 'Work faster so you finish sooner' },
+              { key: 'b', text: 'Water, shade breaks, hat, and light clothing' },
+              { key: 'c', text: 'Drink only when you feel very thirsty' },
+              { key: 'd', text: 'Remove your shirt to cool down' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'When can you clear a jammed mower blade?',
+            options: [
+              { key: 'a', text: 'While the engine is idling' },
+              { key: 'b', text: 'After the machine is stopped and the blade is still' },
+              { key: 'c', text: 'If you wear gloves and keep it running' },
+              { key: 'd', text: 'By tipping it while it is running' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'Spray drift is most likely when:',
+            options: [
+              { key: 'a', text: 'The air is still and you follow the label' },
+              { key: 'b', text: 'It is windy' },
+              { key: 'c', text: 'You wear gloves' },
+              { key: 'd', text: 'The product is in a closed container' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'A heavy bag of soil is easier to move safely by:',
+            options: [
+              { key: 'a', text: 'Carrying two bags at once' },
+              { key: 'b', text: 'Using a barrow or splitting the load' },
+              { key: 'c', text: 'Twisting quickly to save steps' },
+              { key: 'd', text: 'Lifting it above your head' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'You are stung and feel unwell. What should you do?',
+            options: [
+              { key: 'a', text: 'Keep working and mention it next week' },
+              { key: 'b', text: 'Stop, follow first aid, and tell your supervisor' },
+              { key: 'c', text: 'Rub the sting with fertiliser' },
+              { key: 'd', text: 'Ignore it if you cannot see a mark' },
+            ],
+            correctKey: 'b',
+          },
+        ],
+      },
+      {
+        code: 'ROOF',
+        title: 'Roof and Gutter Cleaner Safety',
+        description:
+          'Safety for roof and gutter cleaning: ladders, heights, weather, manual handling, and power lines.',
+        durationMins: 25,
+        sortOrder: 32,
+        topics: [
+          {
+            title: 'Welcome to roof and gutter safety',
+            body: 'Cleaning roofs and gutters is higher risk than ground cleaning. Complete the generic Gateway training as well. Do not start if you have not been shown the ladder and height method for that site.',
+          },
+          {
+            title: 'Ladders',
+            body: 'Use an industrial ladder that is long enough. Set it on firm, level ground at about a one-in-four angle. Secure the top. Keep three points of contact and do not overreach. Do not stand on the top rungs. A second person should foot the ladder where the ground is soft or the job is exposed. Inspect the ladder before use and do not use a bent or cracked one.',
+          },
+          {
+            title: 'Working at heights',
+            body: 'Stay on the ladder or an approved platform. Do not walk on fragile roofs, skylights, or polycarbonate sheets. If the job needs a harness or edge protection, do not start until that is in place and you have been trained to use it. Keep tools in a belt or bucket so you are not carrying them in one hand while you climb.',
+          },
+          {
+            title: 'Weather and outdoor work',
+            body: 'Do not work on a wet, icy, or very windy roof. Stop if rain starts or the surface becomes slippery. In heat, use sun protection and water, and come down for breaks. Lightning means you get down immediately.',
+          },
+          {
+            title: 'Manual handling of debris',
+            body: 'Wet leaves and silt are heavy. Clear gutters in small loads. Do not lean out with a full bucket. Lower debris with a bucket and rope or carry small amounts. Do not throw waste where people are walking below.',
+          },
+          {
+            title: 'Power lines',
+            body: 'Look up before you raise a ladder or pole. Keep well clear of overhead power lines. Do not touch a gutter or tool that is near a line. If you are unsure of the distance, stop and ask your supervisor. Never try to move a fallen line.',
+          },
+          {
+            title: 'Slips on wet roofs and gutters',
+            body: 'Moss, bird droppings, and wet metal are slippery. Wear boots with grip. Do not rush. If you cannot keep a stable stance, come down and report that the job needs another method.',
+          },
+          {
+            title: 'If you are injured',
+            body: 'A fall, even a short one, must be reported the same day. Do not climb back up if you are dizzy or in pain. Get first aid and tell your supervisor what happened, including near misses such as a ladder slip.',
+          },
+          {
+            title: 'Completion of Learning Section',
+            body: 'You have covered ladders, heights, weather, debris, and power lines. Pass the short quiz to finish. If the setup does not look safe, do not start.',
+          },
+        ],
+        questions: [
+          {
+            prompt: 'When is it acceptable to stand on the top rung of a ladder?',
+            options: [
+              { key: 'a', text: 'If someone is footing it' },
+              { key: 'b', text: 'Never' },
+              { key: 'c', text: 'Only for a few seconds' },
+              { key: 'd', text: 'If the gutter is just out of reach' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'A roof looks fragile or has skylights. What should you do?',
+            options: [
+              { key: 'a', text: 'Walk around the skylights carefully' },
+              { key: 'b', text: 'Do not walk on it; use the approved method or stop' },
+              { key: 'c', text: 'Go up only if you are light' },
+              { key: 'd', text: 'Lay a towel over the sheet and walk on that' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'Overhead power lines are close to the gutter. You should:',
+            options: [
+              { key: 'a', text: 'Use a metal pole if you are careful' },
+              { key: 'b', text: 'Stop and keep clear until your supervisor confirms it is safe' },
+              { key: 'c', text: 'Work only in the morning' },
+              { key: 'd', text: 'Touch the line with a wooden stick to test it' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'Rain starts while you are on a ladder. What should you do?',
+            options: [
+              { key: 'a', text: 'Finish the gutter quickly' },
+              { key: 'b', text: 'Come down; wet roofs and ladders are slippery' },
+              { key: 'c', text: 'Take your boots off for better feel' },
+              { key: 'd', text: 'Keep going if the wind is light' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'How should wet gutter debris be brought down?',
+            options: [
+              { key: 'a', text: 'Thrown to the ground near the path' },
+              { key: 'b', text: 'In small loads, lowered so people below are clear' },
+              { key: 'c', text: 'Carried in both hands while you climb' },
+              { key: 'd', text: 'Left on the roof for the rain to wash off' },
+            ],
+            correctKey: 'b',
+          },
+        ],
+      },
+    ];
+
+    for (const mod of catalogue) {
+      const existing = await this.modulesRepo.findOne({ where: { code: mod.code } });
+      if (existing) continue;
+      const saved = await this.modulesRepo.save(
+        this.modulesRepo.create({
+          code: mod.code,
+          title: mod.title,
+          description: mod.description,
+          durationMins: mod.durationMins,
+          sortOrder: mod.sortOrder,
+          status: 1,
+          moduleKind: 'TRAINING',
+          validityDays: 365,
+          passPercent: 80,
+        }),
+      );
+      await this.topicsRepo.save(
+        mod.topics.map((t, i) =>
+          this.topicsRepo.create({
+            moduleId: saved.id,
+            title: t.title,
+            body: t.body,
+            sortOrder: i + 1,
+          }),
+        ),
+      );
+      await this.questionsRepo.save(
+        mod.questions.map((q, i) =>
+          this.questionsRepo.create({
+            moduleId: saved.id,
+            type: 'MCQ',
+            prompt: q.prompt,
+            options: q.options,
+            correctKey: q.correctKey,
+            answerReviewed: true,
+            sortOrder: i + 1,
+          }),
+        ),
+      );
+      this.logger.log(`training: added module ${mod.code}`);
+    }
+  }
+
+  async applyContentRevisions(): Promise<void> {
+    const data = this.loadTrainingDataFile('content-revisions.json');
+    if (!data) return;
+    let updated = 0;
+    for (const mod of data.modules || []) {
+      const patch: { durationMins?: number; description?: string } = {};
+      if (mod.durationMins) patch.durationMins = mod.durationMins;
+      if (mod.description) patch.description = mod.description;
+      if (Object.keys(patch).length) {
+        await this.modulesRepo.update({ code: mod.code }, patch);
+      }
+    }
+    const applyTopic = async (topic: {
+      code: string;
+      title?: string;
+      sortOrder?: number;
+      body?: string;
+      imageUrl?: string;
+    }) => {
+      const mod = await this.modulesRepo.findOne({ where: { code: topic.code } });
+      if (!mod) return;
+      let row = topic.sortOrder
+        ? await this.topicsRepo.findOne({
+            where: { moduleId: mod.id, sortOrder: topic.sortOrder },
+          })
+        : null;
+      if (!row && topic.title) {
+        row = await this.topicsRepo.findOne({
+          where: { moduleId: mod.id, title: topic.title },
+        });
+      }
+      if (!row) return;
+      let changed = false;
+      if (topic.body && row.body.length < topic.body.length && row.body.trim() !== topic.body.trim()) {
+        row.body = topic.body;
+        changed = true;
+      }
+      if (topic.imageUrl && !row.imageUrl) {
+        row.imageUrl = topic.imageUrl;
+        changed = true;
+      }
+      if (changed) {
+        await this.topicsRepo.save(row);
+        updated += 1;
+      }
+    };
+    for (const topic of data.topics || []) await applyTopic(topic);
+    for (const topic of data.insertTopics || []) {
+      const mod = await this.modulesRepo.findOne({ where: { code: topic.code } });
+      if (!mod || !topic.title) continue;
+      const existing = await this.topicsRepo.findOne({
+        where: { moduleId: mod.id, title: topic.title },
+      });
+      if (existing) {
+        await applyTopic(topic);
+        continue;
+      }
+      await this.topicsRepo.save(
+        this.topicsRepo.create({
+          moduleId: mod.id,
+          title: topic.title,
+          body: topic.body,
+          imageUrl: topic.imageUrl || null,
+          sortOrder: topic.sortOrder || 0,
+        }),
+      );
+      updated += 1;
+    }
+    if (updated) this.logger.log(`training: revised ${updated} topics`);
+  }
+
+  async assignMissingTopicImages(): Promise<void> {
+    const data = this.loadTrainingDataFile('content-revisions.json');
+    const rules: { test: string; src: string }[] = data?.imageRules || [];
+    if (!rules.length) return;
+    const topics = await this.topicsRepo.find();
+    const pending = topics.filter((t) => !t.imageUrl);
+    for (const topic of pending) {
+      const title = String(topic.title || '');
+      const hit = rules.find((rule) => new RegExp(rule.test, 'i').test(title));
+      if (hit) topic.imageUrl = hit.src;
+    }
+    const changed = pending.filter((t) => !!t.imageUrl);
+    if (changed.length) {
+      await this.topicsRepo.save(changed);
+      this.logger.log(`training: set images on ${changed.length} topics`);
+    }
+  }
+
+  private loadTrainingDataFile(name: string): any {
+    const candidates = [
+      path.join(__dirname, 'data', name),
+      path.join(__dirname, '..', '..', 'training', 'data', name),
+      path.join(process.cwd(), 'dist', 'training', 'data', name),
+      path.join(process.cwd(), 'dist', 'src', 'training', 'data', name),
+      path.join(process.cwd(), 'src', 'training', 'data', name),
+    ];
+    for (const p of candidates) {
+      try {
+        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch (e) {
+        this.logger.warn(`training data read failed ${p}: ${(e as Error).message}`);
+      }
+    }
+    return null;
   }
 
   private loadSeedJson(): any {

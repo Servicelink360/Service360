@@ -681,6 +681,7 @@ export function resolvePageTitleLabel(
 	const candidates = [
 		`${path}${search}`,
 		path,
+		path.includes('/') ? path.split('/')[0] : path,
 		path.includes('/') ? path.split('/').pop()! : path,
 	];
 	for (const key of candidates) {

@@ -312,7 +312,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
           <p>
             {isInduction
               ? 'Complete inductions for your assigned job sites. Learn the topics first, then pass the assessment. Progress is saved automatically.'
-              : 'Complete each module by learning the topics first, then pass the assessment. Your progress is saved automatically so you can continue anytime.'}
+              : 'Complete the modules assigned to you. Learn the topics first, then pass the assessment. Your progress is saved automatically so you can continue anytime.'}
           </p>
           <div className="training-summary">
             <span className="training-pill">
@@ -342,7 +342,13 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
             <Spin />
           </div>
         ) : !modules.length ? (
-          <Empty description="No training modules yet" />
+          <Empty
+            description={
+              isInduction
+                ? 'No site inductions for your job sites yet'
+                : 'No training has been assigned to you yet'
+            }
+          />
         ) : (
           <div className="training-grid">
             {modules.map((m) => {
@@ -506,6 +512,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                       moduleCode,
                       currentTopic.order,
                       currentTopic.imageUrl,
+                      currentTopic.title,
                     ),
                   })}
                 </div>

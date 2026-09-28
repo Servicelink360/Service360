@@ -98,6 +98,16 @@ export class TrainingController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Post('admin/modules')
+  async adminCreateModule(@Res() res, @Body() body: any, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminCreateModule(req.user, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Patch('admin/modules/:id')
   async adminUpdateModule(
     @Res() res,
@@ -190,6 +200,16 @@ export class TrainingController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Post('admin/progress/reset')
+  async adminResetProgress(@Res() res, @Body() body: any, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminResetProgress(req.user, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Get('admin/assignments')
   async adminAssignments(
     @Res() res,
@@ -212,6 +232,21 @@ export class TrainingController {
     return customHttpCode(
       res,
       await this.trainingService.adminCreateAssignment(req.user, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('admin/assignments/:id')
+  async adminUpdateAssignment(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: any,
+    @Request() req,
+  ) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminUpdateAssignment(req.user, +id, body || {}),
     );
   }
 

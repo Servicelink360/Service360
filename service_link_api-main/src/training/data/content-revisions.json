@@ -1,0 +1,395 @@
+{
+  "modules": [
+    {
+      "code": "CLEAN",
+      "durationMins": 35,
+      "description": "Australian work health and safety for cleaners: hazardous chemicals and safety data sheets, slips, hazardous manual tasks, sharps, electrical equipment, and working alone."
+    },
+    {
+      "code": "GARDEN",
+      "durationMins": 35,
+      "description": "Australian work health and safety for gardeners: heat and UV, hazardous manual tasks, outdoor slips, sprays and safety data sheets, and powered plant."
+    },
+    {
+      "code": "ROOF",
+      "durationMins": 40,
+      "description": "Australian work health and safety for roof and gutter cleaning: falls, ladders, weather, manual tasks, and overhead power lines."
+    },
+    {
+      "code": "M5",
+      "durationMins": 30,
+      "description": "Australian work health and safety for remote and isolated work: check-in, emergencies, travel, aggression, and fatigue when help is not close by."
+    }
+  ],
+  "topics": [
+    {
+      "code": "CLEAN",
+      "title": "Welcome to cleaner safety",
+      "imageUrl": "/images/training/themes/welcome.png",
+      "body": "This module is for people who clean buildings, amenities, and work sites in Australia. It sits beside Servicelink Gateway training and the site induction. It does not replace a demonstration of the chemicals, machines, and emergency plan for the site you are on.\n\nUnder Australian work health and safety laws, your employer (the person conducting the business) must provide a safe workplace, information, and equipment. You must take reasonable care of your own health and safety and of other people, follow reasonable instructions, and not wilfully put anyone at risk.\n\nBefore you start, look for wet floors, unknown chemicals, sharps, damaged leads, and poor lighting. If the job cannot be done safely with what you have been given, stop and tell your supervisor."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Chemicals and safety data sheets",
+      "imageUrl": "/images/training/themes/chemicals-sds.png",
+      "body": "Use only the cleaning products supplied for that job. In Australia, hazardous chemicals must carry a GHS label and have a current safety data sheet (SDS). Read the label and the SDS before you use a product you do not already know. The SDS tells you the hazards, the personal protective equipment, and the first aid.\n\nNever mix chemicals. Mixing bleach with acids, ammonia, or other cleaners can release toxic gas. Wear the gloves and eye protection the SDS asks for. Keep containers closed, upright, and labelled. Do not put chemicals into drink bottles.\n\nIf you are splashed, follow the first-aid instructions on the SDS, wash the skin or eyes with water, and tell your supervisor the same shift. Store chemicals away from food."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Wet floors, slips and trips",
+      "imageUrl": "/images/training/themes/slips-trips.png",
+      "body": "Slips on wet floors are one of the most common injuries in cleaning. Under the duty to manage risks, the floor must be made safe for the people who will walk on it, not only for you.\n\nPut warning signs out before you mop, and leave them until the floor is dry. Keep leads, hoses, and buckets out of walkways. Mop towards an exit so you are not walking back across the wet floor. Use the footwear you have been issued, with a grip sole.\n\nReport torn mats, loose tiles, spills you cannot clean safely, and poor lighting. Do not leave a wet floor unsigned because you are about to come back."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Manual handling and safe lifting",
+      "imageUrl": "/images/training/gateway/safe-lifting.png",
+      "body": "Buckets, bins, and vacuums become hazardous manual tasks when they are heavy, awkward, or repeated through a shift. Australian guidance on hazardous manual tasks asks you to reduce the risk, not only to lift with a straight back.\n\nDo not fill a bucket or bag more than you can carry comfortably. Keep the load close, bend your knees, and do not twist. Use a trolley for rubbish and linen. Empty bins before they overflow. Ask for help with anything awkward, and split the load.\n\nIf a task always hurts your back, wrist, or shoulder, tell your supervisor. A trolley, smaller bin, or a second person is a better control than pushing through pain."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Sharps and biological waste",
+      "imageUrl": "/images/training/themes/sharps.png",
+      "body": "Needles, broken glass, and unknown waste can cause infection. Do not pick them up with bare hands and do not put them in a plastic rubbish bag.\n\nUse tongs or a dustpan and place sharps in a rigid sharps container, point first. Do not recap a needle. If you are stuck or cut, wash with soap and water, tell your supervisor immediately, and get medical advice the same day.\n\nWash your hands after toilets and amenities. Cover cuts before you start. Blood and body-fluid spills are cleaned only by the site method you have been shown. If you have not been shown it, stop and call your supervisor."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Electrical equipment",
+      "imageUrl": "/images/training/themes/electrical-safety.png",
+      "body": "Check vacuums, polishers, and leads before you plug them in. Do not use equipment with a cut lead, cracked plug, damaged guard, or a test-and-tag label that is out of date where the site requires tagging.\n\nUse a safety switch (RCD) where one is provided. Keep electrical equipment away from water unless it is built for wet use. Unplug it before you change a bag, pad, or filter.\n\nIf a machine smells, sparks, or trips a safety switch, stop, unplug it, and report it. Do not tape a cut lead and keep working."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Working alone on a site",
+      "imageUrl": "/images/training/themes/working-alone.png",
+      "body": "Cleaning after hours is often remote or isolated work: help from another person is not readily available. Australian work health and safety laws require that risk to be managed, usually with a check-in, a way to call for help, and a plan if you do not answer.\n\nTell your supervisor when you arrive and when you leave. Keep your phone charged and know who to call. Know the exits and the assembly point. Do not enter a locked or poorly lit area if you feel unsafe.\n\nIf a person on site threatens you, stop work, leave if you can do so safely, and call your supervisor or 000. Do not stay to finish the job."
+    },
+    {
+      "code": "CLEAN",
+      "title": "If you are injured",
+      "imageUrl": "/images/training/themes/incident-report.png",
+      "body": "Stop work, get first aid, and tell your supervisor the same day. That includes near misses, such as a slip you recovered from or a chemical splash that did not seem serious at the time.\n\nDo not keep working through a back, wrist, eye, or chemical injury. Note what you were doing and which product or area was involved.\n\nA death, a serious injury, or a dangerous incident may have to be notified to the work health and safety regulator. Your supervisor makes that notification. Do not clean up or move things at the scene of a serious incident unless it is necessary to help an injured person or make the area safe."
+    },
+    {
+      "code": "CLEAN",
+      "title": "Completion of Learning Section",
+      "imageUrl": "/images/training/gateway/module-complete.png",
+      "body": "You have covered the main hazards for cleaning work in Australia: chemicals and safety data sheets, wet floors, manual tasks, sharps, electricity, working alone, and reporting injuries.\n\nOn every job, look before you start. If the setup is not safe, do not start. Pass the assessment to finish this module. The pass mark is on the module settings, and you may be asked to repeat the module when it expires."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Welcome to gardener safety",
+      "imageUrl": "/images/training/themes/welcome.png",
+      "body": "This module is for people who maintain gardens, lawns, and outdoor areas. Complete Gateway training as well, and the site induction before you use site plant or chemicals.\n\nOutdoor work adds ultraviolet radiation, heat, uneven ground, insects and snakes, and powered tools. Your employer must manage those risks. You must use the controls you have been given, including hats, sunscreen, guards, and hearing protection, and stop work that is not safe.\n\nCheck the weather, your boots, and the guards on tools before you start."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Sun, heat and outdoor work",
+      "imageUrl": "/images/training/themes/sun-protection.png",
+      "body": "Australia has high ultraviolet levels for much of the year. Use a hat, sunglasses, long sleeves where the job allows, and sunscreen, and reapply sunscreen through the shift.\n\nHeat illness is a work risk, not a matter of toughness. Drink water through the shift, not only when you feel very thirsty. Take shade breaks. Schedule the heaviest work for the cooler part of the day when you can.\n\nStop and tell your supervisor if you feel dizzy, sick, confused, or you stop sweating. That can be heat stroke and needs urgent help. Call 000 if the person is confused or collapses. In cold and wet weather, use layers and footwear with grip."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Manual handling in the garden",
+      "imageUrl": "/images/training/gateway/manual-handling-awareness.png",
+      "body": "Soil, mulch, green waste, and wet equipment are hazardous manual tasks. The risk is higher when the load is heavy, the ground is uneven, or you repeat the lift all day.\n\nMove smaller loads and use a barrow. Keep the load close and do not twist. Do not yank a stuck hose or lift above shoulder height if you can lower the job instead. Team-lift bags that are too heavy for one person.\n\nIf the same task is hurting you, report it. Changing the bag size or using a barrow is the control the hazardous manual tasks guidance expects, not working through an injury."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Slips, trips and uneven ground",
+      "imageUrl": "/images/training/themes/slips-trips.png",
+      "body": "Wet grass, moss, hoses, sprinkler heads, and holes cause falls. Wear boots with grip. Look at the ground before you walk backwards with a mower or blower, and do not walk backwards towards an edge, drain, or road.\n\nCoil hoses and leads out of paths when you finish. Report broken paths, uncovered holes, and lighting that is too poor to see the ground.\n\nIf the public uses the area, keep them clear of tools and wet paths while you work."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Chemicals, sprays and fertilisers",
+      "imageUrl": "/images/training/themes/chemicals-sds.png",
+      "body": "Only use products you have been shown how to use. Read the label and the safety data sheet. Wear the gloves, mask, and eye protection listed. Agricultural and garden chemicals can also be scheduled poisons. Do not decant them into unlabelled bottles.\n\nSpray when the wind is light so the product does not drift onto people, food, playgrounds, or stormwater. Do not spray if people are in the drift path. Wash your hands before you eat, and wash clothing that has been soaked in product separately.\n\nA spill on soil or into a drain must be reported. Do not wash concentrate into the gutter."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Hand tools and mowers",
+      "imageUrl": "/images/training/themes/mower.png",
+      "body": "Mowers, blowers, and line trimmers are items of plant. Check blades, guards, and leads before you start. Do not remove a guard. Keep hands and feet clear of blades.\n\nStop the machine and wait until it is still before you clear a jam. Disconnect the spark plug or power before you work on a blade if that is the method you have been shown. Refuel only when the engine is off and cool, away from flames.\n\nWear hearing and eye protection. If you have not been shown how to use a machine, do not use it."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Bites, stings and first aid",
+      "imageUrl": "/images/training/themes/first-aid.png",
+      "body": "Look before you reach into shrubs, drains, leaf piles, and sheds. In Australia, snake bite and funnel-web spider bite are treated with a pressure immobilisation bandage: firm bandage from the bite down the limb and back up, keep the person still, and call 000. Do not wash the bite, cut it, or suck the venom.\n\nRedback spider bite is different: do not use a pressure bandage. Apply a cold pack and get medical help. For a bee or wasp sting, scrape the sting out, watch for breathing difficulty or collapse, and call 000. Use an adrenaline auto-injector if the person has one and you have been shown how.\n\nTell your supervisor the same day if you are stung or bitten, even if you feel well at first. If you have a known allergy, carry the treatment you have been prescribed."
+    },
+    {
+      "code": "GARDEN",
+      "title": "Completion of Learning Section",
+      "imageUrl": "/images/training/gateway/module-complete.png",
+      "body": "You have covered sun and heat, manual tasks, slips, chemicals, powered garden tools, and bites and stings, in line with Australian work health and safety practice.\n\nCheck the weather, your boots, the safety data sheet, and the guards before you start. Pass the assessment to finish this module."
+    },
+    {
+      "code": "ROOF",
+      "title": "Welcome to roof and gutter safety",
+      "imageUrl": "/images/training/themes/welcome.png",
+      "body": "Cleaning roofs and gutters is work where a fall can kill or seriously injure you. It is higher risk than cleaning at ground level. Complete Gateway training as well.\n\nDo not start unless you have been shown the ladder or height method for that site, the ground is suitable, and the weather is fit. If the job needs edge protection, a harness, or another elevated work platform, do not start until that is in place and you are trained and authorised to use it.\n\nYour employer must manage the risk of a fall. You must not start a job that has no safe way to do it."
+    },
+    {
+      "code": "ROOF",
+      "title": "Ladders",
+      "imageUrl": "/images/training/themes/ladder.png",
+      "body": "A ladder is a low-level control. Use it only for short jobs where a better platform is not reasonably practicable, and only if you have been shown how.\n\nUse an industrial ladder that is long enough for the task. Set it on firm, level ground at about a four-to-one angle (one unit out for every four units up). Secure the top where you can. Keep three points of contact. Do not stand on the top rungs, and do not overreach. Your belt buckle stays between the stiles.\n\nInspect the ladder before use. Do not use a bent, cracked, or home-made ladder. A second person should foot the ladder where the ground is soft or the job is exposed. Carry tools in a belt or hoist them. Do not climb with both hands full."
+    },
+    {
+      "code": "ROOF",
+      "title": "Working at heights",
+      "imageUrl": "/images/training/themes/working-at-heights.png",
+      "body": "Stay on the ladder or an approved platform. Do not walk on fragile roofs, skylights, polycarbonate, or asbestos cement sheets. Those surfaces can look solid and still fail under your weight.\n\nIf the job needs a harness, the harness, anchor, and rescue plan must already be in place, and you must be trained to use them. A harness without a rescue plan is not a safe system of work.\n\nKeep people below clear of the area. Tools and debris must not be able to fall on them. If you cannot keep a stable stance, come down and report that the job needs another method."
+    },
+    {
+      "code": "ROOF",
+      "title": "Weather and outdoor work",
+      "imageUrl": "/images/training/themes/sun-protection.png",
+      "body": "Do not work on a wet, icy, or very windy roof. Stop if rain starts or the surface becomes slippery. Metal, tiles, and wet leaves are worse after rain.\n\nIn heat, use sun protection and water, and come down for breaks. Heat illness on a roof is harder to manage because you cannot sit down safely in the sun. Lightning means you get down immediately and stay away from the ladder and metal gutters until it passes.\n\nIf the weather changes, the job can wait. Finishing quickly is not a reason to stay up."
+    },
+    {
+      "code": "ROOF",
+      "title": "Manual handling of debris",
+      "imageUrl": "/images/training/gateway/safe-lifting.png",
+      "body": "Wet leaves and silt are heavy, and you are handling them in a poor posture. That is a hazardous manual task as well as a fall risk.\n\nClear gutters in small loads. Do not lean out with a full bucket. Lower debris with a bucket and line, or carry small amounts while you still have a secure grip on the ladder. Do not throw waste where people are walking below.\n\nSet an exclusion area on the ground before you start dropping or lowering material."
+    },
+    {
+      "code": "ROOF",
+      "title": "Power lines",
+      "imageUrl": "/images/training/themes/power-lines.png",
+      "body": "Look up before you raise a ladder, pole, or gutter tool. Overhead power lines are a cause of electrocution in Australia. You do not need to touch the line. A metal ladder, wet gutter, or pole can bridge the gap.\n\nSafe approach distances depend on the voltage and the state. Do not guess. If a line looks close, stop and keep clear until your supervisor confirms the job can be done. Never try to move a fallen line. Keep other people away and call 000.\n\nDo not use a metal pole near a line. Treat every line as live."
+    },
+    {
+      "code": "ROOF",
+      "title": "Slips on wet roofs and gutters",
+      "imageUrl": "/images/training/themes/slips-trips.png",
+      "body": "Moss, bird droppings, and wet metal are slippery even when the day looks fine. Wear boots with grip. Do not rush, and do not work in smooth-soled shoes.\n\nIf you cannot keep a stable stance, come down. Report that the job needs another method, such as access from a platform or doing the work from the ladder only.\n\nA near slip is a near miss. Tell your supervisor the same day so the next person is not sent up the same way."
+    },
+    {
+      "code": "ROOF",
+      "title": "If you are injured",
+      "imageUrl": "/images/training/themes/injury.png",
+      "body": "A fall, even a short one, must be reported the same day. Do not climb back up if you are dizzy or in pain. Get first aid and tell your supervisor what happened, including a ladder slip you walked away from.\n\nSerious falls, electric shock, and collapses are the kind of incident a work health and safety regulator may need to be told about immediately. Your supervisor does that notification. Leave the scene as it is unless you must help an injured person or remove an immediate danger.\n\nCall 000 for a fall from height, a person who is not fully alert, or a suspected electric shock."
+    },
+    {
+      "code": "ROOF",
+      "title": "Completion of Learning Section",
+      "imageUrl": "/images/training/gateway/module-complete.png",
+      "body": "You have covered ladders, falls, weather, debris, power lines, and what to do if someone is hurt, in line with Australian work at heights practice.\n\nIf the ladder, the roof, the weather, or the power lines are not right, do not start. Pass the assessment to finish this module."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 1,
+      "title": "Welcome",
+      "imageUrl": "/images/training/themes/working-alone.png",
+      "body": "This module is for people whose work is remote or isolated: help from another person is not readily available because of the location, the time of day, or the nature of the work. Cleaners after hours, gardeners on a reserve, and drivers between sites are common examples.\n\nIt takes about 30 minutes plus the assessment. It is general training. Your employer must still give you the check-in method, the emergency contacts, and the site rules before you work alone.\n\nUnder Australian work health and safety laws you must take reasonable care of yourself and follow the check-in and emergency instructions you are given."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 2,
+      "title": "Overview",
+      "imageUrl": "/images/training/themes/working-alone.png",
+      "body": "Working alone is also called isolated work or remote work. The risk is not the task by itself. The risk is that if you are injured, lost, or threatened, nobody is there to help straight away.\n\nAustralian work health and safety regulations require that risk to be managed. Typical controls are a way to communicate, a check-in at agreed times, a plan if you do not answer, first aid you can use yourself, and permission to leave if you feel unsafe.\n\nLone worker, remote worker, and isolated worker mean the same thing in this module. If your workplace has no fixed address, you also need the travel and communication procedure, not only a building induction.\n\nThis module does not replace a high risk work licence, first aid certificate, or site induction."
+    },
+    {
+      "code": "GATEWAY",
+      "title": "Tips for dealing with Workplace Stress",
+      "imageUrl": "/images/training/gateway/stress-tips.png",
+      "body": "Stress becomes a work health and safety issue when work demands, poor support, or conflict harm your health. Australian guidance treats these as psychosocial hazards. You and your employer both have a part in managing them.\n\nNotice the signs early: poor sleep, irritability, headaches, or dreading work. Use the rest breaks you are given. Talk to your supervisor if the workload, roster, or a person's behaviour is the cause. You do not have to sort out bullying or harassment on your own.\n\nKnow your emergency wardens, exits, and assembly point from your site induction. In a fire or other emergency, follow the warden, use the stairs, and do not use the lift unless you are told it is safe.\n\nIf you are in immediate danger, call 000. If work stress is affecting your health, tell your supervisor and use the employee assistance or medical help available to you."
+    },
+    {
+      "code": "GATEWAY",
+      "title": "Discrimination",
+      "imageUrl": "/images/training/gateway/discrimination.png",
+      "body": "Discrimination at work is treating a person unfavourably because of a personal characteristic protected by law. It can be direct, such as refusing someone a shift because of their race, age, sex, disability, or pregnancy. It can be indirect, such as a rule that looks the same for everyone but unfairly disadvantages people with a protected characteristic, and is not reasonable.\n\nAustralian laws include the Fair Work Act, the Sex Discrimination Act, the Racial Discrimination Act, the Disability Discrimination Act, the Age Discrimination Act, and state or territory anti-discrimination laws. Protected characteristics also commonly include sexual orientation, gender identity, marital status, religion, and family responsibilities. The exact list depends on the state, but the rule at Servicelink is simple: do not treat someone unfairly because of who they are.\n\nA reasonable safety requirement, such as wearing the personal protective equipment the job needs, is not discrimination."
+    },
+    {
+      "code": "GATEWAY",
+      "title": "Discrimination and the Law",
+      "imageUrl": "/images/training/gateway/discrimination-law.png",
+      "body": "Unfair treatment linked to a personal characteristic can include: refusing to hire or roster someone; giving them the worst jobs; denying training; paying them less for the same work; joking about their race, accent, age, disability, or pregnancy; or excluding them from the team.\n\nIt is also unlawful to victimise a person because they made a complaint, or because they supported someone else's complaint.\n\nIf you see it, do not join in. If it is safe to do so, tell the person to stop. Report it to your supervisor or the contact in the workplace policy. You can also seek advice from the Fair Work Commission, the Australian Human Rights Commission, or the equal opportunity agency in your state."
+    },
+    {
+      "code": "GATEWAY",
+      "title": "Sexual Harassment",
+      "imageUrl": "/images/training/gateway/sexual-harassment.png",
+      "body": "Sexual harassment is any unwelcome behaviour of a sexual nature that a reasonable person would expect could humiliate, intimidate, or offend someone. It includes unwelcome touching, sexual comments or jokes, questions about a person's private life, sexual images, repeated requests for a date, and sexual gestures. It can be a one-off. It can be in person, by phone, or online.\n\nIt can be intentional or not. Invited, mutual, and consensual interaction is not harassment. Once someone makes it clear the behaviour is unwelcome, it must stop.\n\nEmployers have a positive duty under the Sex Discrimination Act to take reasonable steps to prevent sexual harassment, not only to respond after a complaint. You must not harass anyone, and you must report behaviour you see if it is safe to do so."
+    },
+    {
+      "code": "GATEWAY",
+      "title": "How to Respond to Discrimination and Sexual Harassment",
+      "imageUrl": "/images/training/gateway/respond-harassment.png",
+      "body": "If you believe you have been discriminated against, sexually harassed, or victimised, you can:\n\nTell the person to stop, if you feel safe to do so.\n\nReport it to your supervisor or the person named in the workplace policy. You can ask for the report to be handled confidentially.\n\nWrite down what happened, when, where, and who saw it.\n\nSeek advice from the Fair Work Commission, the Australian Human Rights Commission, or your state anti-discrimination agency. There are time limits, so do not wait months if you may want an external complaint.\n\nIf you are in immediate danger, leave and call 000. You must not be punished for making a genuine complaint."
+    },
+    {
+      "code": "M2",
+      "title": "Segregation",
+      "imageUrl": "/images/training/themes/dangerous-goods.png",
+      "body": "Some dangerous goods classes react with other classes. The Australian Dangerous Goods Code sets which classes must be kept apart in storage and in transport. Putting incompatible products together can cause fire, toxic gas, or a violent reaction.\n\nDo not store or load incompatible classes in the same cabinet, cage, or vehicle section. Use the site segregation chart or the safety data sheet. Keep dangerous goods away from food.\n\nIf you are not sure two products can sit together, keep them apart and ask your supervisor. Do not rely on the containers looking similar."
+    },
+    {
+      "code": "M3",
+      "sortOrder": 4,
+      "imageUrl": "/images/training/themes/forklift.png",
+      "body": "Parking and shutdown are part of safe forklift operation. Only a person who holds the correct high risk work licence for forklift truck may operate the forklift.\n\nBefore you leave the seat: lower the forks to the ground, tilt them forward, set the park brake, put the transmission in neutral, and remove the key or lock off the start control. Do not leave a forklift running and unattended.\n\nPark clear of exits, emergency equipment, and pedestrian routes. Chock the wheels on a slope if that is the site rule. Report damage, leaks, and warning-light faults before the next person uses the truck."
+    },
+    {
+      "code": "M3",
+      "sortOrder": 9,
+      "title": "Attachments",
+      "imageUrl": "/images/training/themes/forklift-load.png",
+      "body": "An attachment changes the capacity of a forklift. A jib, clamp, or carpet spike moves the load centre and adds its own weight, so the truck can lift less than the number stamped for forks alone.\n\nUse only attachments approved for that truck. Read the data plate or load chart for that attachment and that load centre. Never exceed it. Fit and lock the attachment the way you were trained.\n\nIf the data plate does not show the attachment you have been asked to use, stop. Do not guess the new capacity."
+    },
+    {
+      "code": "M4",
+      "title": "How to Respond to Discrimination and Sexual Harassment",
+      "imageUrl": "/images/training/gateway/respond-harassment.png",
+      "body": "If you believe you have been discriminated against, sexually harassed, or victimised, you can tell the person to stop if it is safe, report it to your supervisor or the contact in the workplace policy, and write down what happened, when, and who saw it.\n\nYou can seek advice from the Fair Work Commission, the Australian Human Rights Commission, or the equal opportunity agency in your state. External complaints have time limits.\n\nYou must not be punished for a genuine complaint. If you are in immediate danger, leave and call 000."
+    },
+    {
+      "code": "M6",
+      "title": "Tips for dealing with Workplace Stress",
+      "imageUrl": "/images/training/gateway/stress-tips.png",
+      "body": "Psychosocial hazards, including high job demands, poor support, and conflict, are work health and safety risks in Australia. Take notice of poor sleep, irritability, and dreading work.\n\nUse your breaks. Tell your supervisor if the workload, roster, or someone's behaviour is the cause. Use the employee assistance program if your workplace provides one.\n\nKnow your wardens, exits, and assembly point. In an emergency follow the warden and use the stairs. If you are in immediate danger, call 000."
+    },
+    {
+      "code": "M6",
+      "title": "Discrimination",
+      "imageUrl": "/images/training/gateway/discrimination.png",
+      "body": "Discrimination may be direct or indirect. Direct discrimination is treating a person unfavourably because of a protected characteristic such as sex, race, age, disability, or pregnancy. Indirect discrimination is a rule that looks equal but unfairly disadvantages people with that characteristic and is not reasonable.\n\nExamples include refusing shifts, denying training, paying less for the same work, or excluding someone because of race, accent, age, disability, pregnancy, sexual orientation, or family responsibilities.\n\nThis is covered by the Fair Work Act, federal discrimination laws, and state anti-discrimination laws. A genuine safety requirement, such as the personal protective equipment the task needs, is not discrimination. Report unfair treatment. Do not victimise a person who complains."
+    },
+    {
+      "code": "M6",
+      "title": "Workplace Harassment",
+      "imageUrl": "/images/training/gateway/workplace-harassment.png",
+      "body": "Workplace harassment is repeated behaviour by an employer, colleague, or group that offends, humiliates, or intimidates a person, and a reasonable person would expect that reaction. It includes insults, exclusion, offensive jokes, and spreading rumours.\n\nA single incident can still be unlawful if it is sexual harassment or a threat. Reasonable management action carried out in a reasonable way, such as setting fair performance expectations, is not harassment.\n\nReport it. You must not join in, and you must not punish someone for complaining."
+    },
+    {
+      "code": "M6",
+      "title": "Your Duty",
+      "imageUrl": "/images/training/gateway/your-responsibility.png",
+      "body": "A co-worker's health includes mental health, not only physical injury. Undermining or unreasonable treatment can harm them and is a work health and safety issue.\n\nYou must take reasonable care, follow reasonable instructions, and cooperate with reasonable policies, including the bullying, harassment, and safety procedures.\n\nYou must not wilfully or recklessly endanger another person. If you see unsafe work or harmful behaviour, report it the same day."
+    },
+    {
+      "code": "M6",
+      "title": "How to Respond to Discrimination and Sexual Harassment",
+      "imageUrl": "/images/training/gateway/respond-harassment.png",
+      "body": "If you believe you have been discriminated against, sexually harassed, or victimised, you can tell the person to stop if it is safe, report it to your supervisor or the contact in the workplace policy, and write down what happened, when, and who saw it.\n\nYou can seek advice from the Fair Work Commission, the Australian Human Rights Commission, or the equal opportunity agency in your state. External complaints have time limits.\n\nYou must not be punished for a genuine complaint. If you are in immediate danger, leave and call 000."
+    },
+    {
+      "code": "M6",
+      "title": "Responsibilities in the Workplace",
+      "imageUrl": "/images/training/gateway/whs-responsibilities.png",
+      "body": "Australian work health and safety laws place duties on officers, the person conducting the business (your employer or host), and workers. For hazardous manual tasks, the employer must find the tasks that can cause musculoskeletal injury and put controls in place. Officers must exercise due diligence. Workers must take reasonable care, follow reasonable instructions, and report hazards.\n\nIn practice: use the trolley, team lift, or smaller load you have been given. Do not remove a guard or skip a step to save time. Report a task that is hurting you instead of working through the pain.\n\nEveryone on the site shares the duty. A host employer's induction does not remove your own employer's duty, or yours."
+    }
+  ],
+  "insertTopics": [
+    {
+      "code": "M5",
+      "sortOrder": 3,
+      "title": "Check-in and communication",
+      "imageUrl": "/images/training/themes/working-alone.png",
+      "body": "Agree the check-in before you leave. That may be a call or message when you arrive, at set times, and when you finish. If you miss a check-in, your supervisor should try to reach you and then escalate. Do not turn the phone off to finish faster.\n\nKeep the phone charged and the signal checked at the start. Know the backup if there is no signal, such as moving to a known spot or a satellite device if you have been issued one.\n\nTell someone if the job will run late. A missed check-in should mean help is coming, not a guess that you are fine."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 4,
+      "title": "Emergency when you are alone",
+      "imageUrl": "/images/training/themes/emergency.png",
+      "body": "Know the address or the nearest landmark before you start, so you can tell 000 where you are. Carry the first aid you have been given and know the steps for bleeding and for an unconscious person.\n\nIf you are injured and can call, call 000 first, then your supervisor. If you cannot do the job safely on your own, stop. Do not climb, enter a confined space, or handle an unknown chemical because nobody is watching.\n\nSerious incidents must be notified to the regulator by your employer. Tell your supervisor as soon as you can."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 5,
+      "title": "Travel and the vehicle",
+      "imageUrl": "/images/training/themes/traffic.png",
+      "body": "The drive between sites is part of the job. Be fit to drive. Do not drive fatigued or after medication that warns against driving. Wear a seatbelt. Do not use a hand-held phone.\n\nCheck tyres, lights, and that the load is secured before you leave. In remote areas, tell your supervisor the route and carry water. If the vehicle breaks down, stay with it unless it is unsafe, and call for help.\n\nA vehicle accident is reported the same day, including a minor one."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 6,
+      "title": "Aggression and leaving the site",
+      "imageUrl": "/images/training/themes/aggression.png",
+      "body": "You are allowed to leave if a person threatens you, blocks your exit, or you feel unsafe. Do not argue. Move to a public place or the vehicle and call your supervisor or 000.\n\nDo not enter a site that is dark, unlocked in a way you were not told about, or occupied by someone who should not be there. Wait for instructions.\n\nReport threats and abuse the same day, even if you were not hurt. The next worker needs that warning."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 7,
+      "title": "Fatigue",
+      "imageUrl": "/images/training/themes/fatigue.png",
+      "body": "Fatigue is a hazard, especially on early, late, or long shifts worked alone. It slows your decisions and your driving.\n\nUse the breaks in your roster. Say no to extra hours when you are already too tired to work safely. Signs include heavy eyes, drifting thoughts, and irritability.\n\nIf you are too tired to drive home, tell your supervisor and use the alternative the workplace provides. Do not push on because there is nobody on site to notice."
+    },
+    {
+      "code": "M5",
+      "sortOrder": 8,
+      "title": "Completion of Learning Section",
+      "imageUrl": "/images/training/gateway/module-complete.png",
+      "body": "You have covered what isolated work means in Australia, check-in, emergencies, travel, aggression, and fatigue.\n\nBefore you work alone, confirm the check-in times, the address, the phone, and who you call. If that is not in place, do not start. Pass the assessment to finish this module."
+    }
+  ],
+  "imageRules": [
+    { "test": "cpr|bls", "src": "/images/training/themes/cpr.png" },
+    { "test": "extinguisher", "src": "/images/training/themes/fire-extinguisher.png" },
+    { "test": "asbestos", "src": "/images/training/themes/asbestos.png" },
+    { "test": "confined", "src": "/images/training/themes/confined-space.png" },
+    { "test": "mower", "src": "/images/training/themes/mower.png" },
+    { "test": "power tool|hand tools", "src": "/images/training/themes/power-tools.png" },
+    { "test": "licen", "src": "/images/training/themes/licence.png" },
+    { "test": "harness|fall arrest", "src": "/images/training/themes/harness.png" },
+    { "test": "scaffold", "src": "/images/training/themes/scaffold.png" },
+    { "test": "height|falls from|working at height", "src": "/images/training/themes/working-at-heights.png" },
+    { "test": "ladder", "src": "/images/training/themes/ladder.png" },
+    { "test": "power line|electrical line", "src": "/images/training/themes/power-lines.png" },
+    { "test": "attachment|load handling", "src": "/images/training/themes/forklift-load.png" },
+    { "test": "forklift|parking", "src": "/images/training/themes/forklift.png" },
+    { "test": "pedestrian|traffic|travel and the vehicle", "src": "/images/training/themes/traffic.png" },
+    { "test": "spill", "src": "/images/training/themes/spill.png" },
+    { "test": "dangerous good|segregation|placard", "src": "/images/training/themes/dangerous-goods.png" },
+    { "test": "signage", "src": "/images/training/themes/signage.png" },
+    { "test": "sun|heat and outdoor|\\buv\\b", "src": "/images/training/themes/sun-protection.png" },
+    { "test": "\\bppe\\b|personal protective", "src": "/images/training/themes/ppe.png" },
+    { "test": "sexual harassment and the law", "src": "/images/training/gateway/sexual-harassment-law.png" },
+    { "test": "sexual harassment", "src": "/images/training/gateway/sexual-harassment.png" },
+    { "test": "discrimination and the law", "src": "/images/training/gateway/discrimination-law.png" },
+    { "test": "discrimination", "src": "/images/training/gateway/discrimination.png" },
+    { "test": "how to respond", "src": "/images/training/gateway/respond-harassment.png" },
+    { "test": "not bullying|reasonable management", "src": "/images/training/gateway/not-bullying.png" },
+    { "test": "bullying", "src": "/images/training/gateway/bullying.png" },
+    { "test": "victimisation|harassment", "src": "/images/training/gateway/workplace-harassment.png" },
+    { "test": "stress", "src": "/images/training/gateway/stress-tips.png" },
+    { "test": "safe lifting|manual handling of debris", "src": "/images/training/gateway/safe-lifting.png" },
+    { "test": "manual task|manual handling", "src": "/images/training/gateway/manual-handling-awareness.png" },
+    { "test": "ergonomic|work station|workstation|keyboard|under desk|computer screen|notebook|occupational overuse|task variety|rest break", "src": "/images/training/gateway/ergonomics.png" },
+    { "test": "house keeping|housekeeping|wet floor", "src": "/images/training/themes/housekeeping.png" },
+    { "test": "^equipment$|operating equipment", "src": "/images/training/themes/power-tools.png" },
+    { "test": "threat", "src": "/images/training/themes/aggression.png" },
+    { "test": "learning outcome|starting your new role|training & supervision|training and supervision|information, instruction", "src": "/images/training/themes/welcome.png" },
+    { "test": "mobile plant", "src": "/images/training/themes/mobile-plant.png" },
+    { "test": "transfer of dg|\\bdg\\b|dangerous good", "src": "/images/training/themes/dangerous-goods.png" },
+    { "test": "access and security", "src": "/images/training/themes/working-alone.png" },
+    { "test": "work platform|\\bewp\\b", "src": "/images/training/themes/ewp.png" },
+    { "test": "ventilation", "src": "/images/training/themes/ventilation.png" },
+    { "test": "ramp|loading dock", "src": "/images/training/themes/forklift.png" },
+    { "test": "out of service", "src": "/images/training/themes/forklift.png" },
+    { "test": "duty of your employer", "src": "/images/training/gateway/your-responsibility.png" },
+    { "test": "slip|trip|uneven ground", "src": "/images/training/themes/slips-trips.png" },
+    { "test": "electrical", "src": "/images/training/themes/electrical-safety.png" },
+    { "test": "chemical|safety data|spray|fertiliser", "src": "/images/training/themes/chemicals-sds.png" },
+    { "test": "bite|sting|first aid", "src": "/images/training/themes/first-aid.png" },
+    { "test": "injur", "src": "/images/training/themes/injury.png" },
+    { "test": "fatigue", "src": "/images/training/themes/fatigue.png" },
+    { "test": "sharp|biological", "src": "/images/training/themes/sharps.png" },
+    { "test": "aggression|violence|leaving the site", "src": "/images/training/themes/aggression.png" },
+    { "test": "working alone|check-in|isolated|remote", "src": "/images/training/themes/working-alone.png" },
+    { "test": "issue resolution|raising issues", "src": "/images/training/gateway/issue-resolution.png" },
+    { "test": "your responsibility|your duty", "src": "/images/training/gateway/your-responsibility.png" },
+    { "test": "risk", "src": "/images/training/gateway/risk-management.png" },
+    { "test": "hazard", "src": "/images/training/gateway/workplace-hazards.png" },
+    { "test": "whs|consultation|responsibilit", "src": "/images/training/gateway/whs-responsibilities.png" },
+    { "test": "emergency", "src": "/images/training/themes/emergency.png" },
+    { "test": "incident|reporting", "src": "/images/training/themes/incident-report.png" },
+    { "test": "completion|summary|successful completion", "src": "/images/training/gateway/module-complete.png" },
+    { "test": "welcome|introduction|overview", "src": "/images/training/themes/welcome.png" }
+  ]
+}

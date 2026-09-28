@@ -2,23 +2,21 @@ import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
 import {
   CheckOutlined,
-  DeleteOutlined,
   EditOutlined,
-  FileTextOutlined,
   PlusOutlined,
   ReloadOutlined,
+  SettingOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import {
   Button,
-  DatePicker,
   Form,
   Input,
   InputNumber,
   Modal,
-  Popconfirm,
   Select,
   Space,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -28,17 +26,17 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import moment from 'moment';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync, callAPIUploadAsync } from '../../library/helpers/api';
 
 const TrainingAdminPage: React.FC = () => {
+  const history = useHistory();
   const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [progressRows, setProgressRows] = useState<any[]>([]);
   const [progressSummary, setProgressSummary] = useState<any>({});
-  const [assignments, setAssignments] = useState<any[]>([]);
-  const [staffOptions, setStaffOptions] = useState<{ label: string; value: number }[]>([]);
   const [siteOptions, setSiteOptions] = useState<{ label: string; value: number }[]>([]);
 
   const [qModuleId, setQModuleId] = useState<number | null>(null);
@@ -46,8 +44,7 @@ const TrainingAdminPage: React.FC = () => {
   const [qSummary, setQSummary] = useState<any>({});
   const [activeTab, setActiveTab] = useState('modules');
 
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [inductionOpen, setInductionOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editModule, setEditModule] = useState<any>(null);
   const [contentModule, setContentModule] = useState<any>(null);
   const [contentTopics, setContentTopics] = useState<any[]>([]);
@@ -55,8 +52,7 @@ const TrainingAdminPage: React.FC = () => {
   const [editTopic, setEditTopic] = useState<any>(null);
   const [topicSaving, setTopicSaving] = useState(false);
   const [topicImageUploading, setTopicImageUploading] = useState(false);
-  const [form] = Form.useForm();
-  const [indForm] = Form.useForm();
+  const [createForm] = Form.useForm();
   const [modForm] = Form.useForm();
   const [topicForm] = Form.useForm();
 
@@ -83,35 +79,11 @@ const TrainingAdminPage: React.FC = () => {
     }
   }, []);
 
-  const loadAssignments = useCallback(async () => {
-    const res = await callAPIAsync(
-      serviceType.COMMON,
-      `${endPoint.TRAINING}/admin/assignments`,
-      'GET',
-      null,
-    );
-    if (res?.code === 1) setAssignments(res.data || []);
-  }, []);
-
   const loadStaffSites = useCallback(async () => {
-    const [staffRes, sitesRes] = await Promise.all([
-      callAPIAsync(serviceType.COMMON, endPoint.USERS, 'GET', {
-        type: 2,
-        limit: 500,
-        page: 1,
-      }),
-      callAPIAsync(serviceType.COMMON, endPoint.JOB_SITES, 'GET', {
-        limit: 500,
-        page: 1,
-      }),
-    ]);
-    const staffRows = staffRes?.data?.rows || staffRes?.data || [];
-    setStaffOptions(
-      (Array.isArray(staffRows) ? staffRows : []).map((u: any) => ({
-        value: +u.id,
-        label: u.fullName || u.full_name || u.email || `Staff #${u.id}`,
-      })),
-    );
+    const sitesRes = await callAPIAsync(serviceType.COMMON, endPoint.JOB_SITES, 'GET', {
+      limit: 500,
+      page: 1,
+    });
     const siteRows = sitesRes?.data?.rows || sitesRes?.data || [];
     setSiteOptions(
       (Array.isArray(siteRows) ? siteRows : []).map((s: any) => ({
@@ -124,11 +96,11 @@ const TrainingAdminPage: React.FC = () => {
   const refreshAll = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([loadModules(), loadProgress(), loadAssignments(), loadStaffSites()]);
+      await Promise.all([loadModules(), loadProgress(), loadStaffSites()]);
     } finally {
       setLoading(false);
     }
-  }, [loadModules, loadProgress, loadAssignments, loadStaffSites]);
+  }, [loadModules, loadProgress, loadStaffSites]);
 
   useEffect(() => {
     refreshAll();
@@ -136,7 +108,7 @@ const TrainingAdminPage: React.FC = () => {
 
   const openQuestions = async (moduleId: number) => {
     setQModuleId(moduleId);
-    setActiveTab('answers');
+    setActiveTab('modules');
     const res = await callAPIAsync(
       serviceType.COMMON,
       `${endPoint.TRAINING}/admin/modules/${moduleId}/questions`,
@@ -163,6 +135,22 @@ const TrainingAdminPage: React.FC = () => {
       return;
     }
     message.success('Answer saved & marked reviewed');
+    if (qModuleId) openQuestions(qModuleId);
+    loadModules();
+  };
+
+  const setReviewed = async (row: any, reviewed: boolean) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/questions/${row.id}`,
+      'PATCH',
+      { answerReviewed: reviewed },
+    );
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Save failed');
+      return;
+    }
+    message.success(reviewed ? 'Marked reviewed' : 'Marked not reviewed');
     if (qModuleId) openQuestions(qModuleId);
     loadModules();
   };
@@ -297,37 +285,17 @@ const TrainingAdminPage: React.FC = () => {
       render: (v) => (v ? `${v}d` : 'Never'),
     },
     {
-      title: 'Answers',
-      width: 130,
-      render: (_, r) => (
-        <span>
-          {r.questionReviewed}/{r.questionWithAnswer}
-          {r.questionWithAnswer > r.questionReviewed ? (
-            <Tag
-              color="orange"
-              style={{ marginLeft: 6, cursor: 'pointer' }}
-              onClick={() => void openQuestions(r.id)}
-            >
-              review
-            </Tag>
-          ) : null}
-        </span>
-      ),
-    },
-    {
       title: '',
-      width: 300,
+      width: 280,
+      fixed: 'right' as const,
       render: (_, r) => (
-        <Space wrap>
-          <Button size="small" icon={<FileTextOutlined />} onClick={() => void openContent(r)}>
-            Content
-          </Button>
-          <Button size="small" onClick={() => openQuestions(r.id)}>
-            Answers
+        <Space>
+          <Button size="small" icon={<EditOutlined />} onClick={() => void openContent(r)}>
+            Edit
           </Button>
           <Button
             size="small"
-            icon={<EditOutlined />}
+            icon={<SettingOutlined />}
             onClick={() => {
               setEditModule(r);
               modForm.setFieldsValue({
@@ -341,6 +309,9 @@ const TrainingAdminPage: React.FC = () => {
             }}
           >
             Settings
+          </Button>
+          <Button size="small" icon={<CheckOutlined />} onClick={() => openQuestions(r.id)}>
+            Answers
           </Button>
         </Space>
       ),
@@ -382,20 +353,38 @@ const TrainingAdminPage: React.FC = () => {
     },
     {
       title: 'Reviewed',
-      width: 90,
-      render: (_, r) =>
-        r.answerReviewed ? (
-          <Tag icon={<CheckOutlined />} color="success">
-            Yes
-          </Tag>
-        ) : (
-          <Tag color="default">No</Tag>
-        ),
+      width: 110,
+      render: (_, r) => (
+        <Switch
+          size="small"
+          checked={!!r.answerReviewed}
+          checkedChildren="Yes"
+          unCheckedChildren="No"
+          onChange={(checked) => setReviewed(r, checked)}
+        />
+      ),
     },
   ];
 
   const progressCols: ColumnsType<any> = [
-    { title: 'Staff', dataIndex: 'staffName', width: 160 },
+    {
+      title: 'Staff',
+      dataIndex: 'staffName',
+      width: 160,
+      render: (name, r) =>
+        r.staffId ? (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, height: 'auto', fontWeight: 600, color: '#166534' }}
+            onClick={() => history.push(`/training-admin/staff/${r.staffId}`)}
+          >
+            {name}
+          </Button>
+        ) : (
+          name
+        ),
+    },
     { title: 'Module', dataIndex: 'moduleTitle' },
     {
       title: 'Status',
@@ -453,71 +442,59 @@ const TrainingAdminPage: React.FC = () => {
   return (
     <Layout title="Training admin">
       <UsersDiv>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, width: '100%' }}>
           <div>
-            <strong>Training management</strong>
-            <div style={{ marginTop: 6 }}>
-              <Space size={[6, 6]} wrap>
-                <Tag>Answer keys</Tag>
-                <Tag>Progress</Tag>
-                <Tag>Assignments</Tag>
-                <Tag>Expiry</Tag>
-                <Tag color="blue">Site inductions</Tag>
-              </Space>
+            <strong>Training</strong>
+            <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>
+              Modules are the courses. Staff is where you assign them.
             </div>
           </div>
           <Space>
             <Button icon={<ReloadOutlined />} onClick={refreshAll} loading={loading}>
               Refresh
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAssignOpen(true)}>
-              Assign module
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                createForm.setFieldsValue({
+                  moduleKind: 'TRAINING',
+                  validityDays: 365,
+                  passPercent: 80,
+                });
+                setCreateOpen(true);
+              }}
+            >
+              New
             </Button>
-            <Button onClick={() => setInductionOpen(true)}>Create site induction</Button>
           </Space>
         </div>
 
         <Tabs
+          style={{ width: '100%' }}
           activeKey={activeTab}
-          onChange={setActiveTab}
+          onChange={(key) => {
+            if (key === 'staff') {
+              history.push('/training-admin/staff');
+              return;
+            }
+            setActiveTab(key);
+          }}
           items={[
             {
               key: 'modules',
               label: 'Modules',
-              children: (
-                <Table
-                  rowKey="id"
-                  loading={loading}
-                  columns={moduleCols}
-                  dataSource={modules}
-                  pagination={{ pageSize: 20 }}
-                  size="middle"
-                />
-              ),
-            },
-            {
-              key: 'answers',
-              label: 'Answer keys',
-              children: (
+              children: qModuleId ? (
                 <>
                   <Space style={{ marginBottom: 12 }} wrap>
-                    <Select
-                      style={{ minWidth: 320 }}
-                      placeholder="Select module"
-                      value={qModuleId || undefined}
-                      onChange={(v) => openQuestions(v)}
-                      options={modules.map((m) => ({
-                        value: m.id,
-                        label: `${m.code} · ${m.title}`,
-                      }))}
-                    />
-                    <Button disabled={!qModuleId} onClick={markAllReviewed}>
-                      Mark all reviewed
-                    </Button>
+                    <Button onClick={() => setQModuleId(null)}>Back to modules</Button>
+                    <strong>
+                      {modules.find((m) => +m.id === +qModuleId)?.title || 'Answers'}
+                    </strong>
+                    <Button onClick={markAllReviewed}>Mark all reviewed</Button>
                     {qSummary?.total != null ? (
                       <Tag>
-                        {qSummary.reviewed}/{qSummary.withAnswer} reviewed ·{' '}
-                        {qSummary.needsReview} need review
+                        {qSummary.reviewed}/{qSummary.withAnswer} reviewed
                       </Tag>
                     ) : null}
                   </Space>
@@ -529,7 +506,22 @@ const TrainingAdminPage: React.FC = () => {
                     size="small"
                   />
                 </>
+              ) : (
+                <Table
+                  rowKey="id"
+                  loading={loading}
+                  columns={moduleCols}
+                  dataSource={modules}
+                  pagination={{ pageSize: 20 }}
+                  size="middle"
+                  scroll={{ x: 980 }}
+                />
               ),
+            },
+            {
+              key: 'staff',
+              label: 'Staff',
+              children: null,
             },
             {
               key: 'progress',
@@ -553,185 +545,68 @@ const TrainingAdminPage: React.FC = () => {
                 </>
               ),
             },
-            {
-              key: 'assignments',
-              label: `Assignments (${assignments.length})`,
-              children: (
-                <Table
-                  rowKey="id"
-                  dataSource={assignments}
-                  pagination={{ pageSize: 20 }}
-                  columns={[
-                    { title: 'Module', dataIndex: 'moduleTitle' },
-                    { title: 'Assigned to', dataIndex: 'staffName', width: 160 },
-                    {
-                      title: 'Site filter',
-                      dataIndex: 'siteName',
-                      width: 160,
-                      render: (v) => v || '—',
-                    },
-                    {
-                      title: 'Due',
-                      dataIndex: 'dueAt',
-                      width: 120,
-                      render: (v, r) =>
-                        v ? (
-                          <span style={{ color: r.overdue ? '#b42318' : undefined }}>
-                            {moment(v).format('YYYY-MM-DD')}
-                          </span>
-                        ) : (
-                          '—'
-                        ),
-                    },
-                    { title: 'Notes', dataIndex: 'notes', ellipsis: true },
-                    {
-                      title: '',
-                      width: 80,
-                      render: (_, r) => (
-                        <Popconfirm
-                          title="Delete assignment?"
-                          onConfirm={async () => {
-                            const res = await callAPIAsync(
-                              serviceType.COMMON,
-                              `${endPoint.TRAINING}/admin/assignments/${r.id}`,
-                              'DELETE',
-                              null,
-                            );
-                            if (res?.code === 1) {
-                              message.success('Deleted');
-                              loadAssignments();
-                            }
-                          }}
-                        >
-                          <Button size="small" danger icon={<DeleteOutlined />} />
-                        </Popconfirm>
-                      ),
-                    },
-                  ]}
-                />
-              ),
-            },
           ]}
         />
 
         <Modal
-          title="Assign module"
-          open={assignOpen}
-          onCancel={() => setAssignOpen(false)}
+          title="New module"
+          open={createOpen}
+          onCancel={() => setCreateOpen(false)}
           onOk={async () => {
-            const v = await form.validateFields();
+            const v = await createForm.validateFields();
             const site = siteOptions.find((s) => s.value === v.siteId);
             const res = await callAPIAsync(
               serviceType.COMMON,
-              `${endPoint.TRAINING}/admin/assignments`,
+              `${endPoint.TRAINING}/admin/modules`,
               'POST',
               {
-                moduleId: v.moduleId,
-                staffId: v.staffId || null,
+                code: v.code,
+                title: v.title,
+                moduleKind: v.moduleKind,
                 siteId: v.siteId || null,
                 siteName: site?.label || null,
-                dueAt: v.dueAt ? v.dueAt.toISOString() : null,
-                notes: v.notes || null,
+                validityDays: v.validityDays ?? null,
+                passPercent: v.passPercent,
               },
             );
             if (res?.code !== 1) {
-              message.error(res?.message || 'Failed');
+              message.error(res?.message || 'Could not create module');
               return;
             }
-            message.success('Assigned');
-            setAssignOpen(false);
-            form.resetFields();
-            loadAssignments();
-          }}
-          destroyOnClose
-        >
-          <Form form={form} layout="vertical">
-            <Form.Item name="moduleId" label="Module" rules={[{ required: true }]}>
-              <Select
-                options={modules.map((m) => ({
-                  value: m.id,
-                  label: `${m.code} · ${m.title}`,
-                }))}
-                showSearch
-                optionFilterProp="label"
-              />
-            </Form.Item>
-            <Form.Item name="staffId" label="Staff (blank = all staff)">
-              <Select
-                allowClear
-                options={staffOptions}
-                showSearch
-                optionFilterProp="label"
-              />
-            </Form.Item>
-            <Form.Item name="siteId" label="Or all staff on site">
-              <Select
-                allowClear
-                options={siteOptions}
-                showSearch
-                optionFilterProp="label"
-              />
-            </Form.Item>
-            <Form.Item name="dueAt" label="Due date">
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="notes" label="Notes">
-              <Input.TextArea rows={2} />
-            </Form.Item>
-          </Form>
-        </Modal>
-
-        <Modal
-          title="Create site induction"
-          open={inductionOpen}
-          onCancel={() => setInductionOpen(false)}
-          onOk={async () => {
-            const v = await indForm.validateFields();
-            const site = siteOptions.find((s) => s.value === v.siteId);
-            const res = await callAPIAsync(
-              serviceType.COMMON,
-              `${endPoint.TRAINING}/admin/site-inductions`,
-              'POST',
-              {
-                siteId: v.siteId,
-                siteName: site?.label || v.siteName,
-                title: v.title,
-                sourceModuleId: v.sourceModuleId,
-              },
-            );
-            if (res?.code !== 1) {
-              message.error(res?.message || 'Failed');
-              return;
-            }
-            message.success('Site induction ready');
-            setInductionOpen(false);
-            indForm.resetFields();
+            message.success('Module created');
+            setCreateOpen(false);
+            createForm.resetFields();
             loadModules();
           }}
+          okText="Create"
           destroyOnClose
         >
-          <Form form={indForm} layout="vertical">
-            <Form.Item name="siteId" label="Job site" rules={[{ required: true }]}>
-              <Select options={siteOptions} showSearch optionFilterProp="label" />
+          <Form form={createForm} layout="vertical">
+            <Form.Item name="code" label="Code" rules={[{ required: true, message: 'Enter a short code' }]}>
+              <Input placeholder="e.g. M7" maxLength={40} />
             </Form.Item>
-            <Form.Item name="title" label="Title (optional)">
-              <Input placeholder="e.g. Ador Avenue Reserve · Site Induction" />
+            <Form.Item name="title" label="Title" rules={[{ required: true, message: 'Enter a title' }]}>
+              <Input maxLength={255} />
+            </Form.Item>
+            <Form.Item name="moduleKind" label="Kind" rules={[{ required: true }]}>
+              <Select
+                options={[
+                  { value: 'TRAINING', label: 'Training' },
+                  { value: 'INDUCTION', label: 'Site induction' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="siteId" label="Site (inductions)">
+              <Select allowClear options={siteOptions} showSearch optionFilterProp="label" />
             </Form.Item>
             <Form.Item
-              name="sourceModuleId"
-              label="Copy content from module (default Gateway)"
+              name="validityDays"
+              label="Validity days after pass (blank = never expires)"
             >
-              <Select
-                allowClear
-                options={modules
-                  .filter((m) => String(m.moduleKind).toUpperCase() !== 'INDUCTION')
-                  .map((m) => ({
-                    value: m.id,
-                    label: `${m.code} · ${m.title}`,
-                  }))}
-                showSearch
-                optionFilterProp="label"
-              />
+              <InputNumber min={1} style={{ width: '100%' }} placeholder="365" />
+            </Form.Item>
+            <Form.Item name="passPercent" label="Pass mark %" rules={[{ required: true }]}>
+              <InputNumber min={1} max={100} style={{ width: '100%' }} />
             </Form.Item>
           </Form>
         </Modal>
