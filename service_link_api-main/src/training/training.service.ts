@@ -1713,11 +1713,11 @@ export class TrainingService {
           },
           {
             title: 'Ladders',
-            body: 'Use an industrial ladder that is long enough. Set it on firm, level ground at about a one-in-four angle. Secure the top. Keep three points of contact and do not overreach. Do not stand on the top rungs. A second person should foot the ladder where the ground is soft or the job is exposed. Inspect the ladder before use and do not use a bent or cracked one.',
+            body: 'A ladder is only for short, light work. Use an industrial ladder at a four-to-one angle. Keep three points of contact at all times: two hands and one foot, or two feet and one hand. Face the ladder, do not stand on the top rungs, and do not climb with tools in both hands.',
           },
           {
             title: 'Working at heights',
-            body: 'Stay on the ladder or an approved platform. Do not walk on fragile roofs, skylights, or polycarbonate sheets. If the job needs a harness or edge protection, do not start until that is in place and you have been trained to use it. Keep tools in a belt or bucket so you are not carrying them in one hand while you climb.',
+            body: 'A fall from a roof or gutter can kill you. The person conducting the business must manage that risk. Do the job from the ground where you can. If you must go up, use edge protection, a scaffold, or an elevated work platform before you rely on a ladder. Do not walk on skylights, polycarbonate, rusted metal, or asbestos cement. A harness needs a proper anchor, training, and a rescue plan before you clip on. Keep people below out of the drop zone. If you cannot keep a stable stance, come down.',
           },
           {
             title: 'Weather and outdoor work',
@@ -1746,29 +1746,59 @@ export class TrainingService {
         ],
         questions: [
           {
-            prompt: 'When is it acceptable to stand on the top rung of a ladder?',
+            prompt: 'What does the three-point rule require while you climb or work from a ladder?',
             options: [
-              { key: 'a', text: 'If someone is footing it' },
-              { key: 'b', text: 'Never' },
-              { key: 'c', text: 'Only for a few seconds' },
-              { key: 'd', text: 'If the gutter is just out of reach' },
+              { key: 'a', text: 'One hand on the ladder is enough if your feet feel steady' },
+              { key: 'b', text: 'Two hands and one foot, or two feet and one hand, on the ladder at the same time' },
+              { key: 'c', text: 'Both hands free so you can hold the tool' },
+              { key: 'd', text: 'Three people watching from the ground' },
             ],
             correctKey: 'b',
           },
           {
-            prompt: 'A roof looks fragile or has skylights. What should you do?',
+            prompt: 'When may you stand on the top three rungs of a straight or extension ladder?',
             options: [
-              { key: 'a', text: 'Walk around the skylights carefully' },
-              { key: 'b', text: 'Do not walk on it; use the approved method or stop' },
-              { key: 'c', text: 'Go up only if you are light' },
-              { key: 'd', text: 'Lay a towel over the sheet and walk on that' },
+              { key: 'a', text: 'If someone is footing the ladder' },
+              { key: 'b', text: 'Never' },
+              { key: 'c', text: 'For a few seconds to reach the gutter' },
+              { key: 'd', text: 'If you keep one hand on the gutter' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'The gutter job needs both hands. What should you do?',
+            options: [
+              { key: 'a', text: 'Let go of the ladder and work quickly' },
+              { key: 'b', text: 'Come down. A ladder is the wrong method when the job needs both hands' },
+              { key: 'c', text: 'Hook one arm around the stile and use both hands' },
+              { key: 'd', text: 'Stand on the top rung so you are closer' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'A roof has skylights or asbestos cement sheets. What should you do?',
+            options: [
+              { key: 'a', text: 'Walk around them carefully' },
+              { key: 'b', text: 'Do not walk on them. Stay on the ladder or a surface you have been told will carry you' },
+              { key: 'c', text: 'Cover a skylight and step across it' },
+              { key: 'd', text: 'Go up only if you are light' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'A harness is on site but there is no rescue plan. What should you do?',
+            options: [
+              { key: 'a', text: 'Clip on. The harness is enough' },
+              { key: 'b', text: 'Do not start. A harness without a rescue plan is not a safe system of work' },
+              { key: 'c', text: 'Tie the lanyard to the gutter' },
+              { key: 'd', text: 'Ask someone in the street to watch' },
             ],
             correctKey: 'b',
           },
           {
             prompt: 'Overhead power lines are close to the gutter. You should:',
             options: [
-              { key: 'a', text: 'Use a metal pole if you are careful' },
+              { key: 'a', text: 'Use a metal ladder if you are careful' },
               { key: 'b', text: 'Stop and keep clear until your supervisor confirms it is safe' },
               { key: 'c', text: 'Work only in the morning' },
               { key: 'd', text: 'Touch the line with a wooden stick to test it' },
@@ -1779,19 +1809,19 @@ export class TrainingService {
             prompt: 'Rain starts while you are on a ladder. What should you do?',
             options: [
               { key: 'a', text: 'Finish the gutter quickly' },
-              { key: 'b', text: 'Come down; wet roofs and ladders are slippery' },
+              { key: 'b', text: 'Come down. A wet ladder is slippery and you may not keep three points of contact' },
               { key: 'c', text: 'Take your boots off for better feel' },
               { key: 'd', text: 'Keep going if the wind is light' },
             ],
             correctKey: 'b',
           },
           {
-            prompt: 'How should wet gutter debris be brought down?',
+            prompt: 'How should you take tools up a ladder?',
             options: [
-              { key: 'a', text: 'Thrown to the ground near the path' },
-              { key: 'b', text: 'In small loads, lowered so people below are clear' },
-              { key: 'c', text: 'Carried in both hands while you climb' },
-              { key: 'd', text: 'Left on the roof for the rain to wash off' },
+              { key: 'a', text: 'One tool in each hand' },
+              { key: 'b', text: 'In a belt, or hoisted on a line after you have three points of contact' },
+              { key: 'c', text: 'Thrown up to the gutter' },
+              { key: 'd', text: 'In one hand, with the other hand off the ladder' },
             ],
             correctKey: 'b',
           },
@@ -1840,6 +1870,44 @@ export class TrainingService {
       );
       this.logger.log(`training: added module ${mod.code}`);
     }
+    await this.syncRoofQuiz(catalogue);
+  }
+
+  /** Keep the Roof and Gutter quiz aligned with the catalogue after content changes. */
+  private async syncRoofQuiz(
+    catalogue: { code: string; questions: { prompt: string; options: { key: string; text: string }[]; correctKey: string }[] }[],
+  ): Promise<void> {
+    const spec = catalogue.find((m) => m.code === 'ROOF');
+    if (!spec?.questions?.length) return;
+    const existing = await this.modulesRepo.findOne({ where: { code: 'ROOF' } });
+    if (!existing) return;
+    const rows = await this.questionsRepo.find({
+      where: { moduleId: existing.id },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    for (let i = 0; i < spec.questions.length; i++) {
+      const q = spec.questions[i];
+      const payload = {
+        moduleId: existing.id,
+        type: 'MCQ',
+        prompt: q.prompt,
+        options: q.options,
+        correctKey: q.correctKey,
+        answerReviewed: true,
+        sortOrder: i + 1,
+      };
+      const row = rows[i];
+      if (row) {
+        Object.assign(row, payload);
+        await this.questionsRepo.save(row);
+      } else {
+        await this.questionsRepo.save(this.questionsRepo.create(payload));
+      }
+    }
+    const extras = rows.slice(spec.questions.length);
+    if (extras.length) {
+      await this.questionsRepo.delete(extras.map((r) => r.id));
+    }
   }
 
   async applyContentRevisions(): Promise<void> {
@@ -1860,6 +1928,7 @@ export class TrainingService {
       sortOrder?: number;
       body?: string;
       imageUrl?: string;
+      forceImage?: boolean;
     }) => {
       const mod = await this.modulesRepo.findOne({ where: { code: topic.code } });
       if (!mod) return;
@@ -1879,7 +1948,7 @@ export class TrainingService {
         row.body = topic.body;
         changed = true;
       }
-      if (topic.imageUrl && !row.imageUrl) {
+      if (topic.imageUrl && (topic.forceImage || !row.imageUrl) && row.imageUrl !== topic.imageUrl) {
         row.imageUrl = topic.imageUrl;
         changed = true;
       }
