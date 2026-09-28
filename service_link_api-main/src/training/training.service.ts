@@ -853,6 +853,10 @@ export class TrainingService {
             (completedTopics > 0 && completedTopics >= topicTotal
               ? progress?.topicsCompletedAt || null
               : null),
+          certificateUrl:
+            progressStatus === 'passed' ? progress?.certificateUrl || null : null,
+          certificateCode:
+            progressStatus === 'passed' ? progress?.certificateCode || null : null,
         };
       }),
     };
@@ -1225,8 +1229,9 @@ export class TrainingService {
   /** One-time defaults for Gateway cartoon illustrations (site-relative public paths). */
   async ensureDefaultGatewayImages(): Promise<void> {
     try {
-      const gateway = await this.modulesRepo.findOne({ where: { code: 'GATEWAY' } });
-      if (!gateway) return;
+      const intro = await this.modulesRepo.findOne({ where: { code: 'SL' } })
+        || await this.modulesRepo.findOne({ where: { code: 'GATEWAY' } });
+      if (!intro) return;
       const defaults: Record<number, string> = {
         1: '/images/training/gateway/whs-responsibilities.png',
         2: '/images/training/gateway/risk-management.png',
@@ -1249,7 +1254,7 @@ export class TrainingService {
         19: '/images/training/gateway/module-complete.png',
       };
       const topics = await this.topicsRepo.find({
-        where: { moduleId: gateway.id },
+        where: { moduleId: intro.id },
         order: { sortOrder: 'ASC' },
       });
       // Only seed defaults on first setup (no topic images yet). Never overwrite admin edits.
@@ -1291,9 +1296,8 @@ export class TrainingService {
       });
     }
     if (!source) {
-      source = await this.modulesRepo.findOne({
-        where: { code: 'GATEWAY' },
-      });
+      source = await this.modulesRepo.findOne({ where: { code: 'SL' } })
+        || await this.modulesRepo.findOne({ where: { code: 'GATEWAY' } });
     }
 
     const saved = await this.modulesRepo.save(
@@ -1479,7 +1483,7 @@ export class TrainingService {
   async ensureCrewTrainingCatalogue(): Promise<void> {
     const hideCodes = ['M7', 'M8', 'M11', 'M13', 'M15', 'M16', 'M17'];
     const keepCodes = [
-      'GATEWAY', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'CLEAN', 'GARDEN', 'ROOF',
+      'SL', 'GATEWAY', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'CLEAN', 'GARDEN', 'ROOF',
     ];
     await this.modulesRepo
       .createQueryBuilder()
@@ -1513,7 +1517,7 @@ export class TrainingService {
         topics: [
           {
             title: 'Welcome to cleaner safety',
-            body: 'This module is for people who clean buildings, amenities, and work sites. Complete the generic Gateway training as well. This module covers the hazards you meet most often on a cleaning job.',
+            body: 'This module is for people who clean buildings, amenities, and work sites. This module covers the hazards you meet most often on a cleaning job.',
           },
           {
             title: 'Chemicals and safety data sheets',
@@ -1611,7 +1615,7 @@ export class TrainingService {
         topics: [
           {
             title: 'Welcome to gardener safety',
-            body: 'This module is for people who maintain gardens, lawns, and outdoor areas. Complete the generic Gateway training as well. Outdoor work adds sun, uneven ground, tools, and sprays.',
+            body: 'This module is for people who maintain gardens, lawns, and outdoor areas. Outdoor work adds sun, uneven ground, tools, and sprays.',
           },
           {
             title: 'Sun, heat and outdoor work',
@@ -1705,7 +1709,7 @@ export class TrainingService {
         topics: [
           {
             title: 'Welcome to roof and gutter safety',
-            body: 'Cleaning roofs and gutters is higher risk than ground cleaning. Complete the generic Gateway training as well. Do not start if you have not been shown the ladder and height method for that site.',
+            body: 'Cleaning roofs and gutters is higher risk than ground cleaning. Do not start if you have not been shown the ladder and height method for that site.',
           },
           {
             title: 'Ladders',
@@ -1907,6 +1911,51 @@ export class TrainingService {
       updated += 1;
     }
     if (updated) this.logger.log(`training: revised ${updated} topics`);
+  }
+
+  async stripGatewayWording(): Promise<void> {
+    const pairs: [string, string][] = [
+      ['Servicelink Gateway Training', 'Servicelink Training'],
+      ['Servicelink Gateway Induction', 'Servicelink Induction'],
+      ['Servicelink Gateway training', 'Servicelink training'],
+      ['Complete the generic Gateway training as well. ', ''],
+      ['Complete Gateway training as well, and ', ''],
+      [' Complete Gateway training as well.', ''],
+      ['Complete Gateway training as well. ', ''],
+      ['It sits beside Servicelink Gateway training and ', 'It sits beside '],
+    ];
+    for (const [from, to] of pairs) {
+      await this.modulesRepo.query(
+        `UPDATE training_modules
+         SET title = replace(title, $1, $2),
+             description = replace(COALESCE(description, ''), $1, $2)
+         WHERE title LIKE '%' || $1 || '%' OR COALESCE(description, '') LIKE '%' || $1 || '%'`,
+        [from, to],
+      );
+      await this.topicsRepo.query(
+        `UPDATE training_topics
+         SET title = replace(title, $1, $2), body = replace(body, $1, $2)
+         WHERE title LIKE '%' || $1 || '%' OR body LIKE '%' || $1 || '%'`,
+        [from, to],
+      );
+      await this.questionsRepo.query(
+        `UPDATE training_questions
+         SET prompt = replace(prompt, $1, $2)
+         WHERE prompt LIKE '%' || $1 || '%'`,
+        [from, to],
+      );
+      await this.questionsRepo.query(
+        `UPDATE training_questions
+         SET options = replace(options::text, $1, $2)::jsonb
+         WHERE options::text LIKE '%' || $1 || '%'`,
+        [from, to],
+      );
+    }
+    await this.modulesRepo.query(
+      `UPDATE training_modules
+       SET title = 'Servicelink Training', code = 'SL'
+       WHERE code = 'GATEWAY'`,
+    );
   }
 
   async assignMissingTopicImages(): Promise<void> {

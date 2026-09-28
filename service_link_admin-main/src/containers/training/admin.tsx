@@ -30,6 +30,7 @@ import { useHistory } from 'react-router-dom';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync, callAPIUploadAsync } from '../../library/helpers/api';
+import { resolveReportPdfHref } from '../reports/new-reports-display-utils';
 
 const TrainingAdminPage: React.FC = () => {
   const history = useHistory();
@@ -427,15 +428,16 @@ const TrainingAdminPage: React.FC = () => {
     },
     {
       title: 'Certificate',
-      width: 110,
-      render: (_, r) =>
-        r.certificateUrl ? (
-          <a href={r.certificateUrl} target="_blank" rel="noreferrer">
-            PDF
+      width: 120,
+      render: (_, r) => {
+        const href = r.status === 'passed' ? resolveReportPdfHref(r.certificateUrl) : '';
+        if (!href) return '';
+        return (
+          <a href={href} target="_blank" rel="noreferrer">
+            Certificate
           </a>
-        ) : (
-          '—'
-        ),
+        );
+      },
     },
   ];
 

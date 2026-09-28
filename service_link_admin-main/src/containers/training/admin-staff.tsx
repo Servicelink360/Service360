@@ -9,6 +9,7 @@ import { useHistory, useLocation, useParams } from 'react-router-dom';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync } from '../../library/helpers/api';
+import { resolveReportPdfHref } from '../reports/new-reports-display-utils';
 import { TrainingAdminChromeStyles } from './trainingAdminChrome';
 
 const TrainingAdminStaffPage: React.FC = () => {
@@ -172,6 +173,20 @@ const TrainingAdminStaffPage: React.FC = () => {
           }
         />
       ),
+    },
+    {
+      title: 'Certificate',
+      width: 120,
+      render: (_, row) => {
+        if (row.progressStatus !== 'passed') return '';
+        const href = resolveReportPdfHref(row.certificateUrl);
+        if (!href) return '';
+        return (
+          <a href={href} target="_blank" rel="noreferrer">
+            Certificate
+          </a>
+        );
+      },
     },
     {
       title: '',

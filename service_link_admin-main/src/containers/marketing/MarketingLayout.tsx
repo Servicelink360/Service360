@@ -7,6 +7,7 @@ import MarketingSeo from './MarketingSeo';
 import HomePage from './HomePage';
 import HowItWorksPage from './HowItWorksPage';
 import MonthlyReportPage from './MonthlyReportPage';
+import CertificateSamplePage from './CertificateSamplePage';
 import MarketingPageView from './MarketingPageView';
 import { DEFAULT_HOME_DESCRIPTION, DEFAULT_HOME_TITLE } from './marketingSeoUtils';
 import { getPageByPath } from './siteData';
@@ -66,6 +67,14 @@ export function MarketingInnerPage() {
     return (
       <MarketingLayout>
         <MonthlyReportPage />
+      </MarketingLayout>
+    );
+  }
+
+  if (pathname === PUBLIC_ROUTE.MARKETING_TRAINING_CERTIFICATE) {
+    return (
+      <MarketingLayout>
+        <CertificateSamplePage />
       </MarketingLayout>
     );
   }

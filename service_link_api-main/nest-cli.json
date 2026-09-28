@@ -7,6 +7,11 @@
         "include": "training/data/**/*",
         "outDir": "dist/src",
         "watchAssets": true
+      },
+      {
+        "include": "training/assets/**/*",
+        "outDir": "dist",
+        "watchAssets": true
       }
     ]
   }

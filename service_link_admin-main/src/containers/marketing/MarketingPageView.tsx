@@ -186,6 +186,10 @@ function renderSection(section: PageSection, index: number) {
               ) : null}
               .
             </p>
+          ) : section.text === 'certificate-sample-link' && section.links?.[0] ? (
+            <p>
+              <Link to={section.links[0].path}>{section.links[0].label}</Link>
+            </p>
           ) : section.text === 'cookie-link' && section.links?.[0] ? (
             <p>
               See our <Link to={section.links[0].path}>{section.links[0].label}</Link> for details on

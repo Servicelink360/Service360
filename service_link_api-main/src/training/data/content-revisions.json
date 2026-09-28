@@ -26,7 +26,7 @@
       "code": "CLEAN",
       "title": "Welcome to cleaner safety",
       "imageUrl": "/images/training/themes/welcome.png",
-      "body": "This module is for people who clean buildings, amenities, and work sites in Australia. It sits beside Servicelink Gateway training and the site induction. It does not replace a demonstration of the chemicals, machines, and emergency plan for the site you are on.\n\nUnder Australian work health and safety laws, your employer (the person conducting the business) must provide a safe workplace, information, and equipment. You must take reasonable care of your own health and safety and of other people, follow reasonable instructions, and not wilfully put anyone at risk.\n\nBefore you start, look for wet floors, unknown chemicals, sharps, damaged leads, and poor lighting. If the job cannot be done safely with what you have been given, stop and tell your supervisor."
+      "body": "This module is for people who clean buildings, amenities, and work sites in Australia. It sits beside the site induction. It does not replace a demonstration of the chemicals, machines, and emergency plan for the site you are on.\n\nUnder Australian work health and safety laws, your employer (the person conducting the business) must provide a safe workplace, information, and equipment. You must take reasonable care of your own health and safety and of other people, follow reasonable instructions, and not wilfully put anyone at risk.\n\nBefore you start, look for wet floors, unknown chemicals, sharps, damaged leads, and poor lighting. If the job cannot be done safely with what you have been given, stop and tell your supervisor."
     },
     {
       "code": "CLEAN",
@@ -80,7 +80,7 @@
       "code": "GARDEN",
       "title": "Welcome to gardener safety",
       "imageUrl": "/images/training/themes/welcome.png",
-      "body": "This module is for people who maintain gardens, lawns, and outdoor areas. Complete Gateway training as well, and the site induction before you use site plant or chemicals.\n\nOutdoor work adds ultraviolet radiation, heat, uneven ground, insects and snakes, and powered tools. Your employer must manage those risks. You must use the controls you have been given, including hats, sunscreen, guards, and hearing protection, and stop work that is not safe.\n\nCheck the weather, your boots, and the guards on tools before you start."
+      "body": "This module is for people who maintain gardens, lawns, and outdoor areas. Complete the site induction before you use site plant or chemicals.\n\nOutdoor work adds ultraviolet radiation, heat, uneven ground, insects and snakes, and powered tools. Your employer must manage those risks. You must use the controls you have been given, including hats, sunscreen, guards, and hearing protection, and stop work that is not safe.\n\nCheck the weather, your boots, and the guards on tools before you start."
     },
     {
       "code": "GARDEN",
@@ -128,7 +128,7 @@
       "code": "ROOF",
       "title": "Welcome to roof and gutter safety",
       "imageUrl": "/images/training/themes/welcome.png",
-      "body": "Cleaning roofs and gutters is work where a fall can kill or seriously injure you. It is higher risk than cleaning at ground level. Complete Gateway training as well.\n\nDo not start unless you have been shown the ladder or height method for that site, the ground is suitable, and the weather is fit. If the job needs edge protection, a harness, or another elevated work platform, do not start until that is in place and you are trained and authorised to use it.\n\nYour employer must manage the risk of a fall. You must not start a job that has no safe way to do it."
+      "body": "Cleaning roofs and gutters is work where a fall can kill or seriously injure you. It is higher risk than cleaning at ground level.\n\nDo not start unless you have been shown the ladder or height method for that site, the ground is suitable, and the weather is fit. If the job needs edge protection, a harness, or another elevated work platform, do not start until that is in place and you are trained and authorised to use it.\n\nYour employer must manage the risk of a fall. You must not start a job that has no safe way to do it."
     },
     {
       "code": "ROOF",

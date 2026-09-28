@@ -34,6 +34,7 @@ export class TrainingModule implements OnModuleInit {
       await this.trainingService.seedFromJsonIfEmpty();
       await this.trainingService.ensureCrewTrainingCatalogue();
       await this.trainingService.applyContentRevisions();
+      await this.trainingService.stripGatewayWording();
       await this.trainingService.ensureDefaultGatewayImages();
       await this.trainingService.assignMissingTopicImages();
     } catch (e) {

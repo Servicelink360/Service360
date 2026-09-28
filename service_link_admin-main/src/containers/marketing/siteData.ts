@@ -154,6 +154,14 @@ export const MARKETING_PAGES: MarketingPage[] = [
     sections: [],
   },
   {
+    slug: 'training-certificate-sample',
+    path: PUBLIC_ROUTE.MARKETING_TRAINING_CERTIFICATE,
+    title: 'Training certificate sample — Service360',
+    hero: 'Training certificate',
+    lead: 'Sample certificate issued when a staff member passes a training module.',
+    sections: [],
+  },
+  {
     slug: 'monthly-report-sample',
     path: PUBLIC_ROUTE.MARKETING_MONTHLY_REPORT,
     title: 'Monthly report sample — Bayside Council — Service360',
@@ -359,7 +367,15 @@ export const MARKETING_PAGES: MarketingPage[] = [
     title: 'Training & Induction — Service360',
     hero: 'Training & induction',
     lead: 'Onboard field staff with training materials and induction workflows.',
-    sections: [{ type: 'paragraph', text: 'Staff see training and induction shortcuts on their dashboard. Admins manage programmes from staff management.' }],
+    sections: [
+      { type: 'paragraph', text: 'Staff see training and induction shortcuts on their dashboard. Admins assign modules, follow progress, and open a certificate when someone passes.' },
+      {
+        type: 'info',
+        title: 'Sample certificate',
+        text: 'certificate-sample-link',
+        links: [{ path: PUBLIC_ROUTE.MARKETING_TRAINING_CERTIFICATE, label: 'View a sample completion certificate' }],
+      },
+    ],
   },
   {
     slug: 'report-templates',

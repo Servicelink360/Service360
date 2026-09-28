@@ -15,6 +15,7 @@ export const PUBLIC_ROUTE = {
 	MARKETING_HOW_IT_WORKS: '/how-it-works',
 	MARKETING_FEATURE_HIGHLIGHTS: '/feature-highlights',
 	MARKETING_MONTHLY_REPORT: '/monthly-report-sample',
+	MARKETING_TRAINING_CERTIFICATE: '/training-certificate-sample',
 	MARKETING_CONTACT: '/contact',
 	MARKETING_DASHBOARD: '/dashboard-info',
 	MARKETING_TASKS: '/tasks-schedules',

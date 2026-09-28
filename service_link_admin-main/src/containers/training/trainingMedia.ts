@@ -2,28 +2,31 @@
  * Fallback cartoon illustrations when a topic has no imageUrl saved yet.
  * Keyed by module code ? topic sortOrder (1-based).
  */
+const introTopicImages: Record<number, string[]> = {
+  1: ['/images/training/gateway/whs-responsibilities.png'],
+  2: ['/images/training/gateway/risk-management.png'],
+  3: ['/images/training/gateway/issue-resolution.png'],
+  4: ['/images/training/gateway/your-responsibility.png'],
+  5: ['/images/training/gateway/workplace-hazards.png'],
+  6: ['/images/training/gateway/manual-handling-awareness.png'],
+  7: ['/images/training/gateway/safe-lifting.png'],
+  8: ['/images/training/gateway/ergonomics.png'],
+  9: ['/images/training/gateway/workplace-stress.png'],
+  10: ['/images/training/gateway/stress-tips.png'],
+  11: ['/images/training/gateway/discrimination.png'],
+  12: ['/images/training/gateway/discrimination-law.png'],
+  13: ['/images/training/gateway/sexual-harassment.png'],
+  14: ['/images/training/gateway/sexual-harassment-law.png'],
+  15: ['/images/training/gateway/workplace-harassment.png'],
+  16: ['/images/training/gateway/respond-harassment.png'],
+  17: ['/images/training/gateway/bullying.png'],
+  18: ['/images/training/gateway/not-bullying.png'],
+  19: ['/images/training/gateway/module-complete.png'],
+};
+
 export const TRAINING_TOPIC_IMAGES: Record<string, Record<number, string[]>> = {
-  GATEWAY: {
-    1: ['/images/training/gateway/whs-responsibilities.png'],
-    2: ['/images/training/gateway/risk-management.png'],
-    3: ['/images/training/gateway/issue-resolution.png'],
-    4: ['/images/training/gateway/your-responsibility.png'],
-    5: ['/images/training/gateway/workplace-hazards.png'],
-    6: ['/images/training/gateway/manual-handling-awareness.png'],
-    7: ['/images/training/gateway/safe-lifting.png'],
-    8: ['/images/training/gateway/ergonomics.png'],
-    9: ['/images/training/gateway/workplace-stress.png'],
-    10: ['/images/training/gateway/stress-tips.png'],
-    11: ['/images/training/gateway/discrimination.png'],
-    12: ['/images/training/gateway/discrimination-law.png'],
-    13: ['/images/training/gateway/sexual-harassment.png'],
-    14: ['/images/training/gateway/sexual-harassment-law.png'],
-    15: ['/images/training/gateway/workplace-harassment.png'],
-    16: ['/images/training/gateway/respond-harassment.png'],
-    17: ['/images/training/gateway/bullying.png'],
-    18: ['/images/training/gateway/not-bullying.png'],
-    19: ['/images/training/gateway/module-complete.png'],
-  },
+  SL: introTopicImages,
+  GATEWAY: introTopicImages,
 };
 
 const theme = (file: string) => `/images/training/themes/${file}`;
