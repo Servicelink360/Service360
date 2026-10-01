@@ -55,6 +55,12 @@ export class TrainingProgress {
   @Column({ name: 'certificate_code', type: 'varchar', length: 64, nullable: true })
   certificateCode?: string | null;
 
+  @Column({ name: 'current_topic_id', type: 'int', nullable: true })
+  currentTopicId?: number | null;
+
+  @Column({ name: 'quiz_draft', type: 'jsonb', default: {} })
+  quizDraft?: Record<string, string>;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

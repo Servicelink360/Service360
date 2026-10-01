@@ -1,0 +1,382 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
+import { errorCode } from '../constants/errorCode';
+import { userType } from '../constants/user';
+import { IUserInfo } from '../interfaces/IUserInfo';
+import { User } from '../users/entities/user.entity';
+import { ToolboxAttendance } from './entities/toolbox-attendance.entity';
+import { ToolboxSession } from './entities/toolbox-session.entity';
+import { ToolboxTalk } from './entities/toolbox-talk.entity';
+import { TOOLBOX_SEEDS } from './toolbox-talks.seed';
+
+@Injectable()
+export class ToolboxService {
+  private readonly logger = new Logger(ToolboxService.name);
+
+  constructor(
+    @InjectRepository(ToolboxTalk)
+    private readonly talksRepo: Repository<ToolboxTalk>,
+    @InjectRepository(ToolboxSession)
+    private readonly sessionsRepo: Repository<ToolboxSession>,
+    @InjectRepository(ToolboxAttendance)
+    private readonly attendanceRepo: Repository<ToolboxAttendance>,
+    @InjectRepository(User)
+    private readonly usersRepo: Repository<User>,
+  ) {}
+
+  private isAdmin(user: IUserInfo) {
+    return +user.type === userType.ADMIN;
+  }
+
+  private isStaffOrAdmin(user: IUserInfo) {
+    const t = +user.type;
+    return t === userType.STAFF || t === userType.ADMIN;
+  }
+
+  async ensureSeedTalks(): Promise<void> {
+    for (const seed of TOOLBOX_SEEDS) {
+      const existing = await this.talksRepo.findOne({ where: { code: seed.code } });
+      if (!existing) {
+        await this.talksRepo.save(
+          this.talksRepo.create({
+            code: seed.code,
+            title: seed.title,
+            brief: seed.brief,
+            points: seed.points,
+            durationMins: seed.durationMins,
+            sortOrder: seed.sortOrder,
+            imageUrl: seed.imageUrl || null,
+            status: 1,
+          }),
+        );
+        this.logger.log(`toolbox: added talk ${seed.code}`);
+        continue;
+      }
+      let changed = false;
+      if ((existing.brief || '').length < seed.brief.length) {
+        existing.title = seed.title;
+        existing.brief = seed.brief;
+        existing.points = seed.points;
+        existing.durationMins = seed.durationMins;
+        changed = true;
+      }
+      if (!existing.imageUrl && seed.imageUrl) {
+        existing.imageUrl = seed.imageUrl;
+        changed = true;
+      }
+      if (changed) {
+        await this.talksRepo.save(existing);
+        this.logger.log(`toolbox: updated talk ${seed.code}`);
+      }
+    }
+  }
+
+  async listTalks(user: IUserInfo) {
+    if (!this.isStaffOrAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const rows = await this.talksRepo.find({
+      where: { status: 1 },
+      order: { sortOrder: 'ASC', title: 'ASC' },
+    });
+    return { ...errorCode.SUCCESS, data: rows };
+  }
+
+  async adminListTalks(user: IUserInfo) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const rows = await this.talksRepo.find({ order: { sortOrder: 'ASC', title: 'ASC' } });
+    return { ...errorCode.SUCCESS, data: rows };
+  }
+
+  private async uniqueCode(title: string) {
+    const base = String(title || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '')
+      .slice(0, 20) || 'TALK';
+    let code = base;
+    let n = 2;
+    while (await this.talksRepo.findOne({ where: { code } })) {
+      code = `${base.slice(0, 16)}${n}`;
+      n += 1;
+    }
+    return code;
+  }
+
+  async adminCreateTalk(
+    user: IUserInfo,
+    body: { title?: string; brief?: string; points?: string[]; durationMins?: number },
+  ) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const title = String(body.title || '').trim();
+    const brief = String(body.brief || '').trim();
+    if (!title || !brief) return { ...errorCode.VALIDATION_ERROR, message: 'Enter a title and a brief' };
+    const max = await this.talksRepo
+      .createQueryBuilder('t')
+      .select('MAX(t.sortOrder)', 'max')
+      .getRawOne();
+    const talk = await this.talksRepo.save(
+      this.talksRepo.create({
+        code: await this.uniqueCode(title),
+        title,
+        brief,
+        points: Array.isArray(body.points) ? body.points.map((p) => String(p).trim()).filter(Boolean) : [],
+        durationMins: Number.isFinite(+body.durationMins) ? +body.durationMins : 10,
+        sortOrder: (+max?.max || 0) + 1,
+        status: 1,
+      }),
+    );
+    return { ...errorCode.SUCCESS, data: talk };
+  }
+
+  async adminDeleteTalk(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const used = await this.sessionsRepo.count({ where: { talkId: id } });
+    if (used) {
+      return { ...errorCode.CAN_NOT_DELETE, message: 'This talk has sessions. Delete those sessions first.' };
+    }
+    await this.talksRepo.delete({ id });
+    return { ...errorCode.SUCCESS, data: true };
+  }
+
+  async adminUpdateTalk(
+    user: IUserInfo,
+    id: number,
+    body: { title?: string; brief?: string; points?: string[]; durationMins?: number; status?: number },
+  ) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const talk = await this.talksRepo.findOne({ where: { id } });
+    if (!talk) return { ...errorCode.NOT_FOUND, message: 'Talk not found' };
+    if (body.title !== undefined) talk.title = String(body.title).trim() || talk.title;
+    if (body.brief !== undefined) talk.brief = String(body.brief);
+    if (Array.isArray(body.points)) {
+      talk.points = body.points.map((p) => String(p).trim()).filter(Boolean);
+    }
+    if (body.durationMins !== undefined && Number.isFinite(+body.durationMins)) {
+      talk.durationMins = +body.durationMins;
+    }
+    if (body.status !== undefined) talk.status = +body.status === 0 ? 0 : 1;
+    await this.talksRepo.save(talk);
+    return { ...errorCode.SUCCESS, data: talk };
+  }
+
+  async createSession(
+    user: IUserInfo,
+    body: {
+      talkId?: number;
+      siteId?: number | null;
+      siteName?: string | null;
+      deliveredAt?: string;
+      notes?: string;
+      staffIds?: number[];
+    },
+  ) {
+    if (!this.isStaffOrAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const talk = await this.talksRepo.findOne({ where: { id: +body.talkId, status: 1 } });
+    if (!talk) return { ...errorCode.NOT_FOUND, message: 'Talk not found' };
+    const staffIds = Array.from(
+      new Set((body.staffIds || []).map((id) => +id).filter((id) => Number.isFinite(id) && id > 0)),
+    );
+    if (!staffIds.length) return { ...errorCode.VALIDATION_ERROR, message: 'Choose at least one person' };
+    const deliveredAt = body.deliveredAt ? new Date(body.deliveredAt) : new Date();
+    if (Number.isNaN(deliveredAt.getTime())) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'Enter a valid date' };
+    }
+    const session = await this.sessionsRepo.save(
+      this.sessionsRepo.create({
+        talkId: talk.id,
+        siteId: body.siteId ? +body.siteId : null,
+        siteName: body.siteName ? String(body.siteName).trim() : null,
+        deliveredBy: +user.userId || null,
+        deliveredAt,
+        notes: body.notes ? String(body.notes).trim() : null,
+      }),
+    );
+    await this.attendanceRepo.save(
+      staffIds.map((staffId) =>
+        this.attendanceRepo.create({ sessionId: session.id, staffId, acknowledgedAt: null }),
+      ),
+    );
+    return { ...errorCode.SUCCESS, data: { id: session.id } };
+  }
+
+  async updateSession(
+    user: IUserInfo,
+    id: number,
+    body: {
+      talkId?: number;
+      siteId?: number | null;
+      siteName?: string | null;
+      deliveredAt?: string;
+      notes?: string;
+      staffIds?: number[];
+    },
+  ) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const session = await this.sessionsRepo.findOne({ where: { id } });
+    if (!session) return { ...errorCode.NOT_FOUND, message: 'Session not found' };
+    const talk = await this.talksRepo.findOne({ where: { id: +body.talkId, status: 1 } });
+    if (!talk) return { ...errorCode.NOT_FOUND, message: 'Talk not found' };
+    const staffIds = Array.from(
+      new Set((body.staffIds || []).map((staffId) => +staffId).filter((staffId) => Number.isFinite(staffId) && staffId > 0)),
+    );
+    if (!staffIds.length) return { ...errorCode.VALIDATION_ERROR, message: 'Choose at least one person' };
+    const deliveredAt = body.deliveredAt ? new Date(body.deliveredAt) : session.deliveredAt;
+    if (Number.isNaN(deliveredAt.getTime())) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'Enter a valid date' };
+    }
+    session.talkId = talk.id;
+    session.siteId = body.siteId ? +body.siteId : null;
+    session.siteName = body.siteName ? String(body.siteName).trim() : null;
+    session.deliveredAt = deliveredAt;
+    session.notes = body.notes ? String(body.notes).trim() : null;
+    await this.sessionsRepo.save(session);
+    const existing = await this.attendanceRepo.find({ where: { sessionId: id } });
+    const keep = new Set(staffIds);
+    const remove = existing.filter((row) => !keep.has(row.staffId));
+    if (remove.length) await this.attendanceRepo.delete(remove.map((row) => row.id));
+    const have = new Set(existing.map((row) => row.staffId));
+    const add = staffIds.filter((staffId) => !have.has(staffId));
+    if (add.length) {
+      await this.attendanceRepo.save(
+        add.map((staffId) => this.attendanceRepo.create({ sessionId: id, staffId, acknowledgedAt: null })),
+      );
+    }
+    return { ...errorCode.SUCCESS, data: { id } };
+  }
+
+  async listSessions(user: IUserInfo) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const sessions = await this.sessionsRepo.find({ order: { deliveredAt: 'DESC', id: 'DESC' } });
+    if (!sessions.length) return { ...errorCode.SUCCESS, data: [] };
+    const talkIds = Array.from(new Set(sessions.map((s) => s.talkId)));
+    const talks = await this.talksRepo.find({ where: { id: In(talkIds) } });
+    const talkById = new Map(talks.map((t) => [t.id, t]));
+    const leaderIds = Array.from(
+      new Set(sessions.map((s) => s.deliveredBy).filter((id): id is number => !!id)),
+    );
+    const leaders = leaderIds.length
+      ? await this.usersRepo.find({ where: { id: In(leaderIds) } })
+      : [];
+    const leaderById = new Map(leaders.map((u) => [u.id, u.fullName]));
+    const counts = await this.attendanceRepo
+      .createQueryBuilder('a')
+      .select('a.session_id', 'sessionId')
+      .addSelect('COUNT(*)', 'present')
+      .addSelect('COUNT(a.acknowledged_at)', 'acknowledged')
+      .where('a.session_id IN (:...ids)', { ids: sessions.map((s) => s.id) })
+      .groupBy('a.session_id')
+      .getRawMany();
+    const countById = new Map(
+      counts.map((row) => [
+        +(row.sessionId ?? row.sessionid),
+        { present: +row.present || 0, acknowledged: +row.acknowledged || 0 },
+      ]),
+    );
+    return {
+      ...errorCode.SUCCESS,
+      data: sessions.map((s) => ({
+        id: s.id,
+        talkId: s.talkId,
+        talkTitle: talkById.get(s.talkId)?.title || '',
+        siteId: s.siteId,
+        siteName: s.siteName || '',
+        deliveredAt: s.deliveredAt,
+        deliveredByName: s.deliveredBy ? leaderById.get(s.deliveredBy) || '' : '',
+        notes: s.notes || '',
+        present: countById.get(s.id)?.present || 0,
+        acknowledged: countById.get(s.id)?.acknowledged || 0,
+      })),
+    };
+  }
+
+  async getSession(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const session = await this.sessionsRepo.findOne({ where: { id } });
+    if (!session) return { ...errorCode.NOT_FOUND, message: 'Session not found' };
+    const talk = await this.talksRepo.findOne({ where: { id: session.talkId } });
+    const rows = await this.attendanceRepo.find({ where: { sessionId: id }, order: { id: 'ASC' } });
+    const staffIds = rows.map((r) => r.staffId);
+    const people = staffIds.length ? await this.usersRepo.find({ where: { id: In(staffIds) } }) : [];
+    const nameById = new Map(people.map((u) => [u.id, u.fullName]));
+    let deliveredByName = '';
+    if (session.deliveredBy) {
+      const leader = await this.usersRepo.findOne({ where: { id: session.deliveredBy } });
+      deliveredByName = leader?.fullName || '';
+    }
+    return {
+      ...errorCode.SUCCESS,
+      data: {
+        id: session.id,
+        talkId: session.talkId,
+        talkTitle: talk?.title || '',
+        talkCode: talk?.code || '',
+        imageUrl: talk?.imageUrl || null,
+        brief: talk?.brief || '',
+        points: talk?.points || [],
+        siteId: session.siteId,
+        siteName: session.siteName || '',
+        deliveredAt: session.deliveredAt,
+        deliveredByName,
+        notes: session.notes || '',
+        attendance: rows.map((r) => ({
+          staffId: r.staffId,
+          name: nameById.get(r.staffId) || `Staff #${r.staffId}`,
+          acknowledgedAt: r.acknowledgedAt,
+        })),
+      },
+    };
+  }
+
+  async deleteSession(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    await this.attendanceRepo.delete({ sessionId: id });
+    await this.sessionsRepo.delete({ id });
+    return { ...errorCode.SUCCESS, data: true };
+  }
+
+  async myAttendance(user: IUserInfo) {
+    if (!this.isStaffOrAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const rows = await this.attendanceRepo.find({
+      where: { staffId: +user.userId },
+      order: { id: 'DESC' },
+    });
+    if (!rows.length) return { ...errorCode.SUCCESS, data: [] };
+    const sessions = await this.sessionsRepo.find({
+      where: { id: In(rows.map((r) => r.sessionId)) },
+    });
+    const sessionById = new Map(sessions.map((s) => [s.id, s]));
+    const talks = await this.talksRepo.find({
+      where: { id: In(Array.from(new Set(sessions.map((s) => s.talkId)))) },
+    });
+    const talkById = new Map(talks.map((t) => [t.id, t]));
+    const data = rows
+      .map((row) => {
+        const session = sessionById.get(row.sessionId);
+        if (!session) return null;
+        const talk = talkById.get(session.talkId);
+        return {
+          attendanceId: row.id,
+          sessionId: session.id,
+          talkTitle: talk?.title || '',
+          siteName: session.siteName || '',
+          deliveredAt: session.deliveredAt,
+          acknowledgedAt: row.acknowledgedAt,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => +new Date(b.deliveredAt) - +new Date(a.deliveredAt));
+    return { ...errorCode.SUCCESS, data };
+  }
+
+  async acknowledge(user: IUserInfo, sessionId: number) {
+    if (!this.isStaffOrAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
+    const row = await this.attendanceRepo.findOne({
+      where: { sessionId, staffId: +user.userId },
+    });
+    if (!row) return { ...errorCode.NOT_FOUND, message: 'You are not on this talk' };
+    if (!row.acknowledgedAt) {
+      row.acknowledgedAt = new Date();
+      await this.attendanceRepo.save(row);
+    }
+    return { ...errorCode.SUCCESS, data: { acknowledgedAt: row.acknowledgedAt } };
+  }
+}

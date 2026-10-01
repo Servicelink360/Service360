@@ -50,6 +50,25 @@ export class TrainingController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Get('my-certificates')
+  async myCertificates(@Res() res, @Request() req) {
+    return customHttpCode(res, await this.trainingService.listMyCertificates(req.user));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('modules/:id/resume')
+  async saveResume(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: { currentTopicId?: number; quizDraft?: Record<string, string> },
+    @Request() req,
+  ) {
+    return customHttpCode(res, await this.trainingService.saveResume(req.user, +id, body || {}));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Post('modules/:id/start')
   async start(@Res() res, @Param('id') id: string, @Request() req) {
     const user: IUserInfo = req.user;
@@ -91,6 +110,67 @@ export class TrainingController {
   // Admin
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Get('admin/certificate-templates')
+  async adminListCertificateTemplates(@Res() res, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminListCertificateTemplates(req.user));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('admin/certificate-templates')
+  async adminSaveCertificateTemplate(@Res() res, @Body() body: any, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminSaveCertificateTemplate(req.user, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('admin/certificate-templates/:id')
+  async adminDeleteCertificateTemplate(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminDeleteCertificateTemplate(req.user, +id),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('admin/certificates/issued')
+  async adminListIssuedCertificates(@Res() res, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminListIssuedCertificates(req.user));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('admin/certificates')
+  async adminListCertificates(@Res() res, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminListCertificates(req.user));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('admin/certificates')
+  async adminSaveCertificate(@Res() res, @Body() body: any, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminSaveCertificate(req.user, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('admin/certificates/:id')
+  async adminDeleteCertificate(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminDeleteCertificate(req.user, +id),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Get('admin/modules')
   async adminModules(@Res() res, @Request() req) {
     return customHttpCode(res, await this.trainingService.adminListModules(req.user));
@@ -128,6 +208,37 @@ export class TrainingController {
     return customHttpCode(
       res,
       await this.trainingService.adminGetTopics(req.user, +id),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('admin/modules/:id/topics')
+  async adminCreateTopic(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: any,
+    @Request() req,
+  ) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminCreateTopic(req.user, +id, body || {}),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('admin/topics/:id/move')
+  async adminMoveTopic(
+    @Res() res,
+    @Param('id') id: string,
+    @Body() body: any,
+    @Request() req,
+  ) {
+    const direction = body?.direction === 'down' ? 'down' : 'up';
+    return customHttpCode(
+      res,
+      await this.trainingService.adminMoveTopic(req.user, +id, direction),
     );
   }
 

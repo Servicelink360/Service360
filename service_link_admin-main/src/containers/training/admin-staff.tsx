@@ -1,7 +1,7 @@
 import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
 import { ArrowLeftOutlined, CloseOutlined, UndoOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Form, Input, Popconfirm, Progress, Select, Table, message } from 'antd';
+import { Button, Checkbox, DatePicker, Form, Input, Popconfirm, Progress, Select, Table, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import moment from 'moment';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,6 +24,7 @@ const TrainingAdminStaffPage: React.FC = () => {
   const [staffName, setStaffName] = useState('');
   const [staffOptions, setStaffOptions] = useState<{ label: string; value: number }[]>([]);
   const [modules, setModules] = useState<any[]>([]);
+  const [certificates, setCertificates] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -34,12 +35,14 @@ const TrainingAdminStaffPage: React.FC = () => {
     if (!isNew && (!Number.isFinite(staffNum) || staffNum <= 0)) return;
     setLoading(true);
     try {
-      const [modRes, assignRes, staffRes] = await Promise.all([
+      const [modRes, assignRes, staffRes, certRes] = await Promise.all([
         callAPIAsync(serviceType.COMMON, `${endPoint.TRAINING}/admin/modules`, 'GET', null),
         callAPIAsync(serviceType.COMMON, `${endPoint.TRAINING}/admin/assignments`, 'GET', null),
         callAPIAsync(serviceType.COMMON, endPoint.USERS, 'GET', { type: 2, limit: 500, page: 1 }),
+        callAPIAsync(serviceType.COMMON, `${endPoint.TRAINING}/admin/certificates`, 'GET', null),
       ]);
       if (modRes?.code === 1) setModules(modRes.data || []);
+      if (certRes?.code === 1) setCertificates(certRes.data?.certificates || []);
       const rows = assignRes?.code === 1 ? assignRes.data || [] : [];
       const assignedIds = new Set(rows.filter((a: any) => a.staffId).map((a: any) => +a.staffId));
       const mine = isNew ? [] : rows.filter((a: any) => +a.staffId === staffNum);
@@ -80,6 +83,10 @@ const TrainingAdminStaffPage: React.FC = () => {
       staffId: isNew ? undefined : staffNum,
       dueAt: !isNew && first?.dueAt ? moment(first.dueAt) : null,
       notes: isNew ? '' : first?.notes || '',
+      issueCertificate: isNew ? false : assignments.some((a) => a.issueCertificate),
+      certificateId: isNew
+        ? undefined
+        : assignments.find((a) => a.certificateId)?.certificateId || undefined,
     });
   }, [editing, loaded, assignments, staffNum, form, isNew]);
 
@@ -99,6 +106,8 @@ const TrainingAdminStaffPage: React.FC = () => {
         staffId: v.staffId,
         dueAt: v.dueAt ? v.dueAt.toISOString() : null,
         notes: v.notes || null,
+        issueCertificate: !!v.issueCertificate,
+        certificateId: v.issueCertificate ? v.certificateId : null,
       };
       const anchor = assignments[0];
       const res = await callAPIAsync(
@@ -178,8 +187,9 @@ const TrainingAdminStaffPage: React.FC = () => {
       title: 'Certificate',
       width: 120,
       render: (_, row) => {
-        if (row.progressStatus !== 'passed') return '';
-        const href = resolveReportPdfHref(row.certificateUrl);
+        const href = resolveReportPdfHref(
+          row.issueCertificate ? row.staffCertificateUrl : row.progressStatus === 'passed' ? row.certificateUrl : '',
+        );
         if (!href) return '';
         return (
           <a href={href} target="_blank" rel="noreferrer">
@@ -271,6 +281,35 @@ const TrainingAdminStaffPage: React.FC = () => {
               </Form.Item>
               <Form.Item name="notes" label="Notes">
                 <Input.TextArea rows={2} />
+              </Form.Item>
+              <Form.Item name="issueCertificate" valuePropName="checked">
+                <Checkbox>Issue certificate</Checkbox>
+              </Form.Item>
+              <Form.Item noStyle shouldUpdate={(prev, next) => prev.issueCertificate !== next.issueCertificate}>
+                {() =>
+                  form.getFieldValue('issueCertificate') ? (
+                    <Form.Item
+                      name="certificateId"
+                      label="Certificate"
+                      rules={[{ required: true, message: 'Choose a certificate' }]}
+                      extra={
+                        <span>
+                          Issued when every module selected above is passed.{' '}
+                          <Button type="link" size="small" style={{ padding: 0 }} onClick={() => history.push('/training-admin/certificates')}>
+                            Manage certificates
+                          </Button>
+                        </span>
+                      }
+                    >
+                      <Select
+                        placeholder="Choose a certificate"
+                        options={certificates.map((cert) => ({ value: +cert.id, label: cert.title }))}
+                        showSearch
+                        optionFilterProp="label"
+                      />
+                    </Form.Item>
+                  ) : null
+                }
               </Form.Item>
             </Form>
             <div

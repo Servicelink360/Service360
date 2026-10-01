@@ -1,0 +1,107 @@
+.toolbox-brief {
+  color: #1a2e24;
+  line-height: 1.55;
+}
+
+.toolbox-brief__hero {
+  position: relative;
+  margin: 0 0 16px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0f5c3f;
+  aspect-ratio: 16 / 9;
+  max-height: 220px;
+}
+
+.toolbox-brief__hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.toolbox-brief__hero-label {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(15, 92, 63, 0.92);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.toolbox-brief__title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f5c3f;
+  line-height: 1.25;
+}
+
+.toolbox-brief__meta {
+  margin: 0 0 14px;
+  color: #5a6b62;
+  font-size: 13px;
+}
+
+.toolbox-brief__lead {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 4px solid #0f5c3f;
+  background: #eef6f1;
+  border-radius: 0 8px 8px 0;
+  font-size: 15px;
+}
+
+.toolbox-brief__section {
+  margin: 0 0 14px;
+}
+
+.toolbox-brief__section h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f5c3f;
+  text-transform: none;
+}
+
+.toolbox-brief__section p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.toolbox-brief__section p:last-child {
+  margin-bottom: 0;
+}
+
+.toolbox-brief__discussion {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #c9ddd2;
+}
+
+.toolbox-brief__discussion h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f5c3f;
+}
+
+.toolbox-brief__discussion ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.toolbox-brief__discussion li {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.toolbox-brief__discussion li:last-child {
+  margin-bottom: 0;
+}

@@ -79,6 +79,13 @@
   font-family: Georgia, "Times New Roman", serif;
 }
 
+.cert-logo-img {
+  width: 28cqw;
+  height: 18cqw;
+  margin-top: 2cqw;
+  object-fit: contain;
+}
+
 .cert-logo {
   width: 28cqw;
   height: 18cqw;
@@ -124,6 +131,7 @@
   font-size: 2.5cqw;
   line-height: 1.35;
   color: #3a3a3a;
+  white-space: pre-line;
 }
 
 .cert-module {
@@ -153,6 +161,18 @@
   line-height: 1.45;
   color: #3a3a3a;
   max-width: 70%;
+  white-space: pre-line;
+}
+
+.cert-sheet-plain {
+  background: #fff;
+  background-image: none;
+  border: 10px solid #0f5c3f;
+  box-sizing: border-box;
+}
+
+.cert-sheet-plain .cert-geo {
+  display: none;
 }
 
 .cert-signs {

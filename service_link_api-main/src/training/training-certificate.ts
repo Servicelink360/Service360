@@ -7,23 +7,6 @@ import {
 } from '../upload/s3-upload.helper';
 import config from '../config';
 
-function escapeHtml(s: string) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function formatCertDate(d: Date) {
-  return new Intl.DateTimeFormat('en-AU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Australia/Sydney',
-  }).format(d);
-}
-
 function logoDataUri(): string {
   const name = 'servicelink-logo.png';
   const candidates = [
@@ -46,6 +29,79 @@ function logoDataUri(): string {
   return '';
 }
 
+function escapeHtml(s: string) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatCertDate(d: Date) {
+  return new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Australia/Sydney',
+  }).format(d);
+}
+
+export type CertificateLayout = {
+  templateKey?: string;
+  orgName?: string;
+  heading?: string;
+  lead?: string;
+  completedLine?: string;
+  body?: string;
+  signLeft?: string;
+  signLeftRole?: string;
+  signLeftNote?: string;
+  signRight?: string;
+  signRightRole?: string;
+  signRightNote?: string;
+  staffLine?: string;
+  moduleLine?: string;
+  dateLine?: string;
+  imageUrl?: string;
+  logoUrl?: string;
+};
+
+export function defaultCertificateLayout(templateKey = 'classic'): CertificateLayout {
+  return {
+    templateKey,
+    orgName: 'Service360',
+    heading: 'Certificate of Completion',
+    staffLine: '{staff}',
+    lead: 'has successfully completed the\n{modules}',
+    moduleLine: '{title}',
+    completedLine: 'This module was completed on',
+    dateLine: '{date}',
+    body: 'Score {score}. Module code {module}.\nValid until {valid}.',
+    signLeft: 'Service360',
+    signLeftRole: 'Issued by Service360',
+    signLeftNote: 'Training record',
+    signRight: 'Passed',
+    signRightRole: 'Certificate ID',
+    signRightNote: '{code}',
+  };
+}
+
+function fillCertificateText(
+  text: string,
+  vars: { staff: string; modules: string; date: string; code: string; score: string; module: string; valid: string; title: string },
+) {
+  return escapeHtml(text || '')
+    .replace(/\{staff\}/g, escapeHtml(vars.staff))
+    .replace(/\{title\}/g, escapeHtml(vars.title))
+    .replace(/\{modules\}/g, escapeHtml(vars.modules))
+    .replace(/\{date\}/g, escapeHtml(vars.date))
+    .replace(/\{code\}/g, escapeHtml(vars.code))
+    .replace(/\{score\}/g, escapeHtml(vars.score))
+    .replace(/\{module\}/g, escapeHtml(vars.module))
+    .replace(/\{valid\}/g, escapeHtml(vars.valid))
+    .replace(/\n/g, '<br/>');
+}
+
 export function buildTrainingCertificateHtml(opts: {
   staffName: string;
   moduleTitle: string;
@@ -57,17 +113,41 @@ export function buildTrainingCertificateHtml(opts: {
   expiresAt?: Date | null;
   certificateCode: string;
   kind?: string;
+  detail?: string;
+  layout?: CertificateLayout | null;
 }): string {
   const passedStr = formatCertDate(opts.passedAt);
   const expiresStr = opts.expiresAt ? formatCertDate(opts.expiresAt) : 'Does not expire';
   const isInduction = String(opts.kind || '').toUpperCase() === 'INDUCTION';
-  const lead = isInduction
-    ? 'has successfully completed the<br/>site induction'
-    : 'has successfully completed the<br/>Servicelink training module';
-  const logo = logoDataUri();
-  const logoHtml = logo
-    ? `<div class="logo" style="-webkit-mask-image:url('${logo}');mask-image:url('${logo}');" role="img" aria-label="Servicelink"></div>`
-    : '';
+  const layout = {
+    ...defaultCertificateLayout(opts.layout?.templateKey || 'classic'),
+    ...(opts.layout || {}),
+  };
+  const tokens = {
+    staff: opts.staffName,
+    modules: opts.detail || opts.moduleTitle,
+    date: passedStr,
+    code: opts.certificateCode,
+    score: `${opts.score}/${opts.total} (${opts.percent}%)`,
+    module: opts.moduleCode,
+    valid: expiresStr,
+    title: opts.moduleTitle,
+  };
+  const lead = opts.layout
+    ? fillCertificateText(layout.lead || '', tokens)
+    : opts.detail
+      ? 'has successfully completed'
+      : isInduction
+        ? 'has successfully completed the<br/>site induction'
+        : 'has successfully completed the<br/>Servicelink training module';
+  const customImage = layout.imageUrl ? escapeHtml(layout.imageUrl) : '';
+  const plain = layout.templateKey === 'plain';
+  const bundledLogo = logoDataUri();
+  const logoHtml = layout.logoUrl
+    ? `<img class="logo-img" src="${escapeHtml(layout.logoUrl)}" alt="" />`
+    : bundledLogo
+      ? `<div class="logo" style="-webkit-mask-image:url('${bundledLogo}');mask-image:url('${bundledLogo}');" role="img" aria-label="Servicelink"></div>`
+      : '';
 
   return `<!DOCTYPE html>
 <html>
@@ -89,6 +169,17 @@ export function buildTrainingCertificateHtml(opts: {
         linear-gradient(180deg, #fcfbf8 0%, #f4f1ea 100%);
       color: #1a1a1a;
     }
+    .sheet.plain {
+      background: #fff;
+      background-image: none;
+      border: 10px solid #0f5c3f;
+      box-sizing: border-box;
+    }
+    .sheet.plain .geo { display: none; }
+    .sheet.custom {
+      background: #fff center / contain no-repeat;
+    }
+    .sheet.custom .geo { display: none; }
     .geo { position: absolute; width: 54mm; height: 54mm; }
     .geo-tl {
       top: 0; left: 0;
@@ -117,6 +208,12 @@ export function buildTrainingCertificateHtml(opts: {
       align-items: center;
       text-align: center;
       font-family: Georgia, "Times New Roman", serif;
+    }
+    .logo-img {
+      width: 58mm;
+      height: 38mm;
+      margin-top: 6mm;
+      object-fit: contain;
     }
     .logo {
       width: 58mm;
@@ -166,31 +263,37 @@ export function buildTrainingCertificateHtml(opts: {
   </style>
 </head>
 <body>
-  <div class="sheet">
+  <div class="sheet${customImage ? ' custom' : plain ? ' plain' : ''}"${customImage ? ` style="background-image:url('${customImage}')"` : ''}>
     <div class="geo geo-tl"></div>
     <div class="geo geo-br"></div>
     <div class="inner">
       ${logoHtml}
-      <p class="org">Service360</p>
-      <h1>Certificate of Completion</h1>
-      <p class="name">${escapeHtml(opts.staffName)}</p>
+      <p class="org">${fillCertificateText(layout.orgName || 'Service360', tokens)}</p>
+      <h1>${opts.layout ? fillCertificateText(layout.heading || '', tokens) : 'Certificate of Completion'}</h1>
+      <p class="name">${fillCertificateText(layout.staffLine || '{staff}', tokens)}</p>
       <p class="lead">${lead}</p>
-      <p class="module">${escapeHtml(opts.moduleTitle)}</p>
-      <p class="when">This module was completed on</p>
-      <p class="date">${escapeHtml(passedStr)}</p>
-      <p class="award">Score ${opts.score}/${opts.total} (${opts.percent}%). Module code ${escapeHtml(opts.moduleCode)}.<br/>Valid until ${escapeHtml(expiresStr)}.</p>
+      <p class="module">${fillCertificateText(layout.moduleLine || '{title}', tokens)}</p>
+      <p class="when">${opts.layout ? fillCertificateText(layout.completedLine || '', tokens) : 'This module was completed on'}</p>
+      <p class="date">${fillCertificateText(layout.dateLine || '{date}', tokens)}</p>
+      <p class="award">${
+        opts.layout
+          ? fillCertificateText(layout.body || '', tokens)
+          : opts.detail
+            ? escapeHtml(opts.detail)
+            : `Score ${opts.score}/${opts.total} (${opts.percent}%). Module code ${escapeHtml(opts.moduleCode)}.<br/>Valid until ${escapeHtml(expiresStr)}.`
+      }</p>
       <div class="signs">
         <div>
-          <span class="script">Service360</span>
+          <span class="script">${opts.layout ? fillCertificateText(layout.signLeft || '', tokens) : 'Service360'}</span>
           <span class="rule"></span>
-          <strong>Issued by Service360</strong>
-          <em>Training record</em>
+          <strong>${opts.layout ? fillCertificateText(layout.signLeftRole || '', tokens) : 'Issued by Service360'}</strong>
+          <em>${opts.layout ? fillCertificateText(layout.signLeftNote || '', tokens) : 'Training record'}</em>
         </div>
         <div>
-          <span class="script">Passed</span>
+          <span class="script">${opts.layout ? fillCertificateText(layout.signRight || '', tokens) : 'Passed'}</span>
           <span class="rule"></span>
-          <strong>Certificate ID</strong>
-          <em>${escapeHtml(opts.certificateCode)}</em>
+          <strong>${opts.layout ? fillCertificateText(layout.signRightRole || '', tokens) : 'Certificate ID'}</strong>
+          <em>${fillCertificateText(layout.signRightNote || '{code}', tokens)}</em>
         </div>
       </div>
     </div>
@@ -210,6 +313,8 @@ export async function generateTrainingCertificatePdf(opts: {
   expiresAt?: Date | null;
   certificateCode: string;
   kind?: string;
+  detail?: string;
+  layout?: CertificateLayout | null;
 }): Promise<string> {
   const html = buildTrainingCertificateHtml(opts);
 

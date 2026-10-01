@@ -33,6 +33,14 @@ export class TrainingAssignment {
   @Column({ name: 'assigned_by', type: 'int', nullable: true })
   assignedBy?: number | null;
 
+  /** When true, a certificate is issued after every module in this assignment is passed. */
+  @Column({ name: 'issue_certificate', type: 'boolean', default: false })
+  issueCertificate: boolean;
+
+  /** Named certificate from training_certificates, used when issueCertificate is set. */
+  @Column({ name: 'certificate_id', type: 'int', nullable: true })
+  certificateId?: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

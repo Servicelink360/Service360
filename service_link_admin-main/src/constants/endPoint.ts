@@ -40,6 +40,7 @@ const crmEndPoint = {
     INVOICES: 'v1/invoices',
     ASSETS: 'v1/assets',
     TRAINING: 'v1/training',
+    TOOLBOX: 'v1/toolbox',
     MESSAGES: 'v1/messages',
     /** Multipart upload (must match API UploadController version prefix). */
     UPLOAD_FILE: 'v1/uploadFile',

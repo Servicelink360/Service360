@@ -105,6 +105,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureInvoicesTable();
     await this.ensureAssetsTable();
     await this.ensureTrainingTables();
+    await this.ensureToolboxTables();
     await this.ensureReportTemplateSiteFields();
     await this.applyRenameDepartmentsToServices();
 
@@ -2239,7 +2240,9 @@ export class PostgresSchemaPatchService implements OnModuleInit {
         ALTER TABLE public.training_progress
           ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NULL,
           ADD COLUMN IF NOT EXISTS certificate_url VARCHAR(1000) NULL,
-          ADD COLUMN IF NOT EXISTS certificate_code VARCHAR(64) NULL;
+          ADD COLUMN IF NOT EXISTS certificate_code VARCHAR(64) NULL,
+          ADD COLUMN IF NOT EXISTS current_topic_id INTEGER NULL,
+          ADD COLUMN IF NOT EXISTS quiz_draft JSONB NOT NULL DEFAULT '{}'::jsonb;
       `);
       await this.dataSource.query(`
         CREATE INDEX IF NOT EXISTS idx_training_progress_user
@@ -2279,13 +2282,151 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           ON public.training_assignments(module_id);
       `);
       await this.dataSource.query(`
+        ALTER TABLE public.training_assignments
+          ADD COLUMN IF NOT EXISTS issue_certificate BOOLEAN NOT NULL DEFAULT FALSE;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_assignments
+          ADD COLUMN IF NOT EXISTS certificate_id INTEGER NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_certificate_awards
+          ADD COLUMN IF NOT EXISTS module_ids JSONB NOT NULL DEFAULT '[]';
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_staff_certificates (
+          staff_id INTEGER PRIMARY KEY,
+          module_ids JSONB NOT NULL DEFAULT '[]',
+          certificate_url VARCHAR(1000) NULL,
+          certificate_code VARCHAR(64) NULL,
+          issued_at TIMESTAMPTZ NULL
+        );
+      `);
+      await this.dataSource.query(`
         UPDATE public.training_modules
         SET validity_days = 365
         WHERE validity_days IS NULL AND UPPER(COALESCE(module_kind,'TRAINING')) = 'TRAINING';
       `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_settings (
+          setting_key VARCHAR(80) PRIMARY KEY,
+          setting_value VARCHAR(255) NOT NULL
+        );
+      `);
+      await this.dataSource.query(`
+        INSERT INTO public.training_settings (setting_key, setting_value)
+        VALUES ('certificate_modules_required', '1')
+        ON CONFLICT (setting_key) DO NOTHING;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_certificates (
+          id SERIAL PRIMARY KEY,
+          title VARCHAR(255) NOT NULL,
+          description TEXT NULL,
+          module_ids JSONB NOT NULL DEFAULT '[]',
+          layout JSONB NOT NULL DEFAULT '{}',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_certificates
+          ADD COLUMN IF NOT EXISTS layout JSONB NOT NULL DEFAULT '{}';
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_certificates
+          ADD COLUMN IF NOT EXISTS description TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_certificates
+          ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_certificate_templates (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          layout JSONB NOT NULL DEFAULT '{}',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.training_certificate_awards (
+          id SERIAL PRIMARY KEY,
+          certificate_id INTEGER NOT NULL REFERENCES public.training_certificates(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL,
+          certificate_url VARCHAR(1000) NULL,
+          certificate_code VARCHAR(64) NULL,
+          issued_at TIMESTAMPTZ NULL,
+          UNIQUE (certificate_id, user_id)
+        );
+      `);
       this.logger.log('training tables ensured');
     } catch (e) {
       this.logger.warn(`training tables patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureToolboxTables(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.toolbox_talks (
+          id SERIAL PRIMARY KEY,
+          code VARCHAR(40) NOT NULL UNIQUE,
+          title VARCHAR(255) NOT NULL,
+          brief TEXT NOT NULL,
+          points JSONB NOT NULL DEFAULT '[]'::jsonb,
+          duration_mins INTEGER NOT NULL DEFAULT 10,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          status SMALLINT NOT NULL DEFAULT 1
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_talks
+        ADD COLUMN IF NOT EXISTS image_url VARCHAR(500) NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.toolbox_sessions (
+          id SERIAL PRIMARY KEY,
+          talk_id INTEGER NOT NULL REFERENCES public.toolbox_talks(id) ON DELETE CASCADE,
+          site_id INTEGER NULL,
+          site_name VARCHAR(255) NULL,
+          delivered_by INTEGER NULL,
+          delivered_at TIMESTAMPTZ NOT NULL,
+          notes TEXT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_toolbox_sessions_delivered
+          ON public.toolbox_sessions(delivered_at DESC);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.toolbox_attendance (
+          id SERIAL PRIMARY KEY,
+          session_id INTEGER NOT NULL REFERENCES public.toolbox_sessions(id) ON DELETE CASCADE,
+          staff_id INTEGER NOT NULL,
+          acknowledged_at TIMESTAMPTZ NULL,
+          UNIQUE (session_id, staff_id)
+        );
+      `);
+      const { TOOLBOX_SEEDS } = await import('../toolbox/toolbox-talks.seed');
+      for (const seed of TOOLBOX_SEEDS) {
+        await this.dataSource.query(
+          `INSERT INTO public.toolbox_talks (code, title, brief, points, duration_mins, sort_order, status, image_url)
+           SELECT $1, $2, $3, $4::jsonb, $5, $6, 1, $7
+           WHERE NOT EXISTS (SELECT 1 FROM public.toolbox_talks WHERE code = $1)`,
+          [seed.code, seed.title, seed.brief, JSON.stringify(seed.points), seed.durationMins, seed.sortOrder, seed.imageUrl || null],
+        );
+        await this.dataSource.query(
+          `UPDATE public.toolbox_talks
+           SET title = $2, brief = $3, points = $4::jsonb, duration_mins = $5,
+               image_url = COALESCE(NULLIF(image_url, ''), $6)
+           WHERE code = $1 AND (char_length(brief) < char_length($3) OR image_url IS NULL OR image_url = '')`,
+          [seed.code, seed.title, seed.brief, JSON.stringify(seed.points), seed.durationMins, seed.imageUrl || null],
+        );
+      }
+      this.logger.log('toolbox tables ensured');
+    } catch (e) {
+      this.logger.warn(`toolbox tables patch: ${(e as Error).message}`);
     }
   }
 

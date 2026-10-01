@@ -1,6 +1,8 @@
 import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
 import {
+  ArrowDownOutlined,
+  ArrowUpOutlined,
   CheckOutlined,
   EditOutlined,
   PlusOutlined,
@@ -30,6 +32,8 @@ import { useHistory } from 'react-router-dom';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync, callAPIUploadAsync } from '../../library/helpers/api';
+import { formatTrainingBody } from './formatTrainingBody';
+import './training.css';
 import { resolveReportPdfHref } from '../reports/new-reports-display-utils';
 
 const TrainingAdminPage: React.FC = () => {
@@ -51,11 +55,13 @@ const TrainingAdminPage: React.FC = () => {
   const [contentTopics, setContentTopics] = useState<any[]>([]);
   const [contentLoading, setContentLoading] = useState(false);
   const [editTopic, setEditTopic] = useState<any>(null);
+  const [newTopicOpen, setNewTopicOpen] = useState(false);
   const [topicSaving, setTopicSaving] = useState(false);
   const [topicImageUploading, setTopicImageUploading] = useState(false);
   const [createForm] = Form.useForm();
   const [modForm] = Form.useForm();
   const [topicForm] = Form.useForm();
+  const [newTopicForm] = Form.useForm();
 
   const loadModules = useCallback(async () => {
     const res = await callAPIAsync(
@@ -260,6 +266,58 @@ const TrainingAdminPage: React.FC = () => {
     }
   };
 
+  const reloadTopics = async (moduleId: number) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/modules/${moduleId}/topics`,
+      'GET',
+      null,
+    );
+    if (res?.code === 1) setContentTopics(res.data?.topics || []);
+  };
+
+  const createTopic = async () => {
+    if (!contentModule) return;
+    const v = await newTopicForm.validateFields();
+    setTopicSaving(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TRAINING}/admin/modules/${contentModule.id}/topics`,
+        'POST',
+        {
+          title: String(v.title || '').trim(),
+          body: String(v.body || ''),
+        },
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not add topic');
+        return;
+      }
+      message.success('Topic added');
+      setNewTopicOpen(false);
+      newTopicForm.resetFields();
+      await reloadTopics(contentModule.id);
+    } finally {
+      setTopicSaving(false);
+    }
+  };
+
+  const moveTopic = async (topicId: number, direction: 'up' | 'down') => {
+    if (!contentModule) return;
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/topics/${topicId}/move`,
+      'POST',
+      { direction },
+    );
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not reorder topic');
+      return;
+    }
+    await reloadTopics(contentModule.id);
+  };
+
   const moduleCols: ColumnsType<any> = [
     { title: 'Code', dataIndex: 'code', width: 110 },
     { title: 'Title', dataIndex: 'title' },
@@ -284,6 +342,28 @@ const TrainingAdminPage: React.FC = () => {
       dataIndex: 'validityDays',
       width: 100,
       render: (v) => (v ? `${v}d` : 'Never'),
+    },
+    {
+      title: 'Length',
+      dataIndex: 'durationMins',
+      width: 90,
+      render: (v) => (v ? `${v} min` : '—'),
+    },
+    {
+      title: 'Questions',
+      width: 120,
+      render: (_, r) => {
+        const total = +r.questionTotal || 0;
+        const reviewed = +r.questionReviewed || 0;
+        const withAnswer = +r.questionWithAnswer || 0;
+        const thin = total > 0 && total < 8;
+        const gaps = withAnswer < total || reviewed < total;
+        return (
+          <Tag color={thin || gaps ? 'orange' : 'green'}>
+            {reviewed}/{total} reviewed
+          </Tag>
+        );
+      },
     },
     {
       title: '',
@@ -480,6 +560,10 @@ const TrainingAdminPage: React.FC = () => {
               history.push('/training-admin/staff');
               return;
             }
+            if (key === 'certificates') {
+              history.push('/training-admin/certificates');
+              return;
+            }
             setActiveTab(key);
           }}
           items={[
@@ -516,7 +600,7 @@ const TrainingAdminPage: React.FC = () => {
                   dataSource={modules}
                   pagination={{ pageSize: 20 }}
                   size="middle"
-                  scroll={{ x: 980 }}
+                  scroll={{ x: 1180 }}
                 />
               ),
             },
@@ -546,6 +630,11 @@ const TrainingAdminPage: React.FC = () => {
                   />
                 </>
               ),
+            },
+            {
+              key: 'certificates',
+              label: 'Certificates',
+              children: null,
             },
           ]}
         />
@@ -696,6 +785,18 @@ const TrainingAdminPage: React.FC = () => {
           width={860}
           destroyOnClose
         >
+          <div style={{ marginBottom: 12 }}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                newTopicForm.resetFields();
+                setNewTopicOpen(true);
+              }}
+            >
+              Add topic
+            </Button>
+          </div>
           <Table
             rowKey="id"
             loading={contentLoading}
@@ -711,7 +812,7 @@ const TrainingAdminPage: React.FC = () => {
                   t.imageUrl ? (
                     <img
                       src={t.imageUrl}
-                      alt=""
+                      alt={t.title || 'Topic image'}
                       style={{
                         width: 64,
                         height: 40,
@@ -728,11 +829,25 @@ const TrainingAdminPage: React.FC = () => {
               { title: 'Title', dataIndex: 'title', ellipsis: true },
               {
                 title: '',
-                width: 90,
-                render: (_, t) => (
-                  <Button size="small" icon={<EditOutlined />} onClick={() => openTopicEditor(t)}>
-                    Edit
-                  </Button>
+                width: 210,
+                render: (_, t, index) => (
+                  <Space>
+                    <Button
+                      size="small"
+                      icon={<ArrowUpOutlined />}
+                      disabled={index === 0}
+                      onClick={() => void moveTopic(t.id, 'up')}
+                    />
+                    <Button
+                      size="small"
+                      icon={<ArrowDownOutlined />}
+                      disabled={index === contentTopics.length - 1}
+                      onClick={() => void moveTopic(t.id, 'down')}
+                    />
+                    <Button size="small" icon={<EditOutlined />} onClick={() => openTopicEditor(t)}>
+                      Edit
+                    </Button>
+                  </Space>
                 ),
               },
             ]}
@@ -759,6 +874,35 @@ const TrainingAdminPage: React.FC = () => {
             <Form.Item name="body" label="Topic text" rules={[{ required: true, message: 'Enter text' }]}>
               <Input.TextArea rows={12} placeholder="Learning content for this topic" />
             </Form.Item>
+            <Form.Item
+              noStyle
+              shouldUpdate={(prev, next) =>
+                prev.body !== next.body || prev.title !== next.title || prev.imageUrl !== next.imageUrl
+              }
+            >
+              {() => (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Preview</div>
+                  <div
+                    style={{
+                      maxHeight: 280,
+                      overflow: 'auto',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 8,
+                      padding: 12,
+                      background: '#fafafa',
+                    }}
+                  >
+                    {formatTrainingBody(topicForm.getFieldValue('body') || '', {
+                      title: topicForm.getFieldValue('title'),
+                      imagesAfterIntro: topicForm.getFieldValue('imageUrl')
+                        ? [topicForm.getFieldValue('imageUrl')]
+                        : [],
+                    })}
+                  </div>
+                </div>
+              )}
+            </Form.Item>
             <Form.Item name="imageUrl" label="Image URL" hidden>
               <Input />
             </Form.Item>
@@ -770,7 +914,7 @@ const TrainingAdminPage: React.FC = () => {
                     return url ? (
                       <img
                         src={url}
-                        alt=""
+                        alt={editTopic?.title || 'Topic image'}
                         style={{
                           maxWidth: '100%',
                           maxHeight: 200,
@@ -815,6 +959,29 @@ const TrainingAdminPage: React.FC = () => {
                   </Form.Item>
                 </Space>
               </Space>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          title="Add topic"
+          open={newTopicOpen}
+          onCancel={() => setNewTopicOpen(false)}
+          onOk={() => void createTopic()}
+          confirmLoading={topicSaving}
+          okText="Add topic"
+          destroyOnClose
+        >
+          <Form form={newTopicForm} layout="vertical">
+            <Form.Item name="title" label="Title" rules={[{ required: true, message: 'Enter a title' }]}>
+              <Input maxLength={255} />
+            </Form.Item>
+            <Form.Item
+              name="body"
+              label="Topic text"
+              rules={[{ required: true, message: 'Enter topic text' }]}
+            >
+              <Input.TextArea rows={8} />
             </Form.Item>
           </Form>
         </Modal>

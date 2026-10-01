@@ -1,6 +1,6 @@
 import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { Button, Input, Popconfirm, Progress, Space, Table, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -211,19 +211,18 @@ const TrainingAdminStaffListPage: React.FC = () => {
                 <p className="ta-list-chrome-sub">People who already have training</p>
               </div>
               <Space>
+                <Button icon={<ArrowLeftOutlined />} onClick={() => history.push('/training-admin')}>
+                  Back
+                </Button>
+                <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+                  Refresh
+                </Button>
                 <Button
-                  className="ta-btn-green"
+                  type="primary"
                   icon={<PlusOutlined />}
                   onClick={() => history.push('/training-admin/staff/new')}
                 >
                   New
-                </Button>
-                <Button
-                  className="ta-btn-outline"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={() => history.push('/training-admin')}
-                >
-                  Back
                 </Button>
               </Space>
             </div>
@@ -238,11 +237,7 @@ const TrainingAdminStaffListPage: React.FC = () => {
                   onPressEnter={() => setApplied(filter)}
                 />
               </div>
-              <Button
-                className="ta-btn-green"
-                icon={<SearchOutlined />}
-                onClick={() => setApplied(filter)}
-              >
+              <Button type="primary" icon={<SearchOutlined />} onClick={() => setApplied(filter)}>
                 Search
               </Button>
             </div>

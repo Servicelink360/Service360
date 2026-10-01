@@ -232,6 +232,11 @@
   background: var(--tr-surface);
 }
 
+.training-topic-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .training-topic-list button.active {
   background: var(--tr-accent-soft);
   color: var(--tr-accent);
@@ -277,7 +282,102 @@
 .training-body {
   font-size: 15px;
   line-height: 1.65;
-  color: #1f332b;
+  color: #1a2e24;
+}
+
+.training-brief {
+  color: #1a2e24;
+  line-height: 1.55;
+}
+
+.training-brief__hero {
+  position: relative;
+  margin: 0 0 16px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #eef6f1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 420px;
+}
+
+.training-brief__hero img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+}
+
+.training-brief__hero-label {
+  display: none;
+}
+
+.training-brief__section {
+  margin: 0 0 14px;
+}
+
+.training-brief__section h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f5c3f;
+  text-transform: none;
+}
+
+.training-brief__section p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.training-brief__section p:last-child {
+  margin-bottom: 0;
+}
+
+.training-brief__lead {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-left: 4px solid #0f5c3f;
+  background: #eef6f1;
+  border-radius: 0 8px 8px 0;
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.training-brief__discussion {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #c9ddd2;
+}
+
+.training-brief__discussion h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f5c3f;
+}
+
+.training-brief__discussion ol,
+.training-brief__discussion ul {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.training-brief__discussion li {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.training-brief__discussion li:last-child {
+  margin-bottom: 0;
 }
 
 .training-figure {
@@ -286,19 +386,20 @@
   border: 0;
   background: transparent;
   display: block;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
 }
 
 .training-figure img {
   display: block;
-  width: auto;
-  max-width: min(100%, 520px);
+  width: 100%;
+  max-width: 100%;
   height: auto;
-  max-height: 280px;
+  max-height: 420px;
   object-fit: contain;
-  border-radius: 12px;
-  background: transparent;
+  object-position: center;
+  border-radius: 10px;
+  background: #eef6f1;
 }
 
 .training-video {
@@ -322,6 +423,11 @@
 
 .training-body p {
   margin: 0 0 14px;
+}
+
+.training-body .training-brief__lead,
+.training-body .training-brief__section p {
+  margin-bottom: 0;
 }
 
 .training-body p:last-child {

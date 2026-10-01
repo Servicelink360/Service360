@@ -16,6 +16,35 @@
       "description": "Australian work health and safety for roof and gutter cleaning: falls, ladders, weather, manual tasks, and overhead power lines."
     },
     {
+      "code": "SL",
+      "durationMins": 40
+    },
+    {
+      "code": "M1",
+      "durationMins": 60
+    },
+    {
+      "code": "M2",
+      "durationMins": 45
+    },
+    {
+      "code": "M3",
+      "durationMins": 45
+    },
+    {
+      "code": "M4",
+      "durationMins": 30
+    },
+    {
+      "code": "M6",
+      "durationMins": 50
+    },
+    {
+      "code": "MANUAL",
+      "durationMins": 75,
+      "description": "Australian hazardous manual tasks training: risk controls, musculoskeletal injury prevention, and safe lift, push and carry techniques."
+    },
+    {
       "code": "M5",
       "durationMins": 30,
       "description": "Australian work health and safety for remote and isolated work: check-in, emergencies, travel, aggression, and fatigue when help is not close by."
@@ -57,6 +86,13 @@
       "title": "Electrical equipment",
       "imageUrl": "/images/training/themes/electrical-safety.png",
       "body": "Check vacuums, polishers, and leads before you plug them in. Do not use equipment with a cut lead, cracked plug, damaged guard, or a test-and-tag label that is out of date where the site requires tagging.\n\nUse a safety switch (RCD) where one is provided. Keep electrical equipment away from water unless it is built for wet use. Unplug it before you change a bag, pad, or filter.\n\nIf a machine smells, sparks, or trips a safety switch, stop, unplug it, and report it. Do not tape a cut lead and keep working."
+    },
+    {
+      "code": "M1",
+      "title": "Identifying faulty electrical equipment",
+      "imageUrl": "/images/training/themes/faulty-electrical-equipment.png",
+      "forceImage": true,
+      "body": "If you notice the following you should take the simple step to report the matter using the hazard reporting process at your workplace.\n\nWhat to look for\nExtension socket is cracked and split.\nA lead has had heavy objects dropped on it, causing broken and deformed insulation.\nA plug top shows signs of heat damage.\nThe outer insulation is cut, pulled back, or missing.\nA switch or socket feels hot, smells of burning, or sparks when used.\nThe lead is taped, knotted, or held together with wire.\nA test and tag label is missing or out of date where the site requires tagging.\n\nWhat you do\nDo not use the item. Unplug it if it is safe to do so. Tag it out of service and keep other people away from it. Report it through the hazard reporting process the same day. Do not repair electrical equipment yourself unless you are a licensed electrician."
     },
     {
       "code": "CLEAN",
@@ -375,7 +411,13 @@
     { "test": "out of service", "src": "/images/training/themes/forklift.png" },
     { "test": "duty of your employer", "src": "/images/training/gateway/your-responsibility.png" },
     { "test": "slip|trip|uneven ground", "src": "/images/training/themes/slips-trips.png" },
+    { "test": "sweep", "src": "/images/training/themes/sweep-manual-hazards.png" },
+    { "test": "awkward posture|postures and tasks", "src": "/images/training/themes/awkward-posture.png" },
+    { "test": "manual handling principles|natural curves|spine", "src": "/images/training/themes/spine-curves-lift.png" },
+    { "test": "practical techniques|pushing|trolley", "src": "/images/training/themes/push-pull-trolley.png" },
+    { "test": "faulty electrical|identifying faulty|cracked.*socket|heat damage", "src": "/images/training/themes/faulty-electrical-equipment.png" },
     { "test": "electrical", "src": "/images/training/themes/electrical-safety.png" },
+    { "test": "manual handling|hazardous manual|safe lifting", "src": "/images/training/gateway/manual-handling-awareness.png" },
     { "test": "chemical|safety data|spray|fertiliser", "src": "/images/training/themes/chemicals-sds.png" },
     { "test": "bite|sting|first aid", "src": "/images/training/themes/first-aid.png" },
     { "test": "injur", "src": "/images/training/themes/injury.png" },

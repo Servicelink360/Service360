@@ -74,6 +74,14 @@ export const TrainingAdminChromeStyles: React.FC = () => (
         overflow: hidden;
       }
       .ta-table-panel .ant-table-pagination { margin: 12px 16px !important; }
+      .cert-view-modal { overflow: hidden !important; }
+      .cert-view-modal .ant-modal-body { overflow: hidden !important; }
+      .ta-cert-table .ant-table-thead > tr > th {
+        background: #188038 !important;
+        color: #fff !important;
+        font-weight: 600;
+        border-bottom: none !important;
+      }
       .ta-row-link { color: #166534; font-weight: 600; cursor: pointer; }
       .ta-row-link:hover { color: #188038; }
     `}

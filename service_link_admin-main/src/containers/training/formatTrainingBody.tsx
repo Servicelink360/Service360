@@ -3,73 +3,142 @@ import React from 'react';
 /** Split plain training copy into readable paragraphs / lists for the learner UI. */
 export function formatTrainingBody(
   raw: string,
-  options?: { imagesAfterIntro?: string[] },
+  options?: { imagesAfterIntro?: string[]; title?: string },
 ): React.ReactNode {
   const text = String(raw || '').replace(/\r\n/g, '\n').trim();
   const images = (options?.imagesAfterIntro || []).filter(Boolean);
   if (!text && !images.length) return null;
 
   const blocks = buildBlocks(text);
-  const nodes: React.ReactNode[] = [];
-  let imagesInserted = false;
+  const embeddedHero = blocks.find((b) => b.type === 'image') as { type: 'image'; src: string } | undefined;
+  const heroSrc = images[0] || embeddedHero?.src || null;
+  const restImages = images.filter((src) => src !== heroSrc);
 
-  const pushImages = (keyPrefix: string) => {
-    if (imagesInserted || !images.length) return;
-    imagesInserted = true;
-    images.forEach((src, idx) => {
-      nodes.push(
-        <figure className="training-figure" key={`${keyPrefix}-img-${idx}`}>
-          <img src={src} alt="" loading="lazy" />
-        </figure>,
-      );
-    });
+  type RenderItem =
+    | { kind: 'lead'; text: string }
+    | { kind: 'section'; heading?: string; paragraphs: string[] }
+    | { kind: 'list'; lead: string; items: string[] }
+    | { kind: 'video'; src: string }
+    | { kind: 'image'; src: string };
+
+  const items: RenderItem[] = [];
+  let leadUsed = false;
+  let restImagesPlaced = false;
+
+  const placeRestImages = () => {
+    if (restImagesPlaced || !restImages.length) return;
+    restImagesPlaced = true;
+    restImages.forEach((src) => items.push({ kind: 'image', src }));
   };
 
-  if (!blocks.length) {
-    pushImages('solo');
-    return nodes;
+  for (const block of blocks) {
+    if (block.type === 'image') {
+      if (heroSrc && block.src === heroSrc) continue;
+      items.push({ kind: 'image', src: block.src });
+      continue;
+    }
+    if (block.type === 'video') {
+      items.push({ kind: 'video', src: block.src });
+      continue;
+    }
+    if (block.type === 'list') {
+      items.push({ kind: 'list', lead: block.lead, items: block.items });
+      placeRestImages();
+      continue;
+    }
+    if (isHeadingText(block.text)) {
+      items.push({ kind: 'section', heading: block.text, paragraphs: [] });
+      continue;
+    }
+    if (!leadUsed) {
+      leadUsed = true;
+      items.push({ kind: 'lead', text: block.text });
+      placeRestImages();
+      continue;
+    }
+    const last = items[items.length - 1];
+    if (last?.kind === 'section') {
+      last.paragraphs.push(block.text);
+    } else {
+      items.push({ kind: 'section', paragraphs: [block.text] });
+    }
   }
 
-  blocks.forEach((block, i) => {
-    if (block.type === 'image') {
-      nodes.push(
-        <figure className="training-figure" key={`img-${i}`}>
-          <img src={block.src} alt="" loading="lazy" />
-        </figure>,
-      );
-    } else if (block.type === 'video') {
-      nodes.push(
-        <div className="training-video" key={`vid-${i}`}>
-          <iframe
-            src={block.src}
-            title="Training video"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>,
-      );
-    } else if (block.type === 'list') {
-      nodes.push(
-        <React.Fragment key={`list-${i}`}>
-          {block.lead ? (
-            <p className="training-list-lead">{linkifyTrainingText(block.lead)}</p>
-          ) : null}
-          <ul>
-            {block.items.map((item, j) => (
-              <li key={j}>{linkifyTrainingText(item)}</li>
-            ))}
-          </ul>
-        </React.Fragment>,
-      );
-    } else {
-      nodes.push(<p key={`p-${i}`}>{linkifyTrainingText(block.text)}</p>);
-    }
+  placeRestImages();
 
-    if (i === 0) pushImages('after-intro');
-  });
+  return (
+    <div className="training-brief">
+      {heroSrc ? (
+        <div className="training-brief__hero">
+          <img src={heroSrc} alt={options?.title || 'Training illustration'} loading="lazy" />
+          {options?.title ? <span className="training-brief__hero-label">{options.title}</span> : null}
+        </div>
+      ) : null}
+      {items.map((item, i) => {
+        if (item.kind === 'lead') {
+          return (
+            <p className="training-brief__lead" key={`lead-${i}`}>
+              {linkifyTrainingText(item.text)}
+            </p>
+          );
+        }
+        if (item.kind === 'section') {
+          return (
+            <div className="training-brief__section" key={`sec-${i}`}>
+              {item.heading ? <h4>{linkifyTrainingText(item.heading)}</h4> : null}
+              {item.paragraphs.map((paragraph, pIndex) => (
+                <p key={pIndex}>{linkifyTrainingText(paragraph)}</p>
+              ))}
+            </div>
+          );
+        }
+        if (item.kind === 'list') {
+          return (
+            <div className="training-brief__discussion" key={`list-${i}`}>
+              <h4>{linkifyTrainingText(stripListColon(item.lead) || 'Key points')}</h4>
+              <ol>
+                {item.items.map((listItem, j) => (
+                  <li key={j}>{linkifyTrainingText(listItem)}</li>
+                ))}
+              </ol>
+            </div>
+          );
+        }
+        if (item.kind === 'video') {
+          return (
+            <div className="training-video" key={`vid-${i}`}>
+              <iframe
+                src={item.src}
+                title={options?.title ? `${options.title} video` : 'Training video'}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          );
+        }
+        return (
+          <figure className="training-figure" key={`img-${i}`}>
+            <img src={item.src} alt={options?.title || 'Training illustration'} loading="lazy" />
+          </figure>
+        );
+      })}
+    </div>
+  );
+}
 
-  if (!imagesInserted) pushImages('end');
-  return nodes;
+function stripListColon(lead: string) {
+  return String(lead || '')
+    .replace(/:\s*$/, '')
+    .trim();
+}
+
+function isHeadingText(text: string) {
+  const t = String(text || '').trim();
+  if (!t || t.length > 72) return false;
+  if (/[.?!]$/.test(t)) return false;
+  if (/^(https?:\/\/|IMAGE:|VIDEO:)/i.test(t)) return false;
+  if (/^\d+[.)]\s/.test(t)) return false;
+  return true;
 }
 
 type BodyBlock =
@@ -78,67 +147,185 @@ type BodyBlock =
   | { type: 'image'; src: string }
   | { type: 'video'; src: string };
 
+/** Same shape as toolbox briefs: short lead, headed sections, short paragraphs. */
 function buildBlocks(text: string): BodyBlock[] {
-  const repaired = repairSentences(text);
-  const chunks = expandToChunks(repaired);
-  const out: BodyBlock[] = [];
+  const prepared = isolateMediaAndVideos(String(text || '').replace(/\r\n/g, '\n'));
+  const lined = hasToolboxLineStructure(prepared)
+    ? prepared
+    : structureDenseTrainingText(prepared);
 
-  for (const chunk of chunks) {
-    const imageUrl = matchImageBlock(chunk);
+  const lines = lined
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const out: BodyBlock[] = [];
+  for (const line of lines) {
+    const imageUrl = matchImageBlock(line);
     if (imageUrl) {
       out.push({ type: 'image', src: imageUrl });
       continue;
     }
-    const embedUrl = matchVideoEmbed(chunk);
+    const embedUrl = matchVideoEmbed(line) || matchYoutubePlaceholder(line);
     if (embedUrl) {
       out.push({ type: 'video', src: embedUrl });
       continue;
     }
-
-    const list = extractListItems(chunk);
+    const list = extractListItems(line);
     if (list?.items?.length) {
       out.push({ type: 'list', lead: list.lead, items: list.items });
       if (list.trailing) {
-        toParagraphs(list.trailing).forEach((p) => out.push({ type: 'paragraph', text: p }));
+        shortParagraphs(list.trailing).forEach((p) => out.push({ type: 'paragraph', text: p }));
       }
       continue;
     }
-
-    toParagraphs(chunk).forEach((p) => out.push({ type: 'paragraph', text: p }));
+    if (isHeadingText(line)) {
+      out.push({ type: 'paragraph', text: line });
+      continue;
+    }
+    shortParagraphs(line).forEach((p) => out.push({ type: 'paragraph', text: p }));
   }
-
   return out;
 }
 
-function expandToChunks(text: string): string[] {
-  // Put each YouTube placeholder on its own block for clearer blue links.
-  const normalized = text.replace(
-    /\s*((?:WorkSafe\s+)?(?:Victoria\s+)?[^()\n]{3,120}?)\s*\(\s*this is a link to a youtube video\s*\)\s*/gi,
-    '\n\n$1 (this is a link to a youtube video)\n\n',
-  );
-
-  let chunks = normalized
-    .split(/\n{2,}/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  if (chunks.length === 1) {
-    const lines = normalized
-      .split(/\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (lines.length > 1) chunks = lines;
-  }
-
-  // Pull semicolon lists into their own chunks so list extraction works.
-  return chunks.flatMap((chunk) => splitAroundSemicolonLists(chunk));
+function isolateMediaAndVideos(text: string): string {
+  return text
+    .replace(/^\s*(IMAGE|VIDEO):\s*(\S+)\s*$/gim, '\n$1: $2\n')
+    .replace(
+      /\s*((?:WorkSafe\s+)?(?:Victoria\s+)?[^()\n]{3,120}?)\s*\(\s*this is a link to a youtube video\s*\)\s*/gi,
+      '\n$1 (this is a link to a youtube video)\n',
+    )
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
-function toParagraphs(text: string): string[] {
+function hasToolboxLineStructure(text: string): boolean {
+  const lines = text
+    .split(/\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 3) return false;
+  const longLines = lines.filter(
+    (line) => line.length > 220 && !/^(IMAGE|VIDEO):/i.test(line) && !isHeadingText(line),
+  ).length;
+  // Prefer the dense reformatter when any paragraph is still a wall of text.
+  if (longLines > 0) return false;
+  const short = lines.filter((line) => line.length <= 140 || isHeadingText(line)).length;
+  return short >= Math.min(3, lines.length);
+}
+
+/** Pull common induction headings onto their own lines, then keep sentences short. */
+function structureDenseTrainingText(text: string): string {
+  let t = text.replace(/\s+/g, ' ').trim();
+  const headings = [
+    'How this module works',
+    'Once you have completed the module',
+    'Once you.?ve completed this module',
+    'Once you have completed this module',
+    'Learning Outcomes',
+    'Learning outcomes',
+    'Introduction',
+    'Key terms',
+    'Key points',
+    'Summary',
+    'Completion of Learning Section',
+    'Person or Persons Conducting a Business or Undertaking \\(PCBU\\)',
+    'Persons Conducting a Business or Undertaking \\(PCBU\\)',
+    'PCBU',
+    'Workers',
+    'Duties in the Workplace',
+    'Duties in the workplace',
+    'Employers',
+    "Workers' duties",
+    'Your Responsibility',
+    'Your responsibility',
+    'Risk Management',
+    'Risk management',
+    'Hazard Identification',
+    'Hazard identification',
+    'Common Workplace Hazards',
+    'Training & Supervision',
+    'Training and Supervision',
+    'Forklift Hazards',
+    'Operation Fundamentals',
+    'Parking',
+    'Managing Forklift Instability',
+    'Managing Forklift',
+    'Loads and Load Handling',
+    'Attachments',
+    'Ventilation',
+    'Poor Ventilation Resulting in Exposure to Harmful Gas Emissions',
+    'Ramps & Loading Docks',
+    'Out of Service',
+    'The Risks',
+    'Forklift Instability',
+    'Store Worker Hazards',
+    'Mobile Plant',
+    'Signage & Placards',
+    'Signage and Placards',
+    'Minimising Hazardous Manual Handling',
+    'Workplace Harassment',
+    'Sexual Harassment',
+    'Discrimination',
+    'Bullying',
+    'What Causes Workplace Stress',
+    'Ergonomics',
+    'Emergency Management',
+    'Working at heights',
+    'Working at Heights',
+    'Ladders',
+    'Starting your new role',
+    'Computer Screen',
+    'Basically',
+  ];
+  for (const heading of headings) {
+    const re = new RegExp(`(?:^|[.\\s:;])(${heading})(?=\\s|[–—:\\-]|$)`, 'gi');
+    t = t.replace(re, (full, hit) => {
+      const prefix = full.slice(0, full.length - hit.length).trimEnd();
+      return `${prefix ? `${prefix}\n` : ''}${hit}\n`;
+    });
+  }
+  t = t.replace(/:\s+(?=[A-Z])/g, ':\n');
+  t = t.replace(/(^|\n):\s*(?=\n|$)/g, '$1');
+  // Split long sentences onto separate lines for toolbox-style paragraphs.
+  t = t
+    .split(/\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (isHeadingText(trimmed) || /^(IMAGE|VIDEO):/i.test(trimmed)) return trimmed;
+      return shortParagraphs(trimmed).join('\n');
+    })
+    .filter(Boolean)
+    .join('\n');
+  return t;
+}
+
+function shortParagraphs(text: string): string[] {
   const t = text.trim();
   if (!t) return [];
-  if (t.length < 160) return [t];
-  return splitDenseParagraph(t);
+  if (t.length <= 140) return [t];
+  const sentences = t.match(/[^.!?]+[.!?]+(?:["'\u201d\u2019])?(?:\s+|$)|[^.!?]+$/g);
+  if (!sentences || sentences.length < 2) return [t];
+
+  const paras: string[] = [];
+  let buf: string[] = [];
+  let bufLen = 0;
+  for (const raw of sentences) {
+    const sentence = raw.trim();
+    if (!sentence) continue;
+    const nextLen = bufLen + sentence.length + (buf.length ? 1 : 0);
+    if (buf.length && (bufLen >= 90 || nextLen > 160 || buf.length >= 2)) {
+      paras.push(buf.join(' '));
+      buf = [sentence];
+      bufLen = sentence.length;
+    } else {
+      buf.push(sentence);
+      bufLen = nextLen;
+    }
+  }
+  if (buf.length) paras.push(buf.join(' '));
+  return paras.length ? paras : [t];
 }
 
 function matchImageBlock(block: string): string | null {
@@ -147,6 +334,36 @@ function matchImageBlock(block: string): string | null {
     block.match(/^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/);
   if (!m) return null;
   return (m[2] || m[1] || '').trim() || null;
+}
+
+function matchYoutubePlaceholder(line: string): string | null {
+  const m = line.match(/^(.*)\(\s*this is a link to a youtube video\s*\)\s*$/i);
+  if (!m) return null;
+  return resolveYoutubeEmbed(cleanVideoLabel(m[1] || ''));
+}
+
+function youtubeEmbed(id: string) {
+  return `https://www.youtube.com/embed/${id}`;
+}
+
+function youtubeWatch(id: string) {
+  return `https://www.youtube.com/watch?v=${id}`;
+}
+
+/** Known public WorkSafe Victoria films named in the topic text. */
+function knownYoutubeId(label: string): string | null {
+  const key = label.toLowerCase();
+  if (/skeleton/.test(key) && /worker/.test(key)) return 'Gcpd8y-jN4E';
+  if (/skeleton/.test(key) && /supervisor/.test(key)) return '9U7g6iL1_JM';
+  if ((/shoe/.test(key) || /store/.test(key)) && /musculoskeletal|shoe/.test(key)) {
+    return 'DeAqzydHE2k';
+  }
+  return null;
+}
+
+function resolveYoutubeEmbed(label: string): string | null {
+  const id = knownYoutubeId(label);
+  return id ? youtubeEmbed(id) : null;
 }
 
 function matchVideoEmbed(block: string): string | null {
@@ -226,32 +443,15 @@ function cleanVideoLabel(label: string): string {
 }
 
 function resolveYoutubePlaceholderUrl(label: string): string {
-  const key = label.toLowerCase();
-  // Prefer known public WorkSafe / Safe Work Australia resources where possible.
-  if (/skeleton/.test(key) && /worker/.test(key)) {
-    return 'https://www.youtube.com/results?search_query=WorkSafe+Victoria+Skeleton+Project+Workers';
-  }
-  if (/skeleton/.test(key) && /supervisor/.test(key)) {
-    return 'https://www.youtube.com/results?search_query=WorkSafe+Victoria+Skeleton+Supervisors';
-  }
-  if (/shoe|store|musculoskeletal/.test(key)) {
-    return 'https://www.youtube.com/results?search_query=WorkSafe+Victoria+Musculoskeletal+Injuries+Shoe+Store';
-  }
+  const id = knownYoutubeId(label);
+  if (id) return youtubeWatch(id);
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(
     `${label} WorkSafe Victoria`,
   )}`;
 }
 
 function repairSentences(text: string): string {
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/([a-z0-9)])\s+([A-Z][a-z][\w'-]*)/g, (full, prev, next) => {
-      // Only insert a missing period before likely new-section starters.
-      if (SECTION_START.test(next)) return `${prev}. ${next}`;
-      return full;
-    })
-    .replace(/\.\s*\./g, '.')
-    .trim();
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 const SECTION_START =
@@ -260,47 +460,16 @@ const SECTION_START =
 const LIST_LEAD =
   /((?:^|[.!?]\s+)(?:[^.!?]{0,200}?)(?:should|includes?|following|consider|are|require[sd]?)\s*:)/i;
 
-function splitDenseParagraph(text: string): string[] {
-  const sentences = text.match(
-    /[^.!?]+[.!?]+(?:["'\u201d\u2019])?(?:\s+|$)|[^.!?]+$/g,
-  );
-  if (!sentences || sentences.length < 2) return [text];
-
-  const paras: string[] = [];
-  let buf: string[] = [];
-  let bufLen = 0;
-
-  for (const raw of sentences) {
-    const sentence = raw.trim();
-    if (!sentence) continue;
-
-    const forceBreak = buf.length > 0 && SECTION_START.test(sentence);
-    const longEnough = bufLen >= 110 || buf.length >= 2;
-
-    if (forceBreak || (longEnough && bufLen + sentence.length > 90)) {
-      paras.push(buf.join(' '));
-      buf = [sentence];
-      bufLen = sentence.length;
-    } else {
-      buf.push(sentence);
-      bufLen += sentence.length + 1;
-    }
-  }
-
-  if (buf.length) paras.push(buf.join(' '));
-  return paras.length ? paras : [text];
-}
-
 function splitAroundSemicolonLists(text: string): string[] {
   if ((text.match(/;/g) || []).length < 1) {
-    return toParagraphs(text);
+    return shortParagraphs(text);
   }
 
   const match = text.match(LIST_LEAD);
   if (!match || match.index == null) {
     // Generic "Something: a; b; c"
     const generic = text.match(/^([\s\S]{8,180}:)\s*([^;]{4,};[\s\S]+)$/);
-    if (!generic) return toParagraphs(text);
+    if (!generic) return shortParagraphs(text);
     return finalizeListSplit('', generic[1] + ' ' + generic[2]);
   }
 
@@ -319,9 +488,9 @@ function finalizeListSplit(before: string, listAndAfter: string): string[] {
     .trim();
 
   const out: string[] = [];
-  if (before) toParagraphs(before).forEach((p) => out.push(p));
+  if (before) shortParagraphs(before).forEach((p) => out.push(p));
   if (listChunk) out.push(listChunk);
-  if (after) toParagraphs(after).forEach((p) => out.push(p));
+  if (after) shortParagraphs(after).forEach((p) => out.push(p));
   return out.length ? out : [listAndAfter];
 }
 

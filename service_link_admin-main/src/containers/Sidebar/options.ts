@@ -90,8 +90,23 @@ export const optionsStaff: option[] = [
 		]
 	},
 	{
-		key: 'training',
+		key: 'training-menu',
 		label: 'sidebar.training',
+		leftIcon: 'icon-staff',
+		children: [
+			{
+				key: 'training',
+				label: 'sidebar.training',
+			},
+			{
+				key: 'my-certificates',
+				label: 'sidebar.myCertificates',
+			},
+		],
+	},
+	{
+		key: 'toolbox',
+		label: 'sidebar.toolbox',
 		leftIcon: 'icon-staff',
 	},
 	{
@@ -304,6 +319,10 @@ const options: option[] = [
 			{
 				key: 'training-admin',
 				label: 'sidebar.trainingAdmin',
+			},
+			{
+				key: 'toolbox',
+				label: 'sidebar.toolbox',
 			},
 			{
 				key: 'induction',

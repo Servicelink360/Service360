@@ -8,7 +8,7 @@ import {
   PlayCircleOutlined,
 } from '@ant-design/icons';
 import { Button, Empty, Progress, Radio, Space, Spin, Tag, message } from 'antd';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
 import { callAPIAsync } from '../../library/helpers/api';
@@ -109,8 +109,24 @@ type TrainingPageProps = {
   kind?: 'TRAINING' | 'INDUCTION';
 };
 
+function firstOpenTopic(list: Topic[], savedId: number, passed: boolean) {
+  if (!list.length) return 0;
+  if (passed) {
+    const saved = list.findIndex((t) => t.id === savedId);
+    return saved >= 0 ? saved : 0;
+  }
+  const firstIncomplete = list.findIndex((t) => !t.completed);
+  const openUntil = firstIncomplete < 0 ? list.length - 1 : firstIncomplete;
+  if (savedId) {
+    const saved = list.findIndex((t) => t.id === savedId);
+    if (saved >= 0 && saved <= openUntil) return saved;
+  }
+  return firstIncomplete >= 0 ? firstIncomplete : Math.max(0, list.length - 1);
+}
+
 const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
   const isInduction = kind === 'INDUCTION';
+  const resumeReady = useRef(false);
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState<ModuleListItem[]>([]);
   const [summary, setSummary] = useState({
@@ -171,6 +187,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
   }, [loadCatalog]);
 
   const loadModule = useCallback(async (id: number, preferQuiz = false) => {
+    resumeReady.current = false;
     setModuleLoading(true);
     setActiveModuleId(id);
     setResult(null);
@@ -205,15 +222,24 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
       setCertificateUrl(data.progress?.certificateUrl || null);
       setExpiresAt(data.progress?.expiresAt || null);
 
-      const firstIncomplete = nextTopics.findIndex((t) => !t.completed);
-      const idx = firstIncomplete >= 0 ? firstIncomplete : Math.max(0, nextTopics.length - 1);
-      setTopicIndex(idx);
+      const savedId = Number(data.progress?.currentTopicId || 0);
+      const rawDraft = data.progress?.quizDraft;
+      const draft: Record<number, string> = {};
+      if (rawDraft && typeof rawDraft === 'object') {
+        Object.entries(rawDraft).forEach(([key, value]) => {
+          if (value) draft[+key] = String(value);
+        });
+      }
+      setAnswers(draft);
+      const passed = data.progress?.status === 'passed';
+      setTopicIndex(firstOpenTopic(nextTopics, savedId, passed));
+      resumeReady.current = true;
 
       if (preferQuiz && data.quiz?.unlocked) {
         setMode('quiz');
       } else if (data.progress?.status === 'passed' && data.quiz?.unlocked) {
         setMode('learn');
-      } else if (data.quiz?.unlocked && firstIncomplete < 0) {
+      } else if (data.quiz?.unlocked && nextTopics.every((t) => t.completed)) {
         setMode('quiz');
       } else {
         setMode('learn');
@@ -223,7 +249,29 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!resumeReady.current || !activeModuleId || !topics[topicIndex]) return;
+    const topicId = topics[topicIndex].id;
+    const draft = answers;
+    const handle = window.setTimeout(() => {
+      void callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TRAINING}/modules/${activeModuleId}/resume`,
+        'POST',
+        { currentTopicId: topicId, quizDraft: draft },
+      );
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [activeModuleId, topicIndex, topics, answers]);
+
   const currentTopic = topics[topicIndex];
+  const firstIncomplete = topics.findIndex((t) => !t.completed);
+  const maxOpenIndex =
+    progressStatus === 'passed'
+      ? Math.max(0, topics.length - 1)
+      : firstIncomplete < 0
+        ? Math.max(0, topics.length - 1)
+        : firstIncomplete;
 
   const completeCurrentTopic = async () => {
     if (!activeModuleId || !currentTopic) return;
@@ -295,6 +343,18 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
       setExpiresAt(res.data?.progress?.expiresAt || null);
       if (res.data?.passed) {
         message.success('Module passed');
+        setAnswers({});
+        void callAPIAsync(
+          serviceType.COMMON,
+          `${endPoint.TRAINING}/modules/${activeModuleId}/resume`,
+          'POST',
+          { quizDraft: {} },
+        );
+        if (res.data?.certificateMessage) {
+          message.info(res.data.certificateMessage);
+        } else if (res.data?.certificateError) {
+          message.warning(res.data.certificateError);
+        }
       } else {
         message.warning('Score below pass mark - review topics and try again');
       }
@@ -464,8 +524,10 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                   <button
                     type="button"
                     className={mode === 'learn' && i === topicIndex ? 'active' : ''}
-                    title={t.title}
+                    title={i > maxOpenIndex ? 'Complete earlier topics first' : t.title}
+                    disabled={i > maxOpenIndex}
                     onClick={() => {
+                      if (i > maxOpenIndex) return;
                       setMode('learn');
                       setTopicIndex(i);
                     }}
@@ -508,6 +570,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                 <h1 title={currentTopic.title}>{clipText(currentTopic.title, 100)}</h1>
                 <div className="training-body">
                   {formatTrainingBody(currentTopic.body, {
+                    title: currentTopic.title,
                     imagesAfterIntro: topicImagesFor(
                       moduleCode,
                       currentTopic.order,
@@ -578,7 +641,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                                   <ExpandableText text={o.text} max={120} />
                                 ) : (
                                   <>
-                                    ({o.key}) <ExpandableText text={o.text} max={120} />
+                                    {String(o.key).toUpperCase()}. <ExpandableText text={o.text} max={120} />
                                   </>
                                 )}
                               </Radio>
@@ -610,7 +673,18 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                   status={result.passed ? 'success' : 'exception'}
                   style={{ maxWidth: 360, marginBottom: 16 }}
                 />
-                {result.passed && (result.certificateUrl || certificateUrl) ? (
+                {result.passed && (result.awardedCertificates || []).length ? (
+                  (result.awardedCertificates || []).map((cert: any) =>
+                    cert.url ? (
+                      <p key={cert.id}>
+                        <a href={cert.url} target="_blank" rel="noreferrer">
+                          Download {cert.title}
+                        </a>
+                        {cert.code ? ` - ID ${cert.code}` : ''}
+                      </p>
+                    ) : null,
+                  )
+                ) : result.passed && (result.certificateUrl || certificateUrl) ? (
                   <p>
                     <a
                       href={result.certificateUrl || certificateUrl || undefined}
@@ -624,6 +698,11 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                       : ''}
                   </p>
                 ) : null}
+                {result.passed && result.certificateMessage ? (
+                  <p>{result.certificateMessage}</p>
+                ) : result.passed && result.certificateError ? (
+                  <p>{result.certificateError}</p>
+                ) : null}
                 {(result.results || []).map((r: any, idx: number) => (
                   <div className="training-quiz-q" key={r.questionId}>
                     <h4>
@@ -631,9 +710,7 @@ const TrainingPage: React.FC<TrainingPageProps> = ({ kind = 'TRAINING' }) => {
                     </h4>
                     <div className={r.correct ? 'training-result-ok' : 'training-result-bad'}>
                       Your answer: {String(r.answerKey || '-').toUpperCase()}
-                      {r.correct
-                        ? ' (correct)'
-                        : ` (correct was ${String(r.correctKey || '').toUpperCase()})`}
+                      {r.correct ? ' (correct)' : ' (incorrect)'}
                     </div>
                   </div>
                 ))}

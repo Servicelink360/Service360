@@ -333,9 +333,96 @@ export class TrainingService {
           expiresAt: progress.expiresAt,
           certificateUrl: progress.certificateUrl,
           certificateCode: progress.certificateCode,
+          currentTopicId: progress.currentTopicId || null,
+          quizDraft: progress.quizDraft || {},
         },
       },
     };
+  }
+
+  async saveResume(
+    user: IUserInfo,
+    moduleId: number,
+    body: { currentTopicId?: number; quizDraft?: Record<string, string> },
+  ) {
+    if (!this.staffOrAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Staff or admin only' };
+    }
+    const progress = await this.progressRepo.findOne({
+      where: { userId: +user.userId, moduleId },
+    });
+    if (!progress) return errorCode.NOT_FOUND;
+    if (body?.currentTopicId) progress.currentTopicId = +body.currentTopicId;
+    if (body?.quizDraft && typeof body.quizDraft === 'object') {
+      progress.quizDraft = body.quizDraft;
+    }
+    await this.progressRepo.save(progress);
+    return { ...errorCode.SUCCESS, data: { currentTopicId: progress.currentTopicId, quizDraft: progress.quizDraft } };
+  }
+
+  private async presentAwards(rows: any[]) {
+    const moduleRows = await this.modulesRepo.find();
+    const moduleById = new Map(moduleRows.map((mod) => [+mod.id, mod]));
+    return (rows || []).map((row: any) => {
+      const moduleIds = (Array.isArray(row.module_ids) ? row.module_ids : []).map((id: number) => +id);
+      const modules = moduleIds.map((id: number) => moduleById.get(id)).filter(Boolean);
+      const issued = row.issued_at ? new Date(row.issued_at) : new Date();
+      return {
+        id: +row.id,
+        staffId: +row.user_id,
+        staffName: row.staff_name || '',
+        title: row.title,
+        description: row.description || '',
+        url: row.certificate_url || '',
+        code: row.certificate_code || '',
+        issuedAt: row.issued_at,
+        layout: row.layout && typeof row.layout === 'object' ? row.layout : {},
+        modules: modules.map((mod) => mod.title).join(', '),
+        moduleCode: modules.map((mod) => mod.code).join(', '),
+        date: new Intl.DateTimeFormat('en-AU', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          timeZone: 'Australia/Sydney',
+        }).format(issued),
+        score: `${modules.length}/${modules.length} (100%)`,
+        valid: 'Does not expire',
+      };
+    });
+  }
+
+  async listMyCertificates(user: IUserInfo) {
+    if (!this.staffOrAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Staff or admin only' };
+    }
+    const rows = await this.modulesRepo.manager.query(
+      `SELECT a.id, a.user_id, a.certificate_url, a.certificate_code, a.issued_at, a.module_ids,
+              c.title, c.description, c.layout,
+              u.full_name AS staff_name
+       FROM training_certificate_awards a
+       JOIN training_certificates c ON c.id = a.certificate_id
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE a.user_id = $1
+       ORDER BY a.issued_at DESC NULLS LAST, a.id DESC`,
+      [+user.userId],
+    );
+    return { ...errorCode.SUCCESS, data: { certificates: await this.presentAwards(rows) } };
+  }
+
+  async adminListIssuedCertificates(user: IUserInfo) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const rows = await this.modulesRepo.manager.query(
+      `SELECT a.id, a.user_id, a.certificate_url, a.certificate_code, a.issued_at, a.module_ids,
+              c.title, c.description, c.layout,
+              u.full_name AS staff_name
+       FROM training_certificate_awards a
+       JOIN training_certificates c ON c.id = a.certificate_id
+       LEFT JOIN users u ON u.id = a.user_id
+       ORDER BY a.issued_at DESC NULLS LAST, a.id DESC`,
+    );
+    return { ...errorCode.SUCCESS, data: { certificates: await this.presentAwards(rows) } };
   }
 
   async startModule(user: IUserInfo, moduleId: number) {
@@ -419,10 +506,26 @@ export class TrainingService {
     }
 
     const set = new Set((progress.completedTopicIds || []).map((id) => +id));
+    const orderedTopics = await this.topicsRepo.find({
+      where: { moduleId },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    if (progress.status !== 'passed') {
+      const idx = orderedTopics.findIndex((t) => +t.id === +topicId);
+      const blocked = orderedTopics
+        .slice(0, Math.max(0, idx))
+        .some((t) => !set.has(+t.id));
+      if (blocked) {
+        return {
+          ...errorCode.EXCEPTION,
+          message: 'Complete the previous topic before continuing',
+        };
+      }
+    }
     set.add(+topicId);
     progress.completedTopicIds = Array.from(set);
 
-    const allTopics = await this.topicsRepo.find({ where: { moduleId } });
+    const allTopics = orderedTopics;
     const allDone = allTopics.every((t) => set.has(+t.id));
     if (allDone && progress.status !== 'passed') {
       progress.status = 'topics_done';
@@ -540,32 +643,15 @@ export class TrainingService {
       } else {
         progress.expiresAt = null;
       }
-      const certCode =
-        progress.certificateCode ||
-        `S360-${module.code}-${user.userId}-${Date.now().toString(36).toUpperCase()}`;
-      progress.certificateCode = certCode;
-      try {
-        const staff = await this.usersRepo.findOne({ where: { id: +user.userId } });
-        const url = await generateTrainingCertificatePdf({
-          staffName: staff?.fullName || `Staff #${user.userId}`,
-          moduleTitle: module.title,
-          moduleCode: module.code,
-          score,
-          total,
-          percent,
-          passedAt: now,
-          expiresAt: progress.expiresAt,
-          certificateCode: certCode,
-          kind: module.moduleKind,
-        });
-        progress.certificateUrl = url;
-      } catch (e) {
-        this.logger.warn(`certificate pdf failed: ${(e as Error).message}`);
-      }
     } else if (progress.status !== 'passed') {
       progress.status = 'failed';
     }
     await this.progressRepo.save(progress);
+
+    const awards = passed
+      ? await this.awardListedCertificates(+user.userId, user, module.id)
+      : { issued: [], pending: [], failed: false };
+    const saved = await this.progressRepo.findOne({ where: { id: progress.id } });
 
     return {
       ...errorCode.SUCCESS,
@@ -576,18 +662,261 @@ export class TrainingService {
         percent,
         passPercent: passPct,
         attemptId: attempt.id,
-        progress,
-        certificateUrl: progress.certificateUrl,
-        certificateCode: progress.certificateCode,
+        progress: saved || progress,
+        certificateUrl: awards.issued[0]?.url || null,
+        certificateCode: awards.issued[0]?.code || null,
+        awardedCertificates: awards.issued,
+        certificateMessage: awards.pending.length
+          ? awards.pending
+              .map((item) => `${item.title} still needs: ${item.missingTitles.join(', ')}.`)
+              .join(' ')
+          : null,
+        certificateError: awards.failed
+          ? 'You passed the modules for a certificate. The certificate PDF could not be created. Your result is saved.'
+          : null,
         results: graded.map((g) => ({
           questionId: g.questionId,
           prompt: g.prompt,
           answerKey: g.answerKey,
           correct: g.correct,
-          correctKey: g.correctKey,
         })),
       },
     };
+  }
+
+  private async passedModuleIds(userId: number): Promise<Set<number>> {
+    const rows = await this.modulesRepo.manager.query(
+      `SELECT module_id
+       FROM training_progress
+       WHERE user_id = $1
+         AND status = 'passed'
+         AND (expires_at IS NULL OR expires_at > NOW())`,
+      [userId],
+    );
+    return new Set((rows || []).map((row: { module_id: number }) => +row.module_id));
+  }
+
+  private async listCertificateDefs() {
+    const rows = await this.modulesRepo.manager.query(
+      `SELECT id, title, description, module_ids, layout, created_at
+       FROM training_certificates
+       ORDER BY id ASC`,
+    );
+    const modules = await this.modulesRepo.find({ order: { sortOrder: 'ASC', id: 'ASC' } });
+    const byId = new Map(modules.map((mod) => [+mod.id, mod]));
+    return (rows || []).map((row: { id: number; title: string; description?: string; module_ids: number[]; layout?: Record<string, string>; created_at?: string }) => {
+      const moduleIds = (Array.isArray(row.module_ids) ? row.module_ids : []).map((id) => +id);
+      const layout = row.layout && typeof row.layout === 'object' ? row.layout : {};
+      return {
+        id: +row.id,
+        title: row.title,
+        description: row.description || '',
+        createdAt: row.created_at || null,
+        layout,
+        templateKey: layout.templateKey || 'classic',
+        moduleIds,
+        modules: moduleIds
+          .map((id) => byId.get(id))
+          .filter(Boolean)
+          .map((mod) => ({ id: mod.id, code: mod.code, title: mod.title })),
+      };
+    });
+  }
+
+  /** Issue each selected certificate when every module on that assignment has been passed. */
+  private async awardListedCertificates(userId: number, user: IUserInfo, currentModuleId: number) {
+    const assigned = await this.assignmentsRepo.find({ where: { staffId: userId } });
+    const groups = new Map<number, number[]>();
+    for (const row of assigned) {
+      if (!row.issueCertificate || !row.certificateId) continue;
+      const list = groups.get(+row.certificateId) || [];
+      list.push(+row.moduleId);
+      groups.set(+row.certificateId, list);
+    }
+    if (!groups.size) return { issued: [], pending: [], failed: false };
+
+    const defs = await this.listCertificateDefs();
+    const defById = new Map(defs.map((def) => [+def.id, def]));
+    const passed = await this.passedModuleIds(userId);
+    const staff = await this.usersRepo.findOne({ where: { id: userId } });
+    const issued: { id: number; title: string; url: string | null; code: string | null }[] = [];
+    const pending: { title: string; missingTitles: string[] }[] = [];
+    let failed = false;
+
+    for (const [certificateId, moduleIdList] of groups) {
+      const requiredIds = [...new Set(moduleIdList)].sort((a, b) => a - b);
+      if (!requiredIds.includes(+currentModuleId)) continue;
+      const title = defById.get(certificateId)?.title || 'Certificate';
+      const modules = await this.modulesRepo.find({ where: { id: In(requiredIds) } });
+      const byId = new Map(modules.map((mod) => [+mod.id, mod]));
+      const ordered = requiredIds.map((id) => byId.get(id)).filter(Boolean);
+      const missing = ordered.filter((mod) => !passed.has(+mod.id));
+      if (missing.length) {
+        pending.push({ title, missingTitles: missing.map((mod) => mod.title) });
+        continue;
+      }
+
+      const existing = await this.modulesRepo.manager.query(
+        `SELECT module_ids, certificate_url, certificate_code
+         FROM training_certificate_awards
+         WHERE certificate_id = $1 AND user_id = $2`,
+        [certificateId, userId],
+      );
+      const savedIds = (Array.isArray(existing?.[0]?.module_ids) ? existing[0].module_ids : [])
+        .map((id: number) => +id)
+        .sort((a: number, b: number) => a - b);
+      const sameSet =
+        savedIds.length === requiredIds.length &&
+        savedIds.every((id: number, index: number) => id === requiredIds[index]);
+      if (sameSet && existing?.[0]?.certificate_url) {
+        issued.push({
+          id: certificateId,
+          title,
+          url: existing[0].certificate_url,
+          code: existing[0].certificate_code,
+        });
+        continue;
+      }
+
+      const certCode = `S360-CERT-${certificateId}-${userId}-${Date.now().toString(36).toUpperCase()}`;
+      let url: string | null = null;
+      try {
+        url = await generateTrainingCertificatePdf({
+          staffName: staff?.fullName || user.fullName || `Staff #${userId}`,
+          moduleTitle: title,
+          moduleCode: ordered.map((mod) => mod.code).join(', '),
+          score: ordered.length,
+          total: ordered.length,
+          percent: 100,
+          passedAt: new Date(),
+          expiresAt: null,
+          certificateCode: certCode,
+          kind: 'TRAINING',
+          detail: ordered.map((mod) => mod.title).join(', '),
+          layout: defById.get(certificateId)?.layout || null,
+        });
+      } catch (e) {
+        this.logger.warn(`certificate pdf failed: ${(e as Error).message}`);
+        failed = true;
+      }
+      await this.modulesRepo.manager.query(
+        `INSERT INTO training_certificate_awards
+           (certificate_id, user_id, module_ids, certificate_url, certificate_code, issued_at)
+         VALUES ($1, $2, $3::jsonb, $4, $5, NOW())
+         ON CONFLICT (certificate_id, user_id)
+         DO UPDATE SET module_ids = EXCLUDED.module_ids,
+                       certificate_url = EXCLUDED.certificate_url,
+                       certificate_code = EXCLUDED.certificate_code,
+                       issued_at = NOW()`,
+        [certificateId, userId, JSON.stringify(requiredIds), url, certCode],
+      );
+      issued.push({ id: certificateId, title, url, code: certCode });
+    }
+    return { issued, pending, failed };
+  }
+
+  async adminListCertificates(user: IUserInfo) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs() } };
+  }
+
+  async adminSaveCertificate(
+    user: IUserInfo,
+    body: { id?: number; title?: string; moduleIds?: number[] },
+  ) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const title = String(body?.title || '').trim();
+    const description = String((body as { description?: string })?.description || '').trim();
+    const layout =
+      body && typeof (body as { layout?: unknown }).layout === 'object' && (body as { layout?: object }).layout
+        ? (body as { layout: object }).layout
+        : {};
+    if (!title) return { ...errorCode.EXCEPTION, message: 'Enter a certificate name' };
+    if (body?.id) {
+      const rows = await this.modulesRepo.manager.query(
+        `UPDATE training_certificates SET title = $1, description = $2, layout = $3::jsonb WHERE id = $4 RETURNING id`,
+        [title.slice(0, 255), description.slice(0, 2000), JSON.stringify(layout), +body.id],
+      );
+      if (!rows?.length) return errorCode.NOT_FOUND;
+    } else {
+      await this.modulesRepo.manager.query(
+        `INSERT INTO training_certificates (title, description, module_ids, layout) VALUES ($1, $2, '[]'::jsonb, $3::jsonb)`,
+        [title.slice(0, 255), description.slice(0, 2000), JSON.stringify(layout)],
+      );
+    }
+    return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs() } };
+  }
+
+  async adminDeleteCertificate(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    await this.modulesRepo.manager.query(`DELETE FROM training_certificates WHERE id = $1`, [id]);
+    return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs() } };
+  }
+
+  private async listCertificateTemplates() {
+    const rows = await this.modulesRepo.manager.query(
+      `SELECT id, name, layout, created_at
+       FROM training_certificate_templates
+       ORDER BY CASE layout->>'templateKey'
+         WHEN 'classic' THEN 0
+         WHEN 'plain' THEN 1
+         ELSE 2
+       END, id ASC`,
+    );
+    return (rows || []).map((row: { id: number; name: string; layout?: Record<string, string>; created_at?: string }) => ({
+      id: +row.id,
+      name: row.name,
+      layout: row.layout && typeof row.layout === 'object' ? row.layout : {},
+      createdAt: row.created_at || null,
+    }));
+  }
+
+  async adminListCertificateTemplates(user: IUserInfo) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    return { ...errorCode.SUCCESS, data: { templates: await this.listCertificateTemplates() } };
+  }
+
+  async adminSaveCertificateTemplate(user: IUserInfo, body: { name?: string; layout?: Record<string, string> }) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const name = String(body?.name || '').trim();
+    if (!name) return { ...errorCode.EXCEPTION, message: 'Enter a template name' };
+    const layout = body?.layout && typeof body.layout === 'object' ? body.layout : {};
+    await this.modulesRepo.manager.query(
+      `INSERT INTO training_certificate_templates (name, layout) VALUES ($1, $2::jsonb)`,
+      [name.slice(0, 255), JSON.stringify(layout)],
+    );
+    return { ...errorCode.SUCCESS, data: { templates: await this.listCertificateTemplates() } };
+  }
+
+  async adminDeleteCertificateTemplate(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const rows = await this.modulesRepo.manager.query(
+      `SELECT layout->>'imageUrl' AS image_url FROM training_certificate_templates WHERE id = $1`,
+      [id],
+    );
+    const imageUrl = String(rows?.[0]?.image_url || '').trim();
+    if (imageUrl) {
+      await this.modulesRepo.manager.query(
+        `UPDATE training_certificates
+         SET layout = (layout - 'imageUrl') || '{"templateKey":"classic"}'::jsonb
+         WHERE layout->>'imageUrl' = $1`,
+        [imageUrl],
+      );
+    }
+    await this.modulesRepo.manager.query(`DELETE FROM training_certificate_templates WHERE id = $1`, [id]);
+    return { ...errorCode.SUCCESS, data: { templates: await this.listCertificateTemplates() } };
   }
 
   // ??? Admin: answer keys ???????????????????????????????????????????
@@ -812,6 +1141,23 @@ export class TrainingService {
     const progressRows = staffIds.length
       ? await this.progressRepo.find({ where: { userId: In([...new Set(staffIds)]) } })
       : [];
+    const uniqueStaff = [...new Set(staffIds)];
+    const staffCerts = uniqueStaff.length
+      ? await this.modulesRepo.manager.query(
+          `SELECT user_id, certificate_id, certificate_url, module_ids
+           FROM training_certificate_awards
+           WHERE user_id = ANY($1::int[])`,
+          [uniqueStaff],
+        )
+      : [];
+    const staffCertMap = new Map(
+      (staffCerts || []).map(
+        (row: { user_id: number; certificate_id: number; certificate_url: string; module_ids: number[] }) => [
+          `${+row.user_id}:${+row.certificate_id}`,
+          row,
+        ],
+      ),
+    );
 
     return {
       ...errorCode.SUCCESS,
@@ -853,6 +1199,26 @@ export class TrainingService {
             (completedTopics > 0 && completedTopics >= topicTotal
               ? progress?.topicsCompletedAt || null
               : null),
+          staffCertificateUrl: (() => {
+            if (!a.staffId || !a.issueCertificate || !a.certificateId) return null;
+            const cert = staffCertMap.get(`${+a.staffId}:${+a.certificateId}`);
+            if (!cert?.certificate_url) return null;
+            const saved = (Array.isArray(cert.module_ids) ? cert.module_ids : [])
+              .map((id: number) => +id)
+              .sort((x: number, y: number) => x - y);
+            const required = rows
+              .filter(
+                (row) =>
+                  +row.staffId === +a.staffId &&
+                  row.issueCertificate &&
+                  +row.certificateId === +a.certificateId,
+              )
+              .map((row) => +row.moduleId)
+              .sort((x, y) => x - y);
+            const same =
+              saved.length === required.length && saved.every((id: number, i: number) => id === required[i]);
+            return same ? cert.certificate_url : null;
+          })(),
           certificateUrl:
             progressStatus === 'passed' ? progress?.certificateUrl || null : null,
           certificateCode:
@@ -872,6 +1238,8 @@ export class TrainingService {
       siteName?: string | null;
       dueAt?: string | null;
       notes?: string | null;
+      issueCertificate?: boolean;
+      certificateId?: number | null;
     },
   ) {
     if (!this.isAdmin(user)) {
@@ -879,6 +1247,9 @@ export class TrainingService {
     }
     if (!body.staffId) {
       return { ...errorCode.EXCEPTION, message: 'Choose a staff member' };
+    }
+    if (body.issueCertificate && !(+body.certificateId > 0)) {
+      return { ...errorCode.EXCEPTION, message: 'Choose the certificate to issue' };
     }
     const moduleIds = [
       ...new Set(
@@ -925,6 +1296,8 @@ export class TrainingService {
         dueAt: body.dueAt ? new Date(body.dueAt) : null,
         notes: body.notes || null,
         assignedBy: +user.userId,
+        issueCertificate: !!body.issueCertificate,
+        certificateId: body.issueCertificate ? +body.certificateId : null,
       }),
     );
     const saved = await this.assignmentsRepo.save(rows);
@@ -942,10 +1315,15 @@ export class TrainingService {
       siteName?: string | null;
       dueAt?: string | null;
       notes?: string | null;
+      issueCertificate?: boolean;
+      certificateId?: number | null;
     },
   ) {
     if (!this.isAdmin(user)) {
       return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    if (body.issueCertificate && !(+body.certificateId > 0)) {
+      return { ...errorCode.EXCEPTION, message: 'Choose the certificate to issue' };
     }
     const anchor = await this.assignmentsRepo.findOne({ where: { id } });
     if (!anchor) return errorCode.NOT_FOUND;
@@ -982,6 +1360,8 @@ export class TrainingService {
     const newStaffId = +body.staffId;
     const dueAt = body.dueAt ? new Date(body.dueAt) : null;
     const notes = body.notes || null;
+    const issueCertificate = !!body.issueCertificate;
+    const certificateId = issueCertificate ? +body.certificateId : null;
     const selected = new Set(moduleIds);
     const existing = await this.assignmentsRepo.find({
       where: { staffId: originalStaffId },
@@ -1003,6 +1383,8 @@ export class TrainingService {
       if (other && other.id !== row.id) {
         other.dueAt = dueAt;
         other.notes = notes;
+        other.issueCertificate = issueCertificate;
+        other.certificateId = certificateId;
         other.siteId = body.siteId ? +body.siteId : null;
         other.siteName = body.siteName || null;
         await this.assignmentsRepo.save(other);
@@ -1015,6 +1397,8 @@ export class TrainingService {
       row.siteName = body.siteName || null;
       row.dueAt = dueAt;
       row.notes = notes;
+      row.issueCertificate = issueCertificate;
+      row.certificateId = certificateId;
       byModule.set(+row.moduleId, await this.assignmentsRepo.save(row));
       if (newStaffId !== originalStaffId) {
         await this.clearProgressIfUnassigned(originalStaffId, +row.moduleId);
@@ -1032,6 +1416,8 @@ export class TrainingService {
           dueAt,
           notes,
           assignedBy: +user.userId,
+          issueCertificate,
+          certificateId,
         }),
       );
       byModule.set(moduleId, created);
@@ -1224,6 +1610,73 @@ export class TrainingService {
         order: topic.sortOrder,
       },
     };
+  }
+
+  async adminCreateTopic(
+    user: IUserInfo,
+    moduleId: number,
+    body: { title?: string; body?: string },
+  ) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const module = await this.modulesRepo.findOne({ where: { id: moduleId } });
+    if (!module) return errorCode.NOT_FOUND;
+    const title = String(body.title || '').trim();
+    const text = String(body.body || '').trim();
+    if (!title || !text) {
+      return { ...errorCode.EXCEPTION, message: 'Title and topic text are required' };
+    }
+    const last = await this.topicsRepo.find({
+      where: { moduleId },
+      order: { sortOrder: 'DESC' },
+      take: 1,
+    });
+    const topic = this.topicsRepo.create({
+      moduleId,
+      title: title.slice(0, 255),
+      body: text,
+      imageUrl: null,
+      sortOrder: (last[0]?.sortOrder || 0) + 1,
+    });
+    const saved = await this.topicsRepo.save(topic);
+    return {
+      ...errorCode.SUCCESS,
+      data: {
+        id: saved.id,
+        title: saved.title,
+        body: saved.body,
+        imageUrl: saved.imageUrl || null,
+        order: saved.sortOrder,
+      },
+    };
+  }
+
+  async adminMoveTopic(user: IUserInfo, topicId: number, direction: 'up' | 'down') {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const topic = await this.topicsRepo.findOne({ where: { id: topicId } });
+    if (!topic) return errorCode.NOT_FOUND;
+    const topics = await this.topicsRepo.find({
+      where: { moduleId: topic.moduleId },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    const index = topics.findIndex((t) => +t.id === +topic.id);
+    const swapWith = direction === 'up' ? index - 1 : index + 1;
+    if (index < 0 || swapWith < 0 || swapWith >= topics.length) {
+      return { ...errorCode.SUCCESS, data: { moved: false } };
+    }
+    const other = topics[swapWith];
+    const order = topic.sortOrder;
+    topic.sortOrder = other.sortOrder;
+    other.sortOrder = order;
+    if (topic.sortOrder === other.sortOrder) {
+      topic.sortOrder = swapWith + 1;
+      other.sortOrder = index + 1;
+    }
+    await this.topicsRepo.save([topic, other]);
+    return { ...errorCode.SUCCESS, data: { moved: true } };
   }
 
   /** One-time defaults for Gateway cartoon illustrations (site-relative public paths). */
@@ -1483,7 +1936,7 @@ export class TrainingService {
   async ensureCrewTrainingCatalogue(): Promise<void> {
     const hideCodes = ['M7', 'M8', 'M11', 'M13', 'M15', 'M16', 'M17'];
     const keepCodes = [
-      'SL', 'GATEWAY', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'CLEAN', 'GARDEN', 'ROOF',
+      'SL', 'GATEWAY', 'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'CLEAN', 'GARDEN', 'ROOF', 'MANUAL',
     ];
     await this.modulesRepo
       .createQueryBuilder()
@@ -1827,6 +2280,142 @@ export class TrainingService {
           },
         ],
       },
+      {
+        code: 'MANUAL',
+        title: 'Manual Handling Training',
+        description:
+          'Full hazardous manual tasks training from the ADE program: risk controls, MSD and spine care, principles and practical techniques.',
+        durationMins: 75,
+        sortOrder: 33,
+        topics: [
+          {
+            title: 'Welcome to manual handling training',
+            body: 'Manual handling is more than lifting. It is the safe movement of objects: lifting, lowering, pushing, pulling, carrying, holding and restraining.\n\nEvery one of those actions can injure you if the risk is ignored. Injuries can be prevented through risk management, and workers must be involved in that process.\n\nThis module is built from Service360 manual handling training for day-to-day cleaning, grounds and site work. Use it beside the demonstration of the trolleys, bins and loads on your site.',
+          },
+          {
+            title: 'Learning outcomes',
+            body: 'By the end of this module you should be able to:\n\nIdentify hazardous manual tasks in your work area.\nKnow a range of controls for those tasks.\nUnderstand safe manual handling principles.\nUse those principles on the handling tasks you do every day.\n\nThe training covers four parts: hazardous tasks and risk management, injuries, techniques, and practical application.',
+          },
+          {
+            title: 'What is a hazardous manual task',
+            body: 'Under the WHS Regulations, a hazardous manual task is a task that requires a person to lift, lower, push, pull, carry or otherwise move, hold or restrain any person, animal or thing, and that involves one or more of these:\n\nRepetitive or sustained force.\nHigh or sudden force.\nRepetitive movement.\nSustained or awkward posture.\nExposure to vibration.\n\nIf the job has any of those factors, treat it as a hazardous manual task and manage the risk before you rush it.',
+          },
+          {
+            title: 'Sources of manual handling hazards',
+            body: 'Before you lift, check the main sources of manual handling risk in your workplace.\n\nYou as the worker: tired, sick, injured, stressed, unsure of the method, cutting corners, or wearing poor footwear.\nWork practices: bent or twisted postures, sustained positions, jerky moves, one-sided carrying, repetition, heavy force, rushing, poor staffing, or no rest breaks.\nEquipment: outdated, broken, heavy, unsuitable, missing, or not adjustable. A missing trolley is a hazard.\nEnvironment: clutter, poor layout, heat or cold, poor light, slippery or uneven floors, poor access, crowding.\nThe load or product: heavy, large, slippery, no handles, moves when handled, or has sharp edges.\n\nYou are often the eyes on the ground. Report what you find.',
+          },
+          {
+            title: 'Controlling the risk',
+            body: 'Ask what must be controlled and how.\n\nChange the task: does it need to be done this way?\nChange the object: split a heavy load into smaller parcels.\nChange the work environment: better bench height, clearer layout, ergonomic furniture.\nUse mechanical aids: trolleys, wheelbarrows, conveyors, forklifts where authorised.\nChange the nature of the work: breaks, job rotation, two-person lift, or a different method.\nOffer training: inexperienced workers are more likely to be injured.\n\nPPE and "be careful" are not enough if a safer method is available. Review controls when they stop working, before a workplace change, when a new hazard appears, or when a health and safety representative asks for a review.',
+          },
+          {
+            title: 'Duties under WHS',
+            body: 'The person conducting the business must design and maintain premises, practices, equipment and the environment to prevent manual handling injury so far as reasonably practicable. They must manage the risk, consult workers, and provide information, training and supervision.\n\nTeam leaders must follow policy, consult, respond to hazards and incidents, match work to skill, make sure equipment is available, and check competency.\n\nYou must take reasonable care of yourself and others, follow policies and reasonable instructions, attend training, use the equipment provided, use correct techniques, report hazards, faults and injuries, and look after the equipment (for example charge batteries and oil trolley wheels).',
+          },
+          {
+            title: 'Musculoskeletal disorders',
+            body: 'A musculoskeletal disorder (MSD) is an injury or disease of the musculoskeletal system. It may happen suddenly or over time.\n\nMSDs include sprains and strains, back injuries, joint and bone injury or degeneration, nerve compression, soft tissue hernias, and chronic pain.\n\nThey happen in two ways: gradual wear and tear from repeated or continuous use of the same body parts, including static postures; and sudden damage from strenuous activity or unexpected movement when a load shifts.\n\nManual handling injuries are a large share of workplace harm. Prevention protects you, your income, your family, your sport and leisure, and the workload on the rest of the crew.',
+          },
+          {
+            title: 'Postures and tasks to avoid',
+            body: 'Avoid work that forces you into high-risk postures.\n\nTwisting while lifting or carrying.\nBending for long periods over a low surface.\nReaching above shoulder height with a load.\nCarrying a load on one side of the body.\nSudden, jerky or uncontrolled movements.\nWorking in a fixed posture for a long time without a break.\nLifting heavy items from below the knees or above the shoulders when another method exists.\n\nIf the only way to finish the job is one of those postures, stop and ask for a better method, more people, or equipment.',
+          },
+          {
+            title: 'Key manual handling principles',
+            body: 'Your body is your toolbox. Look after fitness, sleep, nutrition and recovery so you can use good technique.\n\nMaintain the natural curves of your spine.\nKeep a stable yet flexible base: feet apart, soft knees, core switched on.\nSink back into your hips when you need to work lower, rather than rounding your back.\nGet power from your lower body and move with the task: lunge and walk, do not yank with your back.\nKeep the load or task close to your body. Distance multiplies the strain on the spine.\nFace the task and use two hands. Twisting with a load is a common way to injure your back.\n\nPractise these principles on every lift, push and carry until they are automatic.',
+          },
+          {
+            title: 'Practical techniques on the job',
+            body: 'Apply the principles to real Service360 tasks.\n\nPushing and pulling: face the load, use both hands, keep soft knees, and push rather than pull where you can. Keep the path clear.\nWorking at low height: sink into the hips, keep spine curves, and bring the work up on a bench or stand if you can.\nWorking above shoulder height: lower the work, use a platform that is set up safely, or split the load. Do not stretch with a heavy item overhead.\nGolfers stance, perching and propping: use a supported stance for short light tasks so you are not stooping for long.\nTwo-person lifts: agree the plan, lift together, and walk the same pace. Do not surprise the other person.\n\nIf the equipment or the layout will not let you use these techniques, report it and get a control before you force the job.',
+          },
+          {
+            title: 'Completion of Learning Section',
+            body: 'You have covered hazardous manual tasks, risk management, MSD prevention, and the core techniques for lifts, pushes and carries.\n\nPass the short quiz to finish this module. On every job, check yourself, the work, the equipment, the environment and the load before you pick anything up.',
+          },
+        ],
+        questions: [
+          {
+            prompt: 'Under the WHS Regulations, which factor can make a manual task hazardous?',
+            options: [
+              { key: 'a', text: 'Only the weight of the object, nothing else' },
+              { key: 'b', text: 'Repetitive or sustained force, high or sudden force, repetitive movement, sustained or awkward posture, or vibration' },
+              { key: 'c', text: 'Only tasks done outdoors' },
+              { key: 'd', text: 'Only tasks that take more than one hour' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'Which of these is a source of manual handling risk you should check before you lift?',
+            options: [
+              { key: 'a', text: 'Only the colour of the box' },
+              { key: 'b', text: 'Yourself, the work practices, the equipment, the environment, and the load' },
+              { key: 'c', text: 'Only the outdoor weather forecast' },
+              { key: 'd', text: 'Only whether a manager is watching' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'What is the best first control when a load is too heavy for one person?',
+            options: [
+              { key: 'a', text: 'Lift faster so the strain lasts less time' },
+              { key: 'b', text: 'Change the task or object, use a trolley or split the load, or get a two-person lift' },
+              { key: 'c', text: 'Twist as you lift to use momentum' },
+              { key: 'd', text: 'Hold your breath and lift' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'Which principle reduces strain on the spine the most when you lift?',
+            options: [
+              { key: 'a', text: 'Keep the load as far from your body as possible' },
+              { key: 'b', text: 'Keep the load close, face the task, and keep the natural curves of your spine' },
+              { key: 'c', text: 'Twist your back so your feet do not need to move' },
+              { key: 'd', text: 'Lift with a straight-leg bend at the waist' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'A musculoskeletal disorder can happen from:',
+            options: [
+              { key: 'a', text: 'Only a single heavy lift' },
+              { key: 'b', text: 'Gradual wear and tear over time, or sudden damage from a strenuous or unexpected movement' },
+              { key: 'c', text: 'Only chemical exposure' },
+              { key: 'd', text: 'Only work above shoulder height' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'What should a worker do if the only way to finish a job is twisting with a heavy load?',
+            options: [
+              { key: 'a', text: 'Finish quickly and stretch afterwards' },
+              { key: 'b', text: 'Stop and ask for a better method, equipment or help' },
+              { key: 'c', text: 'Carry the load on one hip to save steps' },
+              { key: 'd', text: 'Ignore it if nobody is watching' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'Which worker duty applies to hazardous manual tasks?',
+            options: [
+              { key: 'a', text: 'Only managers need to report damaged trolleys' },
+              { key: 'b', text: 'Use the equipment provided, follow safe procedures, and report hazards, faults and injuries' },
+              { key: 'c', text: 'Skip training if you have been on the job for years' },
+              { key: 'd', text: 'Repair electrical lifting aids yourself' },
+            ],
+            correctKey: 'b',
+          },
+          {
+            prompt: 'When pushing a trolley, the safer approach is usually to:',
+            options: [
+              { key: 'a', text: 'Pull it behind you while twisted' },
+              { key: 'b', text: 'Face the load, use both hands, keep soft knees, and keep the path clear' },
+              { key: 'c', text: 'Load it as high as it will go so you make fewer trips' },
+              { key: 'd', text: 'Push with one hand while carrying another box' },
+            ],
+            correctKey: 'b',
+          },
+        ],
+      },
     ];
 
     for (const mod of catalogue) {
@@ -1871,6 +2460,68 @@ export class TrainingService {
       this.logger.log(`training: added module ${mod.code}`);
     }
     await this.syncRoofQuiz(catalogue);
+    await this.syncManualModuleFromFile();
+  }
+
+  /** Expand Manual Handling from the restored ADE deck data when topics are short or few. */
+  private async syncManualModuleFromFile(): Promise<void> {
+    const data = this.loadTrainingDataFile('manual-module.json');
+    if (!data?.topics?.length) return;
+    const mod = await this.modulesRepo.findOne({ where: { code: 'MANUAL' } });
+    if (!mod) return;
+    if (data.durationMins && mod.durationMins !== data.durationMins) {
+      mod.durationMins = data.durationMins;
+      await this.modulesRepo.save(mod);
+    }
+    const existing = await this.topicsRepo.find({
+      where: { moduleId: mod.id },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    const needReplace =
+      existing.length !== data.topics.length ||
+      existing.some((row, i) => {
+        const next = data.topics[i];
+        if (!next) return true;
+        return (
+          row.title !== next.title ||
+          (row.body || '') !== String(next.body || '') ||
+          (row.imageUrl || '') !== String(next.imageUrl || '')
+        );
+      });
+    if (!needReplace) return;
+    await this.topicsRepo.delete({ moduleId: mod.id });
+    await this.topicsRepo.save(
+      data.topics.map((t: { title: string; body: string; imageUrl?: string }, i: number) =>
+        this.topicsRepo.create({
+          moduleId: mod.id,
+          title: t.title,
+          body: t.body,
+          imageUrl: t.imageUrl || null,
+          sortOrder: i + 1,
+        }),
+      ),
+    );
+    if (Array.isArray(data.questions) && data.questions.length) {
+      await this.questionsRepo.delete({ moduleId: mod.id });
+      await this.questionsRepo.save(
+        data.questions.map(
+          (
+            q: { prompt: string; options: { key: string; text: string }[]; correctKey: string },
+            i: number,
+          ) =>
+            this.questionsRepo.create({
+              moduleId: mod.id,
+              type: 'MCQ',
+              prompt: q.prompt,
+              options: q.options,
+              correctKey: q.correctKey,
+              answerReviewed: true,
+              sortOrder: i + 1,
+            }),
+        ),
+      );
+    }
+    this.logger.log(`training: restored MANUAL module (${data.topics.length} topics)`);
   }
 
   /** Keep the Roof and Gutter quiz aligned with the catalogue after content changes. */
