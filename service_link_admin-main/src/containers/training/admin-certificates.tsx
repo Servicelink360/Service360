@@ -1,6 +1,6 @@
 import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PrinterOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Modal, Popconfirm, Space, Table, Tabs, Upload, message } from 'antd';
 import moment from 'moment';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -23,6 +23,7 @@ const TrainingCertificatesPage: React.FC = () => {
   const editing = isNew || (!!certificateId && certificateId !== 'new');
   const [rows, setRows] = useState<any[]>([]);
   const [issuedRows, setIssuedRows] = useState<any[]>([]);
+  const [deletedRows, setDeletedRows] = useState<any[]>([]);
   const [certTab, setCertTab] = useState('definitions');
   const [loading, setLoading] = useState(false);
   const [issuedLoading, setIssuedLoading] = useState(false);
@@ -69,6 +70,16 @@ const TrainingCertificatesPage: React.FC = () => {
     }
   }, []);
 
+  const loadDeleted = useCallback(async () => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/certificates/deleted`,
+      'GET',
+      null,
+    );
+    if (res?.code === 1) setDeletedRows(res.data?.certificates || []);
+  }, []);
+
   const loadTemplates = useCallback(async () => {
     const res = await callAPIAsync(
       serviceType.COMMON,
@@ -82,8 +93,9 @@ const TrainingCertificatesPage: React.FC = () => {
   useEffect(() => {
     load();
     loadIssued();
+    loadDeleted();
     loadTemplates();
-  }, [load, loadIssued, loadTemplates]);
+  }, [load, loadDeleted, loadIssued, loadTemplates]);
 
   const printIssued = (row: any) => {
     if (!row?.url) {
@@ -318,7 +330,41 @@ const TrainingCertificatesPage: React.FC = () => {
       message.error(res?.message || 'Could not remove certificate');
       return;
     }
+    message.success('Certificate moved to Deleted');
     setRows(res.data?.certificates || []);
+    void loadDeleted();
+  };
+
+  const restore = async (id: number) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/certificates/${id}/restore`,
+      'POST',
+      {},
+    );
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not restore certificate');
+      return;
+    }
+    message.success('Certificate restored');
+    setRows(res.data?.certificates || []);
+    void loadDeleted();
+  };
+
+  const purge = async (id: number) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/certificates/${id}/permanent`,
+      'DELETE',
+      null,
+    );
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not delete certificate');
+      return;
+    }
+    message.success('Certificate permanently deleted');
+    setDeletedRows(res.data?.certificates || []);
+    void load();
   };
 
   if (editing) {
@@ -595,7 +641,9 @@ const TrainingCertificatesPage: React.FC = () => {
                 <p className="ta-list-chrome-sub">
                   {certTab === 'issued'
                     ? 'Staff and the certificates awarded to them.'
-                    : 'Saved certificates. Assignments pick one of these.'}
+                    : certTab === 'deleted'
+                      ? 'Certificates removed from the list. Restore them, or delete them permanently.'
+                      : 'Saved certificates. Assignments pick one of these.'}
                 </p>
               </div>
               <Space>
@@ -607,6 +655,7 @@ const TrainingCertificatesPage: React.FC = () => {
                   onClick={() => {
                     void load();
                     void loadIssued();
+                    void loadDeleted();
                   }}
                   loading={loading || issuedLoading}
                 >
@@ -629,8 +678,9 @@ const TrainingCertificatesPage: React.FC = () => {
             onChange={setCertTab}
             style={{ marginTop: 12 }}
             items={[
-              { key: 'definitions', label: 'Certificates' },
-              { key: 'issued', label: 'Awarded certificates' },
+              { key: 'definitions', label: `Certificates (${rows.length})` },
+              { key: 'issued', label: `Awarded certificates (${issuedRows.length})` },
+              { key: 'deleted', label: `Deleted (${deletedRows.length})` },
             ]}
           />
           {certTab === 'issued' ? (
@@ -684,6 +734,80 @@ const TrainingCertificatesPage: React.FC = () => {
                 ]}
               />
             </div>
+          ) : certTab === 'deleted' ? (
+          <div className="ta-table-panel ta-cert-table">
+            <Table
+              rowKey="id"
+              loading={loading}
+              dataSource={deletedRows}
+              pagination={{ pageSize: 20 }}
+              locale={{ emptyText: 'Nothing in Deleted.' }}
+              columns={[
+                { title: 'Name', dataIndex: 'title' },
+                {
+                  title: 'Description',
+                  dataIndex: 'description',
+                  ellipsis: true,
+                  render: (value) => value || '-',
+                },
+                {
+                  title: 'Deleted',
+                  dataIndex: 'deletedAt',
+                  width: 170,
+                  render: (value) => (value ? moment(value).format('DD MMM YYYY HH:mm') : '-'),
+                },
+                {
+                  title: 'Action',
+                  key: 'actions',
+                  width: 140,
+                  align: 'right',
+                  render: (_, row) => (
+                    <Space size={4} style={{ width: '100%', justifyContent: 'flex-end' }}>
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EyeOutlined />}
+                        aria-label="View"
+                        title="View"
+                        onClick={() => setViewRow(row)}
+                      />
+                      <Popconfirm
+                        title="Restore this certificate to the Certificates list?"
+                        okText="Restore"
+                        cancelText="Cancel"
+                        onConfirm={() => void restore(row.id)}
+                      >
+                        <Button type="link" size="small" icon={<UndoOutlined />} aria-label="Restore" title="Restore" />
+                      </Popconfirm>
+                      <Popconfirm
+                        title={
+                          <span>
+                            Permanently delete this certificate?
+                            <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                              This cannot be undone.
+                            </div>
+                          </span>
+                        }
+                        okText="Delete permanently"
+                        okButtonProps={{ danger: true }}
+                        cancelText="Cancel"
+                        onConfirm={() => void purge(row.id)}
+                      >
+                        <Button
+                          type="link"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          aria-label="Delete permanently"
+                          title="Delete permanently"
+                        />
+                      </Popconfirm>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          </div>
           ) : (
           <div className="ta-table-panel ta-cert-table">
             <Table
@@ -741,8 +865,15 @@ const TrainingCertificatesPage: React.FC = () => {
                         onClick={() => setViewRow(row)}
                       />
                       <Popconfirm
-                        title={`Delete ${row.title}?`}
-                        okText="Delete"
+                        title={
+                          <span>
+                            Move this certificate to Deleted?
+                            <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                              You can permanently delete it later from the Deleted tab.
+                            </div>
+                          </span>
+                        }
+                        okText="Move to Deleted"
                         okButtonProps={{ danger: true }}
                         cancelText="Cancel"
                         onConfirm={() => void remove(row.id)}

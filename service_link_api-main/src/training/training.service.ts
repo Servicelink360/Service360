@@ -696,15 +696,16 @@ export class TrainingService {
     return new Set((rows || []).map((row: { module_id: number }) => +row.module_id));
   }
 
-  private async listCertificateDefs() {
+  private async listCertificateDefs(deleted = false) {
     const rows = await this.modulesRepo.manager.query(
-      `SELECT id, title, description, module_ids, layout, created_at
+      `SELECT id, title, description, module_ids, layout, created_at, deleted_at
        FROM training_certificates
-       ORDER BY id ASC`,
+       WHERE deleted_at IS ${deleted ? 'NOT NULL' : 'NULL'}
+       ORDER BY ${deleted ? 'deleted_at DESC, id DESC' : 'id ASC'}`,
     );
     const modules = await this.modulesRepo.find({ order: { sortOrder: 'ASC', id: 'ASC' } });
     const byId = new Map(modules.map((mod) => [+mod.id, mod]));
-    return (rows || []).map((row: { id: number; title: string; description?: string; module_ids: number[]; layout?: Record<string, string>; created_at?: string }) => {
+    return (rows || []).map((row: { id: number; title: string; description?: string; module_ids: number[]; layout?: Record<string, string>; created_at?: string; deleted_at?: string }) => {
       const moduleIds = (Array.isArray(row.module_ids) ? row.module_ids : []).map((id) => +id);
       const layout = row.layout && typeof row.layout === 'object' ? row.layout : {};
       return {
@@ -712,6 +713,7 @@ export class TrainingService {
         title: row.title,
         description: row.description || '',
         createdAt: row.created_at || null,
+        deletedAt: row.deleted_at || null,
         layout,
         templateKey: layout.templateKey || 'classic',
         moduleIds,
@@ -852,12 +854,63 @@ export class TrainingService {
     return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs() } };
   }
 
+  async adminListDeletedCertificates(user: IUserInfo) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs(true) } };
+  }
+
   async adminDeleteCertificate(user: IUserInfo, id: number) {
     if (!this.isAdmin(user)) {
       return { ...errorCode.EXCEPTION, message: 'Admin only' };
     }
-    await this.modulesRepo.manager.query(`DELETE FROM training_certificates WHERE id = $1`, [id]);
+    const rows = await this.modulesRepo.manager.query(
+      `UPDATE training_certificates SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+      [id],
+    );
+    if (!rows?.length) return errorCode.NOT_FOUND;
     return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs() } };
+  }
+
+  async adminRestoreCertificate(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const rows = await this.modulesRepo.manager.query(
+      `UPDATE training_certificates SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING id`,
+      [id],
+    );
+    if (!rows?.length) return errorCode.NOT_FOUND;
+    return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs() } };
+  }
+
+  async adminPurgeCertificate(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) {
+      return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    }
+    const awards = await this.modulesRepo.manager.query(
+      `SELECT COUNT(*)::int AS count FROM training_certificate_awards WHERE certificate_id = $1`,
+      [id],
+    );
+    if (+awards?.[0]?.count > 0) {
+      return {
+        ...errorCode.EXCEPTION,
+        message: 'This certificate has been awarded. Restore it instead of deleting it permanently.',
+      };
+    }
+    await this.modulesRepo.manager.query(
+      `UPDATE training_assignments
+       SET certificate_id = NULL, issue_certificate = FALSE
+       WHERE certificate_id = $1`,
+      [id],
+    );
+    const rows = await this.modulesRepo.manager.query(
+      `DELETE FROM training_certificates WHERE id = $1 AND deleted_at IS NOT NULL RETURNING id`,
+      [id],
+    );
+    if (!rows?.length) return errorCode.NOT_FOUND;
+    return { ...errorCode.SUCCESS, data: { certificates: await this.listCertificateDefs(true) } };
   }
 
   private async listCertificateTemplates() {

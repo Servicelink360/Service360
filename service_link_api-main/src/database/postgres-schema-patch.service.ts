@@ -2337,6 +2337,10 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
       `);
       await this.dataSource.query(`
+        ALTER TABLE public.training_certificates
+          ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
+      `);
+      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS public.training_certificate_templates (
           id SERIAL PRIMARY KEY,
           name VARCHAR(255) NOT NULL,

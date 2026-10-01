@@ -144,6 +144,27 @@ export class TrainingController {
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Get('admin/certificates/deleted')
+  async adminListDeletedCertificates(@Res() res, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminListDeletedCertificates(req.user));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('admin/certificates/:id/restore')
+  async adminRestoreCertificate(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminRestoreCertificate(req.user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('admin/certificates/:id/permanent')
+  async adminPurgeCertificate(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminPurgeCertificate(req.user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Get('admin/certificates')
   async adminListCertificates(@Res() res, @Request() req) {
     return customHttpCode(res, await this.trainingService.adminListCertificates(req.user));
