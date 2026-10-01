@@ -2290,10 +2290,6 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           ADD COLUMN IF NOT EXISTS certificate_id INTEGER NULL;
       `);
       await this.dataSource.query(`
-        ALTER TABLE public.training_certificate_awards
-          ADD COLUMN IF NOT EXISTS module_ids JSONB NOT NULL DEFAULT '[]';
-      `);
-      await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS public.training_staff_certificates (
           staff_id INTEGER PRIMARY KEY,
           module_ids JSONB NOT NULL DEFAULT '[]',
@@ -2353,11 +2349,16 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           id SERIAL PRIMARY KEY,
           certificate_id INTEGER NOT NULL REFERENCES public.training_certificates(id) ON DELETE CASCADE,
           user_id INTEGER NOT NULL,
+          module_ids JSONB NOT NULL DEFAULT '[]',
           certificate_url VARCHAR(1000) NULL,
           certificate_code VARCHAR(64) NULL,
           issued_at TIMESTAMPTZ NULL,
           UNIQUE (certificate_id, user_id)
         );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.training_certificate_awards
+          ADD COLUMN IF NOT EXISTS module_ids JSONB NOT NULL DEFAULT '[]';
       `);
       this.logger.log('training tables ensured');
     } catch (e) {
