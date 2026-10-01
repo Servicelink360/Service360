@@ -736,7 +736,7 @@ export class TrainingService {
     if (!groups.size) return { issued: [], pending: [], failed: false };
 
     const defs = await this.listCertificateDefs();
-    const defById = new Map(defs.map((def) => [+def.id, def]));
+    const defById = new Map(defs.map((def) => [+def.id, def] as [number, typeof def]));
     const passed = await this.passedModuleIds(userId);
     const staff = await this.usersRepo.findOne({ where: { id: userId } });
     const issued: { id: number; title: string; url: string | null; code: string | null }[] = [];
@@ -746,7 +746,8 @@ export class TrainingService {
     for (const [certificateId, moduleIdList] of groups) {
       const requiredIds = [...new Set(moduleIdList)].sort((a, b) => a - b);
       if (!requiredIds.includes(+currentModuleId)) continue;
-      const title = defById.get(certificateId)?.title || 'Certificate';
+      const certDef = defById.get(certificateId) as { title?: string; layout?: Record<string, unknown> } | undefined;
+      const title = certDef?.title || 'Certificate';
       const modules = await this.modulesRepo.find({ where: { id: In(requiredIds) } });
       const byId = new Map(modules.map((mod) => [+mod.id, mod]));
       const ordered = requiredIds.map((id) => byId.get(id)).filter(Boolean);
@@ -793,7 +794,7 @@ export class TrainingService {
           certificateCode: certCode,
           kind: 'TRAINING',
           detail: ordered.map((mod) => mod.title).join(', '),
-          layout: defById.get(certificateId)?.layout || null,
+          layout: certDef?.layout || null,
         });
       } catch (e) {
         this.logger.warn(`certificate pdf failed: ${(e as Error).message}`);
@@ -1152,10 +1153,8 @@ export class TrainingService {
       : [];
     const staffCertMap = new Map(
       (staffCerts || []).map(
-        (row: { user_id: number; certificate_id: number; certificate_url: string; module_ids: number[] }) => [
-          `${+row.user_id}:${+row.certificate_id}`,
-          row,
-        ],
+        (row: { user_id: number; certificate_id: number; certificate_url: string; module_ids: number[] }) =>
+          [`${+row.user_id}:${+row.certificate_id}`, row] as [string, typeof row],
       ),
     );
 
@@ -1201,7 +1200,9 @@ export class TrainingService {
               : null),
           staffCertificateUrl: (() => {
             if (!a.staffId || !a.issueCertificate || !a.certificateId) return null;
-            const cert = staffCertMap.get(`${+a.staffId}:${+a.certificateId}`);
+            const cert = staffCertMap.get(`${+a.staffId}:${+a.certificateId}`) as
+              | { certificate_url?: string; module_ids?: number[] }
+              | undefined;
             if (!cert?.certificate_url) return null;
             const saved = (Array.isArray(cert.module_ids) ? cert.module_ids : [])
               .map((id: number) => +id)
