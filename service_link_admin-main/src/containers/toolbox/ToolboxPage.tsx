@@ -1,6 +1,6 @@
 import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, PlusOutlined, PrinterOutlined, ReloadOutlined, UndoOutlined } from '@ant-design/icons';
 import { Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import moment from 'moment';
@@ -20,6 +20,30 @@ type Talk = {
   durationMins: number;
   imageUrl?: string | null;
   status?: number;
+  signedAt?: string | null;
+  signatureName?: string;
+  signoffId?: number | null;
+  signoffCount?: number;
+  minutes?: string;
+};
+
+type PrintedPerson = {
+  staffId: number;
+  name: string;
+  signature: string;
+  completedAt: moment.Moment | null;
+};
+
+type PrintedForm = {
+  kind: 'group' | 'single';
+  id: number;
+  talkTitle: string;
+  siteName: string;
+  sessionDate: moment.Moment | null;
+  ledBy: string;
+  minutes: string;
+  notes: string;
+  people: PrintedPerson[];
 };
 
 type SessionRow = {
@@ -33,14 +57,22 @@ type SessionRow = {
   notes: string;
 };
 
-function readProfileType() {
+function readProfile() {
   try {
     const raw = localStorage.getItem('profile');
-    if (!raw) return 0;
-    return +JSON.parse(raw).type || 0;
+    return raw ? JSON.parse(raw) : {};
   } catch {
-    return 0;
+    return {};
   }
+}
+
+function readProfileType() {
+  return +readProfile().type || 0;
+}
+
+function readProfileName() {
+  const profile = readProfile();
+  return profile.fullName || profile.full_name || '';
 }
 
 function formatWhen(value?: string | null) {
@@ -49,7 +81,15 @@ function formatWhen(value?: string | null) {
   return m.isValid() ? m.format('YYYY-MM-DD') : '';
 }
 
-function TalkBrief({ talk, showTitle = true }: { talk: Talk; showTitle?: boolean }) {
+function TalkBrief({
+  talk,
+  showTitle = true,
+  showDiscussion = false,
+}: {
+  talk: Talk;
+  showTitle?: boolean;
+  showDiscussion?: boolean;
+}) {
   const image = toolboxImageFor(talk);
   const lines = String(talk.brief || '')
     .split('\n')
@@ -101,7 +141,7 @@ function TalkBrief({ talk, showTitle = true }: { talk: Talk; showTitle?: boolean
           ))}
         </div>
       ))}
-      {talk.points?.length ? (
+      {showDiscussion && talk.points?.length ? (
         <div className="toolbox-brief__discussion">
           <h4>Discussion with the crew</h4>
           <ol>
@@ -119,20 +159,32 @@ const ToolboxPage: React.FC = () => {
   const isAdmin = readProfileType() === 3;
   const [talks, setTalks] = useState<Talk[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [singleSessions, setSingleSessions] = useState<any[]>([]);
+  const [deletedRows, setDeletedRows] = useState<any[]>([]);
   const [mine, setMine] = useState<any[]>([]);
+  const [printedForm, setPrintedForm] = useState<PrintedForm | null>(null);
+  const [savingForm, setSavingForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [openTalk, setOpenTalk] = useState<Talk | null>(null);
   const [editTalk, setEditTalk] = useState<Talk | null>(null);
   const [createTalkOpen, setCreateTalkOpen] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
-  const [detail, setDetail] = useState<any>(null);
+  const [formPreviewUrl, setFormPreviewUrl] = useState<string | null>(null);
   const [staffOptions, setStaffOptions] = useState<{ label: string; value: number }[]>([]);
   const [siteOptions, setSiteOptions] = useState<{ label: string; value: number }[]>([]);
   const [form] = Form.useForm();
   const [editForm] = Form.useForm();
+  const [signName, setSignName] = useState(readProfileName);
+  const [signSession, setSignSession] = useState<any>(null);
+  const [signing, setSigning] = useState(false);
   const selectedTalkId = Form.useWatch('talkId', form);
   const selectedTalk = talks.find((talk) => talk.id === selectedTalkId) || null;
+
+  useEffect(() => {
+    if (!recordOpen || editingSessionId || !selectedTalk) return;
+    form.setFieldsValue({ minutes: selectedTalk.brief || '' });
+  }, [editingSessionId, form, recordOpen, selectedTalk, selectedTalkId]);
 
   const loadTalks = useCallback(async () => {
     const path = isAdmin ? `${endPoint.TOOLBOX}/admin/talks` : `${endPoint.TOOLBOX}/talks`;
@@ -143,6 +195,16 @@ const ToolboxPage: React.FC = () => {
   const loadSessions = useCallback(async () => {
     const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/admin/sessions`, 'GET', null);
     if (res?.code === 1) setSessions(res.data || []);
+  }, []);
+
+  const loadSingleSessions = useCallback(async () => {
+    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/admin/signoffs`, 'GET', null);
+    if (res?.code === 1) setSingleSessions(res.data || []);
+  }, []);
+
+  const loadDeleted = useCallback(async () => {
+    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/deleted`, 'GET', null);
+    if (res?.code === 1) setDeletedRows(res.data || []);
   }, []);
 
   const loadMine = useCallback(async () => {
@@ -175,24 +237,21 @@ const ToolboxPage: React.FC = () => {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([loadTalks(), isAdmin ? loadSessions() : loadMine(), isAdmin ? loadLookups() : Promise.resolve()]);
+      await Promise.all([
+        loadTalks(),
+        isAdmin ? loadSessions() : loadMine(),
+        isAdmin ? loadSingleSessions() : Promise.resolve(),
+        isAdmin ? loadLookups() : Promise.resolve(),
+        loadDeleted(),
+      ]);
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, loadLookups, loadMine, loadSessions, loadTalks]);
+  }, [isAdmin, loadDeleted, loadLookups, loadMine, loadSessions, loadSingleSessions, loadTalks]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
-
-  const openSession = async (id: number) => {
-    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/admin/sessions/${id}`, 'GET', null);
-    if (res?.code !== 1) {
-      message.error(res?.message || 'Could not open the session');
-      return;
-    }
-    setDetail(res.data);
-  };
 
   const saveSession = async () => {
     let values: any;
@@ -209,6 +268,7 @@ const ToolboxPage: React.FC = () => {
       siteName: siteId === 0 ? 'All sites' : site?.label || '',
       deliveredAt: values.deliveredAt ? values.deliveredAt.toISOString() : new Date().toISOString(),
       notes: values.notes || '',
+      minutes: values.minutes || '',
       staffIds: values.staffIds || [],
     };
     const res = editingSessionId
@@ -256,19 +316,97 @@ const ToolboxPage: React.FC = () => {
     loadTalks();
   };
 
-  const acknowledge = async (sessionId: number) => {
-    const res = await callAPIAsync(
-      serviceType.COMMON,
-      `${endPoint.TOOLBOX}/sessions/${sessionId}/acknowledge`,
-      'POST',
-      {},
-    );
-    if (res?.code !== 1) {
-      message.error(res?.message || 'Could not confirm attendance');
+  const loadRecordUrl = async (path: string) => {
+    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/${path}`, 'GET', null);
+    if (res?.code !== 1 || !res.data?.url) {
+      message.error(res?.message || 'Could not open the form');
+      return '';
+    }
+    return String(res.data.url);
+  };
+
+  const viewRecord = async (path: string) => {
+    const url = await loadRecordUrl(path);
+    if (url) setFormPreviewUrl(url);
+  };
+
+  const printRecord = async (path: string) => {
+    const url = await loadRecordUrl(path);
+    if (!url) return;
+    const res = { data: { url } };
+    const win = window.open(res.data.url, '_blank', 'noopener');
+    if (!win) {
+      message.warning('Allow pop-ups to print the record');
       return;
     }
-    message.success('Attendance confirmed');
-    loadMine();
+    win.addEventListener('load', () => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        /* the opened PDF can still be printed from the browser */
+      }
+    });
+  };
+
+  const submitSignoff = async (talk: Talk) => {
+    const name = signName.trim();
+    if (!name) {
+      message.error('Enter your name to sign');
+      return;
+    }
+    setSigning(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TOOLBOX}/talks/${talk.id}/signoff`,
+        'POST',
+        { signatureName: name },
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not save the sign-off');
+        return;
+      }
+      const signedAt = res.data?.signedAt || new Date().toISOString();
+      const signatureName = res.data?.signatureName || name;
+      setTalks((prev) =>
+        prev.map((row) => (row.id === talk.id ? { ...row, signedAt, signatureName } : row)),
+      );
+      setOpenTalk((current) =>
+        current && current.id === talk.id ? { ...current, signedAt, signatureName } : current,
+      );
+      message.success('Sign-off saved');
+      loadMine();
+    } finally {
+      setSigning(false);
+    }
+  };
+
+  const submitSessionSignoff = async () => {
+    if (!signSession) return;
+    const name = signName.trim();
+    if (!name) {
+      message.error('Enter your name to sign');
+      return;
+    }
+    setSigning(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TOOLBOX}/sessions/${signSession.sessionId}/acknowledge`,
+        'POST',
+        { signatureName: name },
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not save the sign-off');
+        return;
+      }
+      message.success('Sign-off saved');
+      setSignSession(null);
+      refresh();
+    } finally {
+      setSigning(false);
+    }
   };
 
   const talkColumns: ColumnsType<Talk> = useMemo(
@@ -288,6 +426,12 @@ const ToolboxPage: React.FC = () => {
       { title: 'Minutes', dataIndex: 'durationMins', width: 100 },
       ...(isAdmin
         ? [
+            {
+              title: 'Sign-offs',
+              dataIndex: 'signoffCount',
+              width: 110,
+              render: (count: number) => count || 0,
+            } as ColumnsType<Talk>[number],
             {
               title: 'Active',
               dataIndex: 'status',
@@ -312,7 +456,14 @@ const ToolboxPage: React.FC = () => {
               ),
             } as ColumnsType<Talk>[number],
           ]
-        : []),
+        : [
+            {
+              title: 'Sign-off',
+              width: 170,
+              render: (_: unknown, row: Talk) =>
+                row.signedAt ? moment(row.signedAt).format('DD MMM YYYY HH:mm') : 'Not signed',
+            } as ColumnsType<Talk>[number],
+          ]),
       {
         title: '',
         width: 280,
@@ -332,6 +483,7 @@ const ToolboxPage: React.FC = () => {
                     staffIds: [],
                     siteId: undefined,
                     notes: '',
+                    minutes: row.brief || '',
                   });
                   setRecordOpen(true);
                 }}
@@ -391,42 +543,41 @@ const ToolboxPage: React.FC = () => {
     { title: 'Present', dataIndex: 'present', width: 90 },
     { title: 'Confirmed', dataIndex: 'acknowledged', width: 110 },
     {
-      title: '',
-      width: 200,
+      title: 'Action',
+      width: 280,
+      align: 'right',
       render: (_, row) => (
         <Space>
-          <Button type="link" onClick={() => openSession(row.id)}>
+          <Button type="link" onClick={() => viewRecord(`sessions/${row.id}/pdf`)}>
             View
           </Button>
           <Button
             type="link"
-            onClick={async () => {
-              const res = await callAPIAsync(
-                serviceType.COMMON,
-                `${endPoint.TOOLBOX}/admin/sessions/${row.id}`,
-                'GET',
-                null,
-              );
-              if (res?.code !== 1) {
-                message.error(res?.message || 'Could not open the session');
-                return;
-              }
-              const data = res.data;
-              setEditingSessionId(data.id);
-              form.setFieldsValue({
-                talkId: data.talkId,
-                siteId: data.siteId ? data.siteId : data.siteName === 'All sites' ? 0 : undefined,
-                deliveredAt: data.deliveredAt ? moment(data.deliveredAt) : moment(),
-                staffIds: (data.attendance || []).map((person: any) => person.staffId),
-                notes: data.notes || '',
-              });
-              setRecordOpen(true);
-            }}
+            icon={<PrinterOutlined />}
+            title="Print"
+            aria-label="Print"
+            onClick={() => printRecord(`sessions/${row.id}/pdf`)}
           >
-            Edit
+            Print
           </Button>
+          <Button
+            type="link"
+            icon={<EditOutlined />}
+            title="Edit printed form"
+            aria-label="Edit printed form"
+            onClick={() => openPrintedGroup(row.id)}
+          />
           <Popconfirm
-            title="Delete this session?"
+            title={
+              <span>
+                Move this session to Deleted?
+                <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                  You can permanently delete it later from the Deleted tab.
+                </div>
+              </span>
+            }
+            okText="Move to Deleted"
+            okButtonProps={{ danger: true }}
             onConfirm={async () => {
               const res = await callAPIAsync(
                 serviceType.COMMON,
@@ -438,16 +589,224 @@ const ToolboxPage: React.FC = () => {
                 message.error(res?.message || 'Could not delete the session');
                 return;
               }
-              message.success('Session deleted');
-              loadSessions();
+              message.success('Session moved to Deleted');
+              refresh();
             }}
           >
-            <Button type="link">Delete</Button>
+            <Button type="link" danger icon={<DeleteOutlined />} title="Delete" aria-label="Delete" />
           </Popconfirm>
         </Space>
       ),
     },
   ];
+
+  const openPrintedGroup = async (id: number) => {
+    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/admin/sessions/${id}`, 'GET', null);
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not open the form');
+      return;
+    }
+    const data = res.data;
+    setPrintedForm({
+      kind: 'group',
+      id: data.id,
+      talkTitle: data.talkTitle || '',
+      siteName: data.siteName || '',
+      sessionDate: data.deliveredAt ? moment(data.deliveredAt) : null,
+      ledBy: data.deliveredByName || '',
+      minutes: data.minutes || data.brief || '',
+      notes: data.notes || '',
+      people: (data.attendance || []).map((person: any) => ({
+        staffId: person.staffId,
+        name: person.name || '',
+        signature: person.signatureName || '',
+        completedAt: person.acknowledgedAt ? moment(person.acknowledgedAt) : null,
+      })),
+    });
+  };
+
+  const openPrintedSingle = (row: any) => {
+    const signedAt = row.signedAt ? moment(row.signedAt) : null;
+    setPrintedForm({
+      kind: 'single',
+      id: row.signoffId || row.id,
+      talkTitle: row.formTitle || row.talkTitle || row.title || '',
+      siteName: '',
+      sessionDate: signedAt,
+      ledBy: '',
+      minutes: row.minutes || row.brief || '',
+      notes: '',
+      people: [
+        {
+          staffId: row.staffId,
+          name: row.printedName || row.staffName || '',
+          signature: row.signatureName || '',
+          completedAt: signedAt,
+        },
+      ],
+    });
+  };
+
+  const updatePrintedPerson = (index: number, patch: Partial<PrintedPerson>) => {
+    setPrintedForm((current) => {
+      if (!current) return current;
+      const people = current.people.map((person, personIndex) =>
+        personIndex === index ? { ...person, ...patch } : person,
+      );
+      return { ...current, people };
+    });
+  };
+
+  const savePrintedForm = async () => {
+    if (!printedForm) return;
+    setSavingForm(true);
+    try {
+      const person = printedForm.people[0];
+      const res =
+        printedForm.kind === 'group'
+          ? await callAPIAsync(
+              serviceType.COMMON,
+              `${endPoint.TOOLBOX}/admin/sessions/${printedForm.id}/form`,
+              'PATCH',
+              {
+                talkTitle: printedForm.talkTitle,
+                siteName: printedForm.siteName,
+                deliveredAt: printedForm.sessionDate ? printedForm.sessionDate.toISOString() : undefined,
+                ledBy: printedForm.ledBy,
+                minutes: printedForm.minutes,
+                notes: printedForm.notes,
+                people: printedForm.people.map((row) => ({
+                  staffId: row.staffId,
+                  name: row.name,
+                  signature: row.signature,
+                  completedAt: row.completedAt ? row.completedAt.toISOString() : null,
+                })),
+              },
+            )
+          : await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/signoffs/${printedForm.id}`, 'PATCH', {
+              formTitle: printedForm.talkTitle,
+              printedName: person?.name || '',
+              signatureName: person?.signature || '',
+              minutes: printedForm.minutes,
+              signedAt: person?.completedAt ? person.completedAt.toISOString() : undefined,
+            });
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not save the form');
+        return;
+      }
+      message.success('Printed form updated');
+      setPrintedForm(null);
+      refresh();
+    } finally {
+      setSavingForm(false);
+    }
+  };
+
+  const moveSignoffToDeleted = async (id: number) => {
+    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/signoffs/${id}`, 'DELETE', null);
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not delete the sign-off');
+      return;
+    }
+    message.success('Sign-off moved to Deleted');
+    refresh();
+  };
+
+  const restoreDeleted = async (row: any) => {
+    const path =
+      row.kind === 'group'
+        ? `${endPoint.TOOLBOX}/admin/sessions/${row.id}/restore`
+        : `${endPoint.TOOLBOX}/signoffs/${row.id}/restore`;
+    const res = await callAPIAsync(serviceType.COMMON, path, 'POST', {});
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not restore');
+      return;
+    }
+    message.success('Restored');
+    refresh();
+  };
+
+  const purgeDeleted = async (row: any) => {
+    const path =
+      row.kind === 'group'
+        ? `${endPoint.TOOLBOX}/admin/sessions/${row.id}/permanent`
+        : `${endPoint.TOOLBOX}/signoffs/${row.id}/permanent`;
+    const res = await callAPIAsync(serviceType.COMMON, path, 'DELETE', null);
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not delete');
+      return;
+    }
+    message.success('Permanently deleted');
+    refresh();
+  };
+
+  const deletedTab = {
+    key: 'deleted',
+    label: `Deleted (${deletedRows.length})`,
+    children: (
+      <Table
+        rowKey="key"
+        loading={loading}
+        dataSource={deletedRows}
+        locale={{ emptyText: 'Nothing in Deleted.' }}
+        pagination={false}
+        columns={[
+          {
+            title: 'Deleted',
+            dataIndex: 'deletedAt',
+            width: 170,
+            render: (value) => (value ? moment(value).format('DD MMM YYYY HH:mm') : '-'),
+          },
+          {
+            title: 'Type',
+            dataIndex: 'kind',
+            width: 100,
+            render: (value) => (value === 'group' ? 'Group' : 'Single'),
+          },
+          { title: 'Talk', dataIndex: 'talkTitle' },
+          { title: 'Staff / site', dataIndex: 'who', render: (value) => value || '' },
+          {
+            title: 'Action',
+            width: 160,
+            align: 'right' as const,
+            render: (_, row) => (
+              <Space>
+                <Button
+                  type="link"
+                  icon={<PrinterOutlined />}
+                  title="Print"
+                  aria-label="Print"
+                  onClick={() =>
+                    printRecord(row.kind === 'group' ? `sessions/${row.id}/pdf` : `signoffs/${row.id}/pdf`)
+                  }
+                />
+                <Popconfirm title="Restore this record?" okText="Restore" onConfirm={() => restoreDeleted(row)}>
+                  <Button type="link" icon={<UndoOutlined />} title="Restore" aria-label="Restore" />
+                </Popconfirm>
+                {isAdmin ? (
+                  <Popconfirm
+                    title={
+                      <span>
+                        Permanently delete this record?
+                        <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                          This cannot be undone.
+                        </div>
+                      </span>
+                    }
+                    okText="Delete permanently"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => purgeDeleted(row)}
+                  >
+                    <Button type="link" danger icon={<DeleteOutlined />} title="Delete permanently" aria-label="Delete permanently" />
+                  </Popconfirm>
+                ) : null}
+              </Space>
+            ),
+          },
+        ]}
+      />
+    ),
+  };
 
   return (
     <Layout>
@@ -474,7 +833,7 @@ const ToolboxPage: React.FC = () => {
                   icon={<PlusOutlined />}
                   onClick={() => {
                     setEditingSessionId(null);
-                    form.setFieldsValue({ deliveredAt: moment(), staffIds: [], talkId: undefined, siteId: undefined, notes: '' });
+                    form.setFieldsValue({ deliveredAt: moment(), staffIds: [], talkId: undefined, siteId: undefined, notes: '', minutes: '' });
                     setRecordOpen(true);
                   }}
                 >
@@ -496,40 +855,212 @@ const ToolboxPage: React.FC = () => {
                 },
                 {
                   key: 'sessions',
-                  label: 'Sessions',
+                  label: `Group Sessions (${sessions.length})`,
                   children: <Table rowKey="id" loading={loading} columns={sessionColumns} dataSource={sessions} />,
                 },
+                {
+                  key: 'single',
+                  label: `Single Sessions (${singleSessions.length})`,
+                  children: (
+                    <Table
+                      rowKey="id"
+                      loading={loading}
+                      dataSource={singleSessions}
+                      locale={{ emptyText: 'No single staff sign-offs yet.' }}
+                      columns={[
+                        {
+                          title: 'Signed',
+                          dataIndex: 'signedAt',
+                          width: 170,
+                          render: (value) => (value ? moment(value).format('DD MMM YYYY HH:mm') : '-'),
+                        },
+                        { title: 'Staff', dataIndex: 'staffName' },
+                        { title: 'Signed as', dataIndex: 'signatureName' },
+                        { title: 'Talk', dataIndex: 'talkTitle' },
+                        {
+                          title: 'Action',
+                          width: 180,
+                          align: 'right',
+                          render: (_, row) => (
+                            <Space>
+                              <Button type="link" onClick={() => viewRecord(`signoffs/${row.id}/pdf`)}>
+                                View
+                              </Button>
+                              <Button
+                                type="link"
+                                icon={<PrinterOutlined />}
+                                title="Print"
+                                aria-label="Print"
+                                onClick={() => printRecord(`signoffs/${row.id}/pdf`)}
+                              />
+                              <Button
+                                type="link"
+                                icon={<EditOutlined />}
+                                title="Edit"
+                                aria-label="Edit"
+                                onClick={() => openPrintedSingle(row)}
+                              />
+                              <Popconfirm
+                                title={
+                                  <span>
+                                    Move this sign-off to Deleted?
+                                    <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                                      You can permanently delete it later from the Deleted tab.
+                                    </div>
+                                  </span>
+                                }
+                                okText="Move to Deleted"
+                                okButtonProps={{ danger: true }}
+                                onConfirm={() => moveSignoffToDeleted(row.id)}
+                              >
+                                <Button type="link" danger icon={<DeleteOutlined />} title="Delete" aria-label="Delete" />
+                              </Popconfirm>
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
+                  ),
+                },
+                deletedTab,
               ]}
             />
           ) : (
-            <>
-              <h3>Talks</h3>
-              <Table rowKey="id" loading={loading} columns={talkColumns} dataSource={talks} pagination={false} />
-              <h3 style={{ marginTop: 24 }}>My attendance</h3>
-              <Table
-                rowKey="attendanceId"
-                loading={loading}
-                dataSource={mine}
-                pagination={false}
-                columns={[
-                  { title: 'Date', dataIndex: 'deliveredAt', width: 120, render: (v) => formatWhen(v) },
-                  { title: 'Talk', dataIndex: 'talkTitle' },
-                  { title: 'Site', dataIndex: 'siteName', render: (v) => v || '' },
-                  {
-                    title: 'Confirmed',
-                    width: 140,
-                    render: (_, row) =>
-                      row.acknowledgedAt ? (
-                        formatWhen(row.acknowledgedAt)
-                      ) : (
-                        <Button type="link" onClick={() => acknowledge(row.sessionId)}>
-                          I was there
-                        </Button>
-                      ),
-                  },
-                ]}
-              />
-            </>
+            <Tabs
+              defaultActiveKey="talks"
+              items={[
+                {
+                  key: 'talks',
+                  label: 'Talks',
+                  children: (
+                    <Table rowKey="id" loading={loading} columns={talkColumns} dataSource={talks} pagination={false} />
+                  ),
+                },
+                {
+                  key: 'sessions',
+                  label: `Group Sessions (${mine.length})`,
+                  children: (
+                    <Table
+                      rowKey="attendanceId"
+                      loading={loading}
+                      dataSource={mine}
+                      pagination={false}
+                      columns={[
+                        { title: 'Date', dataIndex: 'deliveredAt', width: 120, render: (v) => formatWhen(v) },
+                        { title: 'Talk', dataIndex: 'talkTitle' },
+                        { title: 'Site', dataIndex: 'siteName', render: (v) => v || '' },
+                        {
+                          title: 'Action',
+                          width: 180,
+                          align: 'right',
+                          render: (_, row) => (
+                            <Space>
+                              {row.acknowledgedAt ? (
+                                <span>{formatWhen(row.acknowledgedAt)}</span>
+                              ) : (
+                                <Button
+                                  type="link"
+                                  onClick={() => {
+                                    setSignName(readProfileName());
+                                    setSignSession(row);
+                                  }}
+                                >
+                                  Sign off
+                                </Button>
+                              )}
+                              <Button type="link" onClick={() => viewRecord(`sessions/${row.sessionId}/pdf`)}>
+                                View
+                              </Button>
+                              <Button
+                                type="link"
+                                icon={<PrinterOutlined />}
+                                title="Print"
+                                aria-label="Print"
+                                onClick={() => printRecord(`sessions/${row.sessionId}/pdf`)}
+                              >
+                                Print
+                              </Button>
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
+                  ),
+                },
+                {
+                  key: 'single',
+                  label: `Single Sessions (${talks.filter((talk) => talk.signedAt).length})`,
+                  children: (
+                    <Table
+                      rowKey="id"
+                      loading={loading}
+                      dataSource={talks.filter((talk) => talk.signedAt)}
+                      locale={{ emptyText: 'You have not signed a toolbox talk yet.' }}
+                      pagination={false}
+                      columns={[
+                        {
+                          title: 'Signed',
+                          dataIndex: 'signedAt',
+                          width: 170,
+                          render: (value) => (value ? moment(value).format('DD MMM YYYY HH:mm') : '-'),
+                        },
+                        { title: 'Signed as', dataIndex: 'signatureName' },
+                        { title: 'Talk', dataIndex: 'title' },
+                        {
+                          title: 'Action',
+                          width: 180,
+                          align: 'right',
+                          render: (_, row) => (
+                            <Space>
+                              <Button
+                                type="link"
+                                onClick={() => (row.signoffId ? viewRecord(`signoffs/${row.signoffId}/pdf`) : setOpenTalk(row))}
+                              >
+                                View
+                              </Button>
+                              {row.signoffId ? (
+                                <>
+                                  <Button
+                                    type="link"
+                                    icon={<PrinterOutlined />}
+                                    title="Print"
+                                    aria-label="Print"
+                                    onClick={() => printRecord(`signoffs/${row.signoffId}/pdf`)}
+                                  />
+                                  <Button
+                                    type="link"
+                                    icon={<EditOutlined />}
+                                    title="Edit"
+                                    aria-label="Edit"
+                                    onClick={() => openPrintedSingle(row)}
+                                  />
+                                  <Popconfirm
+                                    title={
+                                      <span>
+                                        Remove this sign-off from your list?
+                                        <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                                          It moves to Deleted. You can restore it from the Deleted tab.
+                                        </div>
+                                      </span>
+                                    }
+                                    okText="Remove"
+                                    okButtonProps={{ danger: true }}
+                                    onConfirm={() => moveSignoffToDeleted(row.signoffId)}
+                                  >
+                                    <Button type="link" danger icon={<DeleteOutlined />} title="Delete" aria-label="Delete" />
+                                  </Popconfirm>
+                                </>
+                              ) : null}
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
+                  ),
+                },
+                deletedTab,
+              ]}
+            />
           )}
         </div>
         <Modal
@@ -539,7 +1070,127 @@ const ToolboxPage: React.FC = () => {
           onCancel={() => setOpenTalk(null)}
           width={820}
         >
-          {openTalk ? <TalkBrief talk={openTalk} /> : null}
+          {openTalk ? <TalkBrief talk={openTalk} showDiscussion={isAdmin} /> : null}
+          {openTalk && !isAdmin ? (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+              <h4 style={{ marginBottom: 8 }}>Digital sign-off</h4>
+              {openTalk.signedAt ? (
+                <p style={{ margin: 0 }}>
+                  Signed by {openTalk.signatureName || 'you'} on{' '}
+                  {moment(openTalk.signedAt).format('DD MMM YYYY HH:mm')}.
+                </p>
+              ) : (
+                <>
+                  <p style={{ marginTop: 0 }}>
+                    Type your name to confirm you have completed this toolbox talk.
+                  </p>
+                  <Input
+                    value={signName}
+                    placeholder="Your name"
+                    onChange={(e) => setSignName(e.target.value)}
+                    style={{ maxWidth: 360, marginBottom: 12 }}
+                  />
+                  <div>
+                    <Button type="primary" loading={signing} onClick={() => submitSignoff(openTalk)}>
+                      Submit acknowledgment
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+        </Modal>
+        <Modal
+          open={!!printedForm}
+          title="Edit printed form"
+          okText="Save"
+          confirmLoading={savingForm}
+          onOk={savePrintedForm}
+          onCancel={() => setPrintedForm(null)}
+          width={820}
+        >
+          {printedForm ? (
+            <div>
+              <p>Toolbox talk</p>
+              <Input
+                value={printedForm.talkTitle}
+                onChange={(e) => setPrintedForm({ ...printedForm, talkTitle: e.target.value })}
+              />
+              {printedForm.kind === 'group' ? (
+                <>
+                  <p style={{ marginTop: 16 }}>Site</p>
+                  <Input
+                    value={printedForm.siteName}
+                    onChange={(e) => setPrintedForm({ ...printedForm, siteName: e.target.value })}
+                  />
+                  <p style={{ marginTop: 16 }}>Session date</p>
+                  <DatePicker
+                    showTime
+                    style={{ width: '100%' }}
+                    value={printedForm.sessionDate}
+                    onChange={(value) => setPrintedForm({ ...printedForm, sessionDate: value })}
+                  />
+                  <p style={{ marginTop: 16 }}>Led by</p>
+                  <Input
+                    value={printedForm.ledBy}
+                    onChange={(e) => setPrintedForm({ ...printedForm, ledBy: e.target.value })}
+                  />
+                </>
+              ) : null}
+              <p style={{ marginTop: 16 }}>Staff on the form</p>
+              {printedForm.people.map((person, index) => (
+                <div key={`${person.staffId}-${index}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 180px', gap: 8, marginBottom: 8 }}>
+                  <Input
+                    placeholder="Staff"
+                    value={person.name}
+                    onChange={(e) => updatePrintedPerson(index, { name: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Signature"
+                    value={person.signature}
+                    onChange={(e) => updatePrintedPerson(index, { signature: e.target.value })}
+                  />
+                  <DatePicker
+                    showTime
+                    placeholder="Completed"
+                    value={person.completedAt}
+                    onChange={(value) => updatePrintedPerson(index, { completedAt: value })}
+                  />
+                </div>
+              ))}
+              <p style={{ marginTop: 16 }}>Minutes (what was read or discussed)</p>
+              <Input.TextArea
+                rows={8}
+                value={printedForm.minutes}
+                onChange={(e) => setPrintedForm({ ...printedForm, minutes: e.target.value })}
+              />
+              {printedForm.kind === 'group' ? (
+                <>
+                  <p style={{ marginTop: 16 }}>Notes</p>
+                  <Input.TextArea
+                    rows={3}
+                    value={printedForm.notes}
+                    onChange={(e) => setPrintedForm({ ...printedForm, notes: e.target.value })}
+                  />
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </Modal>
+        <Modal
+          open={!!signSession}
+          title="Digital sign-off"
+          okText="Submit acknowledgment"
+          confirmLoading={signing}
+          onOk={submitSessionSignoff}
+          onCancel={() => setSignSession(null)}
+        >
+          <p>Type your name to confirm you completed {signSession?.talkTitle || 'this toolbox talk'}.</p>
+          <Input
+            value={signName}
+            placeholder="Your name"
+            onChange={(e) => setSignName(e.target.value)}
+          />
         </Modal>
         <Modal
           open={createTalkOpen || !!editTalk}
@@ -600,7 +1251,7 @@ const ToolboxPage: React.FC = () => {
                   overflow: 'auto',
                 }}
               >
-                <TalkBrief talk={selectedTalk} showTitle={false} />
+                <TalkBrief talk={selectedTalk} showTitle={false} showDiscussion />
               </div>
             ) : (
               <p style={{ color: '#5a6b62' }}>Choose a talk to open the script and picture for the crew.</p>
@@ -630,47 +1281,24 @@ const ToolboxPage: React.FC = () => {
                 options={staffOptions}
               />
             </Form.Item>
+            <Form.Item name="minutes" label="Minutes (what was read or discussed)">
+              <Input.TextArea rows={6} placeholder="The script read with the crew" />
+            </Form.Item>
             <Form.Item name="notes" label="Notes">
               <Input.TextArea rows={3} placeholder="Optional notes from the talk" />
             </Form.Item>
           </Form>
         </Modal>
-        <Modal open={!!detail} title={detail?.talkTitle} footer={null} onCancel={() => setDetail(null)} width={820}>
-          {detail ? (
-            <div>
-              <p>
-                {formatWhen(detail.deliveredAt)}
-                {detail.siteName ? ` - ${detail.siteName}` : ''}
-                {detail.deliveredByName ? ` - ${detail.deliveredByName}` : ''}
-              </p>
-              {detail.notes ? <p>{detail.notes}</p> : null}
-              {detail.brief || detail.points?.length ? (
-                <TalkBrief
-                  talk={{
-                    id: detail.talkId,
-                    code: detail.talkCode,
-                    title: detail.talkTitle,
-                    brief: detail.brief,
-                    points: detail.points,
-                    durationMins: 0,
-                    imageUrl: detail.imageUrl,
-                  }}
-                />
-              ) : null}
-              <Table
-                rowKey="staffId"
-                pagination={false}
-                dataSource={detail.attendance || []}
-                columns={[
-                  { title: 'Person', dataIndex: 'name' },
-                  {
-                    title: 'Confirmed',
-                    dataIndex: 'acknowledgedAt',
-                    render: (v) => formatWhen(v),
-                  },
-                ]}
-              />
-            </div>
+        <Modal
+          open={!!formPreviewUrl}
+          title="Toolbox talk record"
+          footer={null}
+          width={920}
+          onCancel={() => setFormPreviewUrl(null)}
+          bodyStyle={{ padding: 0 }}
+        >
+          {formPreviewUrl ? (
+            <iframe title="Toolbox talk record" src={formPreviewUrl} style={{ width: '100%', height: '78vh', border: 0 }} />
           ) : null}
         </Modal>
       </UsersDiv>

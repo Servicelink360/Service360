@@ -2406,22 +2406,58 @@ export class PostgresSchemaPatchService implements OnModuleInit {
           session_id INTEGER NOT NULL REFERENCES public.toolbox_sessions(id) ON DELETE CASCADE,
           staff_id INTEGER NOT NULL,
           acknowledged_at TIMESTAMPTZ NULL,
+          signature_name VARCHAR(255) NULL,
           UNIQUE (session_id, staff_id)
         );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_attendance
+          ADD COLUMN IF NOT EXISTS signature_name VARCHAR(255) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_sessions
+          ADD COLUMN IF NOT EXISTS minutes TEXT NULL,
+          ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.toolbox_signoffs (
+          id SERIAL PRIMARY KEY,
+          talk_id INTEGER NOT NULL REFERENCES public.toolbox_talks(id) ON DELETE CASCADE,
+          staff_id INTEGER NOT NULL,
+          signature_name VARCHAR(255) NOT NULL,
+          signed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (talk_id, staff_id)
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_signoffs
+          ADD COLUMN IF NOT EXISTS minutes TEXT NULL,
+          ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL,
+          ADD COLUMN IF NOT EXISTS form_title TEXT NULL,
+          ADD COLUMN IF NOT EXISTS printed_name VARCHAR(255) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_sessions
+          ADD COLUMN IF NOT EXISTS form_title TEXT NULL,
+          ADD COLUMN IF NOT EXISTS led_by_name VARCHAR(255) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_attendance
+          ADD COLUMN IF NOT EXISTS printed_name VARCHAR(255) NULL;
       `);
       const { TOOLBOX_SEEDS } = await import('../toolbox/toolbox-talks.seed');
       for (const seed of TOOLBOX_SEEDS) {
         await this.dataSource.query(
           `INSERT INTO public.toolbox_talks (code, title, brief, points, duration_mins, sort_order, status, image_url)
-           SELECT $1, $2, $3, $4::jsonb, $5, $6, 1, $7
-           WHERE NOT EXISTS (SELECT 1 FROM public.toolbox_talks WHERE code = $1)`,
+           SELECT $1::varchar, $2::varchar, $3::text, $4::jsonb, $5::int, $6::int, 1, $7::varchar
+           WHERE NOT EXISTS (SELECT 1 FROM public.toolbox_talks WHERE code = $1::varchar)`,
           [seed.code, seed.title, seed.brief, JSON.stringify(seed.points), seed.durationMins, seed.sortOrder, seed.imageUrl || null],
         );
         await this.dataSource.query(
           `UPDATE public.toolbox_talks
-           SET title = $2, brief = $3, points = $4::jsonb, duration_mins = $5,
-               image_url = COALESCE(NULLIF(image_url, ''), $6)
-           WHERE code = $1 AND (char_length(brief) < char_length($3) OR image_url IS NULL OR image_url = '')`,
+           SET title = $2::varchar, brief = $3::text, points = $4::jsonb, duration_mins = $5::int,
+               image_url = COALESCE(NULLIF(image_url, ''), $6::varchar)
+           WHERE code = $1::varchar AND (char_length(brief) < char_length($3::text) OR image_url IS NULL OR image_url = '')`,
           [seed.code, seed.title, seed.brief, JSON.stringify(seed.points), seed.durationMins, seed.imageUrl || null],
         );
       }

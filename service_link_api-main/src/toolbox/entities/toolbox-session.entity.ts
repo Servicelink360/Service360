@@ -23,6 +23,18 @@ export class ToolboxSession {
   @Column({ type: 'text', nullable: true })
   notes?: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  minutes?: string | null;
+
+  @Column({ name: 'form_title', type: 'text', nullable: true })
+  formTitle?: string | null;
+
+  @Column({ name: 'led_by_name', type: 'varchar', length: 255, nullable: true })
+  ledByName?: string | null;
+
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
