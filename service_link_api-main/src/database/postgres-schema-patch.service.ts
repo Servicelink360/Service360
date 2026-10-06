@@ -2167,6 +2167,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       `);
       await this.dataSource.query(`
         ALTER TABLE public.training_modules
+          ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL,
           ADD COLUMN IF NOT EXISTS module_kind VARCHAR(20) NOT NULL DEFAULT 'TRAINING',
           ADD COLUMN IF NOT EXISTS site_id INTEGER NULL,
           ADD COLUMN IF NOT EXISTS site_name VARCHAR(255) NULL,

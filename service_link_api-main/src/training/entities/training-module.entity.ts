@@ -60,6 +60,9 @@ export class TrainingModule {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null;
+
   @OneToMany(() => TrainingTopic, (t) => t.module)
   topics?: TrainingTopic[];
 

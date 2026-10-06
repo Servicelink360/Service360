@@ -4,10 +4,12 @@ import {
   ArrowDownOutlined,
   ArrowUpOutlined,
   CheckOutlined,
+  DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   ReloadOutlined,
   SettingOutlined,
+  UndoOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import {
@@ -16,6 +18,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Switch,
@@ -39,6 +42,8 @@ import { resolveReportPdfHref } from '../reports/new-reports-display-utils';
 const TrainingAdminPage: React.FC = () => {
   const history = useHistory();
   const [modules, setModules] = useState<any[]>([]);
+  const [deletedModules, setDeletedModules] = useState<any[]>([]);
+  const [showDeleted, setShowDeleted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [progressRows, setProgressRows] = useState<any[]>([]);
   const [progressSummary, setProgressSummary] = useState<any>({});
@@ -64,13 +69,12 @@ const TrainingAdminPage: React.FC = () => {
   const [newTopicForm] = Form.useForm();
 
   const loadModules = useCallback(async () => {
-    const res = await callAPIAsync(
-      serviceType.COMMON,
-      `${endPoint.TRAINING}/admin/modules`,
-      'GET',
-      null,
-    );
+    const [res, deletedRes] = await Promise.all([
+      callAPIAsync(serviceType.COMMON, `${endPoint.TRAINING}/admin/modules`, 'GET', null),
+      callAPIAsync(serviceType.COMMON, `${endPoint.TRAINING}/admin/modules`, 'GET', { deleted: 1 }),
+    ]);
     if (res?.code === 1) setModules(res.data || []);
+    if (deletedRes?.code === 1) setDeletedModules(deletedRes.data || []);
   }, []);
 
   const loadProgress = useCallback(async () => {
@@ -318,6 +322,36 @@ const TrainingAdminPage: React.FC = () => {
     await reloadTopics(contentModule.id);
   };
 
+  const deleteModule = async (id: number) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/modules/${id}`,
+      'DELETE',
+      null,
+    );
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not delete the module');
+      return;
+    }
+    message.success('Module moved to Deleted');
+    loadModules();
+  };
+
+  const restoreModule = async (id: number) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TRAINING}/admin/modules/${id}/restore`,
+      'POST',
+      null,
+    );
+    if (res?.code !== 1) {
+      message.error(res?.message || 'Could not restore the module');
+      return;
+    }
+    message.success('Module restored');
+    loadModules();
+  };
+
   const moduleCols: ColumnsType<any> = [
     { title: 'Code', dataIndex: 'code', width: 110 },
     { title: 'Title', dataIndex: 'title' },
@@ -366,17 +400,31 @@ const TrainingAdminPage: React.FC = () => {
       },
     },
     {
-      title: '',
-      width: 280,
+      title: 'Action',
+      key: 'actions',
+      width: 150,
+      align: 'right' as const,
       fixed: 'right' as const,
       render: (_, r) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => void openContent(r)}>
-            Edit
-          </Button>
+        <Space
+          size={4}
+          className="new-reports-row-actions"
+          style={{ width: '100%', justifyContent: 'flex-end' }}
+        >
           <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            aria-label="Edit"
+            title="Edit"
+            onClick={() => void openContent(r)}
+          />
+          <Button
+            type="link"
             size="small"
             icon={<SettingOutlined />}
+            aria-label="Settings"
+            title="Settings"
             onClick={() => {
               setEditModule(r);
               modForm.setFieldsValue({
@@ -388,12 +436,31 @@ const TrainingAdminPage: React.FC = () => {
                 siteName: r.siteName || undefined,
               });
             }}
+          />
+          <Button
+            type="link"
+            size="small"
+            icon={<CheckOutlined />}
+            aria-label="Answers"
+            title="Answers"
+            onClick={() => openQuestions(r.id)}
+          />
+          <Popconfirm
+            title="Move this module to Deleted? Staff will no longer see it."
+            okText="Move to Deleted"
+            okButtonProps={{ danger: true }}
+            cancelText="Cancel"
+            onConfirm={() => deleteModule(r.id)}
           >
-            Settings
-          </Button>
-          <Button size="small" icon={<CheckOutlined />} onClick={() => openQuestions(r.id)}>
-            Answers
-          </Button>
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              aria-label="Delete"
+              title="Delete"
+            />
+          </Popconfirm>
         </Space>
       ),
     },
@@ -569,7 +636,7 @@ const TrainingAdminPage: React.FC = () => {
           items={[
             {
               key: 'modules',
-              label: 'Modules',
+              label: `Modules (${modules.length})`,
               children: qModuleId ? (
                 <>
                   <Space style={{ marginBottom: 12 }} wrap>
@@ -593,15 +660,62 @@ const TrainingAdminPage: React.FC = () => {
                   />
                 </>
               ) : (
-                <Table
-                  rowKey="id"
-                  loading={loading}
-                  columns={moduleCols}
-                  dataSource={modules}
-                  pagination={{ pageSize: 20 }}
-                  size="middle"
-                  scroll={{ x: 1180 }}
-                />
+                <>
+                  <Space style={{ marginBottom: 12 }}>
+                    <Button type={showDeleted ? 'default' : 'primary'} onClick={() => setShowDeleted(false)}>
+                      Modules ({modules.length})
+                    </Button>
+                    <Button type={showDeleted ? 'primary' : 'default'} onClick={() => setShowDeleted(true)}>
+                      Deleted ({deletedModules.length})
+                    </Button>
+                  </Space>
+                  {showDeleted ? (
+                    <Table
+                      rowKey="id"
+                      loading={loading}
+                      dataSource={deletedModules}
+                      pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `${total} records` }}
+                      size="middle"
+                      locale={{ emptyText: 'No deleted modules.' }}
+                      columns={[
+                        { title: 'Code', dataIndex: 'code', width: 110 },
+                        { title: 'Title', dataIndex: 'title' },
+                        {
+                          title: 'Action',
+                          key: 'actions',
+                          width: 80,
+                          align: 'right' as const,
+                          render: (_, r) => (
+                            <Space
+                              size={4}
+                              className="new-reports-row-actions"
+                              style={{ width: '100%', justifyContent: 'flex-end' }}
+                            >
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<UndoOutlined />}
+                                aria-label="Restore"
+                                title="Restore"
+                                onClick={() => restoreModule(r.id)}
+                              />
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <Table
+                      rowKey="id"
+                      loading={loading}
+                      columns={moduleCols}
+                      dataSource={modules}
+                      pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `${total} records` }}
+                      size="middle"
+                      scroll={{ x: 1100 }}
+                    />
+                  )}
+                </>
               ),
             },
             {
@@ -828,25 +942,42 @@ const TrainingAdminPage: React.FC = () => {
               },
               { title: 'Title', dataIndex: 'title', ellipsis: true },
               {
-                title: '',
-                width: 210,
+                title: 'Action',
+                key: 'actions',
+                width: 130,
+                align: 'right' as const,
                 render: (_, t, index) => (
-                  <Space>
+                  <Space
+                    size={4}
+                    className="new-reports-row-actions"
+                    style={{ width: '100%', justifyContent: 'flex-end' }}
+                  >
                     <Button
+                      type="link"
                       size="small"
                       icon={<ArrowUpOutlined />}
+                      aria-label="Move up"
+                      title="Move up"
                       disabled={index === 0}
                       onClick={() => void moveTopic(t.id, 'up')}
                     />
                     <Button
+                      type="link"
                       size="small"
                       icon={<ArrowDownOutlined />}
+                      aria-label="Move down"
+                      title="Move down"
                       disabled={index === contentTopics.length - 1}
                       onClick={() => void moveTopic(t.id, 'down')}
                     />
-                    <Button size="small" icon={<EditOutlined />} onClick={() => openTopicEditor(t)}>
-                      Edit
-                    </Button>
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<EditOutlined />}
+                      aria-label="Edit"
+                      title="Edit"
+                      onClick={() => openTopicEditor(t)}
+                    />
                   </Space>
                 ),
               },

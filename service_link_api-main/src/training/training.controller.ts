@@ -193,8 +193,25 @@ export class TrainingController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @Get('admin/modules')
-  async adminModules(@Res() res, @Request() req) {
-    return customHttpCode(res, await this.trainingService.adminListModules(req.user));
+  async adminModules(@Res() res, @Query('deleted') deleted: string, @Request() req) {
+    return customHttpCode(
+      res,
+      await this.trainingService.adminListModules(req.user, deleted === '1'),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Delete('admin/modules/:id')
+  async adminDeleteModule(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminDeleteModule(req.user, +id));
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('admin/modules/:id/restore')
+  async adminRestoreModule(@Res() res, @Param('id') id: string, @Request() req) {
+    return customHttpCode(res, await this.trainingService.adminRestoreModule(req.user, +id));
   }
 
   @UseGuards(JwtAuthGuard)

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { errorCode } from '../constants/errorCode';
@@ -109,6 +109,7 @@ export class TrainingService {
     const qb = this.modulesRepo
       .createQueryBuilder('m')
       .where('m.status = 1')
+      .andWhere('m.deleted_at IS NULL')
       .andWhere('UPPER(m.module_kind) = :kind', { kind })
       .orderBy('m.sort_order', 'ASC')
       .addOrderBy('m.id', 'ASC');
@@ -1054,7 +1055,7 @@ export class TrainingService {
       return { ...errorCode.EXCEPTION, message: 'Admin only' };
     }
     const modules = await this.modulesRepo.find({
-      where: { status: 1 },
+      where: { status: 1, deletedAt: IsNull() },
       order: { sortOrder: 'ASC' },
     });
     const filterModules = moduleId
@@ -1893,11 +1894,30 @@ export class TrainingService {
     return { ...errorCode.SUCCESS, data: saved };
   }
 
-  async adminListModules(user: IUserInfo) {
+  async adminDeleteModule(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    const module = await this.modulesRepo.findOne({ where: { id } });
+    if (!module) return { ...errorCode.NOT_FOUND, message: 'Module not found' };
+    module.deletedAt = new Date();
+    await this.modulesRepo.save(module);
+    return { ...errorCode.SUCCESS, data: true };
+  }
+
+  async adminRestoreModule(user: IUserInfo, id: number) {
+    if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Admin only' };
+    const module = await this.modulesRepo.findOne({ where: { id } });
+    if (!module) return { ...errorCode.NOT_FOUND, message: 'Module not found' };
+    module.deletedAt = null;
+    await this.modulesRepo.save(module);
+    return { ...errorCode.SUCCESS, data: true };
+  }
+
+  async adminListModules(user: IUserInfo, deleted = false) {
     if (!this.isAdmin(user)) {
       return { ...errorCode.EXCEPTION, message: 'Admin only' };
     }
     const modules = await this.modulesRepo.find({
+      where: deleted ? { deletedAt: Not(IsNull()) } : { deletedAt: IsNull() },
       order: { sortOrder: 'ASC', id: 'ASC' },
     });
     const qStats = await this.questionsRepo
