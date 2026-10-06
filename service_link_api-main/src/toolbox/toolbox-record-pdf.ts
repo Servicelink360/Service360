@@ -61,6 +61,23 @@ function escapeHtml(value: string) {
     .replace(/"/g, '&quot;');
 }
 
+function formatMinutesHtml(minutes: string) {
+  const lines = String(minutes || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const parts: string[] = [];
+  for (const line of lines) {
+    const heading = line.length < 72 && !/[.?!]$/.test(line);
+    if (heading) {
+      parts.push(`<h3>${escapeHtml(line)}</h3>`);
+      continue;
+    }
+    parts.push(`<p>${escapeHtml(line)}</p>`);
+  }
+  return parts.join('');
+}
+
 function formatWhen(value?: Date | null) {
   if (!value) return 'Not completed';
   const date = new Date(value);
@@ -138,7 +155,8 @@ function buildHtml(opts: {
     table.people td { padding: 12px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
     .sign { font-family: "Segoe Script", "ToolboxSign", "Brush Script MT", cursive; font-size: 22px; color: #14532d; }
     h2 { margin: 18px 0 8px; color: #166534; font-size: 14px; }
-    .minutes { white-space: pre-wrap; line-height: 1.45; margin: 0; }
+    .minutes h3 { margin: 14px 0 4px; color: #166534; font-size: 13px; font-weight: 700; }
+    .minutes p { margin: 0 0 8px; line-height: 1.45; }
     .notes { margin-top: 16px; }
     .notes strong { color: #166534; }
     .statement { margin-top: 22px; font-size: 11px; color: #4b5563; }
@@ -171,7 +189,7 @@ function buildHtml(opts: {
     </thead>
     <tbody>${rows || '<tr><td colspan="3">No staff recorded</td></tr>'}</tbody>
   </table>
-  ${opts.minutes ? `<h2>Minutes</h2><p class="minutes">${escapeHtml(opts.minutes)}</p>` : ''}
+  ${opts.minutes ? `<h2>Minutes</h2><div class="minutes">${formatMinutesHtml(opts.minutes)}</div>` : ''}
   ${opts.notes ? `<p class="notes"><strong>Notes.</strong> ${escapeHtml(opts.notes)}</p>` : ''}
   <p class="statement">The signature is the name the staff member typed when they submitted their electronic acknowledgment that they completed this toolbox talk.</p>
 </body>
