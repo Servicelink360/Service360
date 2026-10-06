@@ -7,21 +7,97 @@ import serviceType from '@app/constants/serviceType';
 import { userType } from '@app/constants/statusUser';
 import useMobilePortrait from '@app/library/hooks/useMobilePortrait';
 import { callAPIAsync } from '@app/library/helpers/api';
-import { EyeOutlined, ThunderboltFilled } from '@ant-design/icons';
-import { Alert, Button, Spin, Table, Tag, Tooltip } from 'antd';
+import { EyeOutlined, ReadOutlined, ThunderboltFilled } from '@ant-design/icons';
+import { Alert, Button, Modal, Spin, Table, Tag, Tooltip } from 'antd';
 import moment from 'moment';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHistory } from 'react-router-dom';
+import { toolboxImageFor } from '../toolbox/toolboxMedia';
+import '../toolbox/toolboxBrief.css';
 import './staff-my-tasks.css';
 
 const formatDateTime = (value?: string | null) =>
   value ? moment(value).format(dateTimeFormat) : '—';
+
+const sydneyDay = (value?: string | Date | null) => {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+};
+
+type ToolboxTask = {
+  attendanceId: number;
+  sessionId: number;
+  talkId?: number;
+  talkTitle: string;
+  brief?: string;
+  durationMins?: number;
+  imageUrl?: string | null;
+  code?: string;
+  siteName?: string;
+  deliveredAt?: string;
+  acknowledgedAt?: string | null;
+};
+
+function TalkToRead({ talk }: { talk: ToolboxTask }) {
+  const image = toolboxImageFor({ ...talk, title: talk.talkTitle });
+  const lines = String(talk.brief || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const sections: { heading?: string; paragraphs: string[] }[] = [];
+  let lead: string | null = null;
+  for (const line of lines) {
+    const heading = line.length < 72 && !/[.?!]$/.test(line);
+    if (heading) {
+      sections.push({ heading: line, paragraphs: [] });
+      continue;
+    }
+    if (!lead && sections.length === 0) {
+      lead = line;
+      continue;
+    }
+    if (!sections.length) sections.push({ paragraphs: [line] });
+    else sections[sections.length - 1].paragraphs.push(line);
+  }
+  return (
+    <div className="toolbox-brief">
+      {image ? (
+        <div className="toolbox-brief__hero">
+          <img src={image} alt="" />
+        </div>
+      ) : null}
+      <p className="toolbox-brief__meta">
+        Attend {formatDateTime(talk.deliveredAt)}
+        {talk.siteName ? ` · ${talk.siteName}` : ''}
+        {talk.durationMins ? ` · ${talk.durationMins} minute talk` : ''}
+      </p>
+      {lead ? <p className="toolbox-brief__lead">{lead}</p> : null}
+      {sections.map((section, index) => (
+        <div key={`${section.heading || 'body'}-${index}`} className="toolbox-brief__section">
+          {section.heading ? <h4>{section.heading}</h4> : null}
+          {section.paragraphs.map((paragraph, pIndex) => (
+            <p key={`${index}-${pIndex}`}>{paragraph}</p>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const StaffMyTasksPage: React.FC = () => {
   const history = useHistory();
   const isMobilePortrait = useMobilePortrait();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<any[]>([]);
+  const [toolboxTasks, setToolboxTasks] = useState<ToolboxTask[]>([]);
+  const [reading, setReading] = useState<ToolboxTask | null>(null);
   const [viewRow, setViewRow] = useState<any | null>(null);
 
   const profileRaw = localStorage.getItem('profile');
@@ -31,15 +107,22 @@ const StaffMyTasksPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await callAPIAsync(
-        serviceType.COMMON,
-        `${endPoint.REPORT_FAULTS}/my-tasks`,
-        'GET',
-        {},
-      );
+      const [res, toolboxRes] = await Promise.all([
+        callAPIAsync(serviceType.COMMON, `${endPoint.REPORT_FAULTS}/my-tasks`, 'GET', {}),
+        callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/me`, 'GET', null),
+      ]);
       setRows(Array.isArray(res?.data) ? res.data : []);
+      const today = sydneyDay(new Date());
+      const upcoming = (Array.isArray(toolboxRes?.data) ? toolboxRes.data : [])
+        .filter((row: ToolboxTask) => !row.acknowledgedAt && sydneyDay(row.deliveredAt) >= today)
+        .sort(
+          (a: ToolboxTask, b: ToolboxTask) =>
+            +new Date(a.deliveredAt || 0) - +new Date(b.deliveredAt || 0),
+        );
+      setToolboxTasks(upcoming);
     } catch {
       setRows([]);
+      setToolboxTasks([]);
     } finally {
       setLoading(false);
     }
@@ -237,23 +320,101 @@ const StaffMyTasksPage: React.FC = () => {
         <Spin />
       ) : (
         <>
-          <Alert
-            type={overdueCount > 0 ? 'warning' : 'info'}
-            showIcon
-            style={{ marginBottom: 16 }}
-            message={
-              overdueCount > 0
-                ? `${overdueCount} assignment${overdueCount === 1 ? '' : 's'} overdue — open each task and click Confirm acted when complete.`
-                : pendingCount > 0
-                  ? `${pendingCount} assignment${pendingCount === 1 ? '' : 's'} awaiting your confirmation. Open each task and click Confirm acted when complete.`
-                  : 'Fault assignments from your admin appear here. Open a task to view details and confirm when you have acted.'
-            }
-          />
+          {rows.length > 0 || toolboxTasks.length === 0 ? (
+            <Alert
+              type={overdueCount > 0 ? 'warning' : 'info'}
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={
+                overdueCount > 0
+                  ? `${overdueCount} assignment${overdueCount === 1 ? '' : 's'} overdue — open each task and click Confirm acted when complete.`
+                  : pendingCount > 0
+                    ? `${pendingCount} assignment${pendingCount === 1 ? '' : 's'} awaiting your confirmation. Open each task and click Confirm acted when complete.`
+                    : 'Fault assignments from your admin appear here. Open a task to view details and confirm when you have acted.'
+              }
+            />
+          ) : null}
+
+          {toolboxTasks.length > 0 ? (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={`${toolboxTasks.length} toolbox talk${toolboxTasks.length === 1 ? '' : 's'} to attend and read.`}
+              />
+              {isMobilePortrait ? (
+                <div className="staff-my-tasks-mobile-list" style={{ marginBottom: 16 }}>
+                  {toolboxTasks.map((talk) => (
+                    <article key={talk.attendanceId} className="staff-my-tasks-card">
+                      <div className="staff-my-tasks-card__head">
+                        <div className="staff-my-tasks-card__title-wrap">
+                          <Tag color="green">Toolbox talk</Tag>
+                          <p className="staff-my-tasks-card__issue">{talk.talkTitle}</p>
+                          {talk.siteName ? <p className="staff-my-tasks-card__site">{talk.siteName}</p> : null}
+                        </div>
+                      </div>
+                      <dl className="staff-my-tasks-card__meta">
+                        <div className="staff-my-tasks-card__meta-item">
+                          <dt>Attend</dt>
+                          <dd>{formatDateTime(talk.deliveredAt)}</dd>
+                        </div>
+                      </dl>
+                      <div className="staff-my-tasks-card__action">
+                        <Button type="primary" block icon={<ReadOutlined />} onClick={() => setReading(talk)}>
+                          Read talk
+                        </Button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="staff-my-tasks-table-wrap" style={{ marginBottom: 16 }}>
+                  <Table
+                    rowKey="attendanceId"
+                    dataSource={toolboxTasks}
+                    pagination={false}
+                    columns={[
+                      {
+                        title: 'Attend',
+                        dataIndex: 'deliveredAt',
+                        width: 160,
+                        render: (value: string) => formatDateTime(value),
+                      },
+                      {
+                        title: 'Toolbox talk',
+                        dataIndex: 'talkTitle',
+                        render: (value: string) => (
+                          <>
+                            <Tag color="green">Toolbox talk</Tag>
+                            {value}
+                          </>
+                        ),
+                      },
+                      { title: 'Site', dataIndex: 'siteName', render: (value: string) => value || '' },
+                      {
+                        title: 'Action',
+                        key: 'read',
+                        width: 120,
+                        render: (_: unknown, talk: ToolboxTask) => (
+                          <Button type="link" icon={<ReadOutlined />} onClick={() => setReading(talk)}>
+                            Read
+                          </Button>
+                        ),
+                      },
+                    ]}
+                  />
+                </div>
+              )}
+            </>
+          ) : null}
 
           {rows.length === 0 ? (
-            <div style={{ padding: '24px 0', textAlign: 'center', color: '#8c8c8c' }}>
-              No assigned tasks right now.
-            </div>
+            toolboxTasks.length > 0 ? null : (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: '#8c8c8c' }}>
+                No assigned tasks right now.
+              </div>
+            )
           ) : isMobilePortrait ? (
             <div className="staff-my-tasks-mobile-list">{rows.map(renderMobileCard)}</div>
           ) : (
@@ -270,6 +431,20 @@ const StaffMyTasksPage: React.FC = () => {
           )}
         </>
       )}
+
+      <Modal
+        open={Boolean(reading)}
+        title={reading?.talkTitle || 'Toolbox talk'}
+        onCancel={() => setReading(null)}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setReading(null)}>
+            Close
+          </Button>,
+        ]}
+        width={760}
+      >
+        {reading ? <TalkToRead talk={reading} /> : null}
+      </Modal>
 
       <FaultReportViewModal
         open={Boolean(viewRow)}

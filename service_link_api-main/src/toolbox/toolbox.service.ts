@@ -742,7 +742,12 @@ export class ToolboxService {
         return {
           attendanceId: row.id,
           sessionId: session.id,
+          talkId: talk?.id || session.talkId,
           talkTitle: talk?.title || '',
+          brief: talk?.brief || '',
+          durationMins: talk?.durationMins || 0,
+          imageUrl: talk?.imageUrl || null,
+          code: talk?.code || '',
           siteName: session.siteName || '',
           deliveredAt: session.deliveredAt,
           acknowledgedAt: row.acknowledgedAt,

@@ -2718,8 +2718,25 @@ export class ReportFaultsService {
           reportFaultStatus.COMPLETED,
         ],
       );
-      const count = rows?.[0]?.count ?? 0;
-      return { ...errorCode.SUCCESS, data: +count };
+      let toolboxCount = 0;
+      try {
+        const toolboxRows = await this.reportFaultsRepository.query(
+          `SELECT count(*)::int AS count
+           FROM toolbox_attendance a
+           JOIN toolbox_sessions s ON s.id = a.session_id
+           WHERE a.staff_id = $1
+             AND a.acknowledged_at IS NULL
+             AND s.deleted_at IS NULL
+             AND (s.delivered_at AT TIME ZONE 'Australia/Sydney')::date
+                 >= (NOW() AT TIME ZONE 'Australia/Sydney')::date`,
+          [+userInfo.userId],
+        );
+        toolboxCount = +(toolboxRows?.[0]?.count ?? 0);
+      } catch {
+        toolboxCount = 0;
+      }
+      const count = +(rows?.[0]?.count ?? 0) + toolboxCount;
+      return { ...errorCode.SUCCESS, data: count };
     } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;
