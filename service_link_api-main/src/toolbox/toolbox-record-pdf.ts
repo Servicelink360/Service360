@@ -10,6 +10,25 @@ export type ToolboxRecordPerson = {
   completedAt?: Date | null;
 };
 
+function signatureFontFace(): string {
+  const candidates = [
+    path.join(__dirname, 'assets', 'Caveat-Regular.ttf'),
+    path.join(process.cwd(), 'src', 'toolbox', 'assets', 'Caveat-Regular.ttf'),
+    path.join(process.cwd(), 'dist', 'toolbox', 'assets', 'Caveat-Regular.ttf'),
+  ];
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        const data = fs.readFileSync(filePath).toString('base64');
+        return `@font-face { font-family: "ToolboxSign"; src: url("data:font/ttf;base64,${data}") format("truetype"); font-weight: 400; font-style: normal; }`;
+      }
+    } catch {
+      /* try the next location */
+    }
+  }
+  return '';
+}
+
 function logoDataUri(): string {
   const name = 'servicelink-logo.png';
   const candidates = [
@@ -102,6 +121,7 @@ function buildHtml(opts: {
   <style>
     @page { size: A4; margin: 16mm; }
     * { box-sizing: border-box; }
+    ${signatureFontFace()}
     body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #1f2937; font-size: 12px; }
     .header { margin-bottom: 14px; }
     .header-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
@@ -116,7 +136,7 @@ function buildHtml(opts: {
     table.people { width: 100%; border-collapse: collapse; }
     table.people th { background: #188038; color: #fff; text-align: left; padding: 8px; font-weight: 700; }
     table.people td { padding: 12px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
-    .sign { font-family: "Segoe Script", "Brush Script MT", cursive; font-size: 22px; color: #14532d; }
+    .sign { font-family: "Segoe Script", "ToolboxSign", "Brush Script MT", cursive; font-size: 22px; color: #14532d; }
     h2 { margin: 18px 0 8px; color: #166534; font-size: 14px; }
     .minutes { white-space: pre-wrap; line-height: 1.45; margin: 0; }
     .notes { margin-top: 16px; }
@@ -183,6 +203,7 @@ export async function generateToolboxRecordPdf(opts: {
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
+    await page.evaluate(() => document.fonts.ready);
     const pdf = await page.pdf({
       format: 'A4',
       landscape: false,

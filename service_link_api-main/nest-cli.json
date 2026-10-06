@@ -12,6 +12,11 @@
         "include": "training/assets/**/*",
         "outDir": "dist",
         "watchAssets": true
+      },
+      {
+        "include": "toolbox/assets/**/*",
+        "outDir": "dist/src",
+        "watchAssets": true
       }
     ]
   }
