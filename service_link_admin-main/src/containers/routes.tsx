@@ -60,6 +60,7 @@ const routes = [
 	{ path: 'training-admin/staff/:staffId', component: asyncComponent(() => import('@app/containers/training/admin-staff')), exact: true },
 	{ path: 'training-admin/staff', component: asyncComponent(() => import('@app/containers/training/admin-staff-list')), exact: true },
 	{ path: 'training-admin', component: asyncComponent(() => import('@app/containers/training/admin')), exact: true },
+	{ path: 'toolbox-admin', component: asyncComponent(() => import('@app/containers/toolbox/ToolboxPage')), exact: true },
 	{ path: 'toolbox', component: asyncComponent(() => import('@app/containers/toolbox/ToolboxPage')), exact: true },
 	{ path: 'induction', component: asyncComponent(() => import('@app/containers/training/induction')) },
 	{ path: 'asset-register', component: asyncComponent(() => import('@app/containers/assets')) },

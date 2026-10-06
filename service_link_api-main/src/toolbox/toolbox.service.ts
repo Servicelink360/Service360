@@ -462,6 +462,21 @@ export class ToolboxService {
         { present: +row.present || 0, acknowledged: +row.acknowledged || 0 },
       ]),
     );
+    const attendance = await this.attendanceRepo.find({
+      where: { sessionId: In(sessions.map((session) => session.id)) },
+      order: { id: 'ASC' },
+    });
+    const assignedIds = Array.from(new Set(attendance.map((row) => row.staffId)));
+    const assignedPeople = assignedIds.length
+      ? await this.usersRepo.find({ where: { id: In(assignedIds) } })
+      : [];
+    const assignedNameById = new Map(assignedPeople.map((person) => [+person.id, person.fullName]));
+    const namesBySession = new Map<number, string[]>();
+    for (const row of attendance) {
+      const names = namesBySession.get(row.sessionId) || [];
+      names.push(assignedNameById.get(+row.staffId) || `Staff #${row.staffId}`);
+      namesBySession.set(row.sessionId, names);
+    }
     return {
       ...errorCode.SUCCESS,
       data: sessions.map((s) => ({
@@ -475,6 +490,7 @@ export class ToolboxService {
         notes: s.notes || '',
         present: countById.get(s.id)?.present || 0,
         acknowledged: countById.get(s.id)?.acknowledged || 0,
+        assignedNames: (namesBySession.get(s.id) || []).join(', '),
       })),
     };
   }

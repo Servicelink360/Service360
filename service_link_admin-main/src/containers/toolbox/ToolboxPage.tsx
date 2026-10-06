@@ -55,6 +55,7 @@ type SessionRow = {
   present: number;
   acknowledged: number;
   notes: string;
+  assignedNames?: string;
 };
 
 function readProfile() {
@@ -278,7 +279,7 @@ const ToolboxPage: React.FC = () => {
       message.error(res?.message || 'Could not save the session');
       return;
     }
-    message.success(editingSessionId ? 'Session updated' : 'Session recorded');
+    message.success(editingSessionId ? 'Session updated' : 'Talk scheduled and assigned');
     setRecordOpen(false);
     setEditingSessionId(null);
     form.resetFields();
@@ -830,6 +831,7 @@ const ToolboxPage: React.FC = () => {
                   New talk
                 </Button>
                 <Button
+                  type="primary"
                   icon={<PlusOutlined />}
                   onClick={() => {
                     setEditingSessionId(null);
@@ -837,15 +839,43 @@ const ToolboxPage: React.FC = () => {
                     setRecordOpen(true);
                   }}
                 >
-                  Present talk
+                  Schedule talk
                 </Button>
               </>
             ) : null}
           </Space>
           {isAdmin ? (
             <Tabs
-              defaultActiveKey="talks"
+              defaultActiveKey="schedule"
               items={[
+                {
+                  key: 'schedule',
+                  label: `Schedule (${sessions.length})`,
+                  children: (
+                    <Table
+                      rowKey="id"
+                      loading={loading}
+                      dataSource={sessions}
+                      locale={{ emptyText: 'No talks scheduled. Use Schedule talk to assign one to staff.' }}
+                      columns={[
+                        {
+                          title: 'When',
+                          dataIndex: 'deliveredAt',
+                          width: 170,
+                          render: (value) => (value ? moment(value).format('DD MMM YYYY HH:mm') : '-'),
+                        },
+                        { title: 'Talk', dataIndex: 'talkTitle' },
+                        { title: 'Site', dataIndex: 'siteName', render: (value) => value || '' },
+                        { title: 'Assigned staff', dataIndex: 'assignedNames', render: (value) => value || '' },
+                        {
+                          title: 'Signed off',
+                          width: 110,
+                          render: (_, row) => `${row.acknowledged}/${row.present}`,
+                        },
+                      ]}
+                    />
+                  ),
+                },
                 {
                   key: 'talks',
                   label: 'Talks',
@@ -944,6 +974,7 @@ const ToolboxPage: React.FC = () => {
                       rowKey="attendanceId"
                       loading={loading}
                       dataSource={mine}
+                      locale={{ emptyText: 'No talks have been assigned to you yet.' }}
                       pagination={false}
                       columns={[
                         { title: 'Date', dataIndex: 'deliveredAt', width: 120, render: (v) => formatWhen(v) },
@@ -1220,7 +1251,7 @@ const ToolboxPage: React.FC = () => {
         </Modal>
         <Modal
           open={recordOpen}
-          title={editingSessionId ? 'Edit session' : 'Present toolbox talk'}
+          title={editingSessionId ? 'Edit scheduled talk' : 'Schedule toolbox talk'}
           onCancel={() => {
             setRecordOpen(false);
             setEditingSessionId(null);
@@ -1265,19 +1296,19 @@ const ToolboxPage: React.FC = () => {
                 options={siteOptions}
               />
             </Form.Item>
-            <Form.Item name="deliveredAt" label="Date" rules={[{ required: true, message: 'Choose a date' }]}>
-              <DatePicker style={{ width: '100%' }} />
+            <Form.Item name="deliveredAt" label="When" rules={[{ required: true, message: 'Choose a date and time' }]}>
+              <DatePicker showTime style={{ width: '100%' }} format="DD MMM YYYY HH:mm" />
             </Form.Item>
             <Form.Item
               name="staffIds"
-              label="People present"
+              label="Assign to staff"
               rules={[{ required: true, message: 'Choose at least one person' }]}
             >
               <Select
                 mode="multiple"
                 showSearch
                 optionFilterProp="label"
-                placeholder="Select the crew who attended"
+                placeholder="Select the staff who must attend"
                 options={staffOptions}
               />
             </Form.Item>

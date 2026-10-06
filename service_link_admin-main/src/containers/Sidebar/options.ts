@@ -321,8 +321,8 @@ const options: option[] = [
 				label: 'sidebar.trainingAdmin',
 			},
 			{
-				key: 'toolbox',
-				label: 'sidebar.toolbox',
+				key: 'toolbox-admin',
+				label: 'sidebar.toolboxAdmin',
 			},
 			{
 				key: 'induction',
