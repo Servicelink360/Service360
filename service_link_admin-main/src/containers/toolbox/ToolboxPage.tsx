@@ -168,6 +168,7 @@ const ToolboxPage: React.FC = () => {
   const [printedForm, setPrintedForm] = useState<PrintedForm | null>(null);
   const [savingForm, setSavingForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
   const [openTalk, setOpenTalk] = useState<Talk | null>(null);
   const [editTalk, setEditTalk] = useState<Talk | null>(null);
   const [createTalkOpen, setCreateTalkOpen] = useState(false);
@@ -786,6 +787,16 @@ const ToolboxPage: React.FC = () => {
     refresh();
   };
 
+  const listPagination = {
+    pageSize,
+    showSizeChanger: true,
+    pageSizeOptions: ['10', '20', '50', '100'],
+    showTotal: (total: number) => `${total} records`,
+    onChange: (_page: number, size?: number) => {
+      if (size && size !== pageSize) setPageSize(size);
+    },
+  };
+
   const deletedTab = {
     key: 'deleted',
     label: `Deleted (${deletedRows.length})`,
@@ -795,7 +806,7 @@ const ToolboxPage: React.FC = () => {
         loading={loading}
         dataSource={deletedRows}
         locale={{ emptyText: 'Nothing in Deleted.' }}
-        pagination={false}
+        pagination={listPagination}
         columns={[
           {
             title: 'Deleted',
@@ -902,6 +913,7 @@ const ToolboxPage: React.FC = () => {
                       loading={loading}
                       dataSource={sessions}
                       locale={{ emptyText: 'No talks scheduled. Use Schedule talk to assign one to staff.' }}
+                      pagination={listPagination}
                       columns={[
                         {
                           title: 'When',
@@ -983,13 +995,13 @@ const ToolboxPage: React.FC = () => {
                   key: 'talks',
                   label: 'Talks',
                   children: (
-                    <Table rowKey="id" loading={loading} columns={talkColumns} dataSource={talks} pagination={false} />
+                    <Table rowKey="id" loading={loading} columns={talkColumns} dataSource={talks} pagination={listPagination} />
                   ),
                 },
                 {
                   key: 'sessions',
                   label: `Group Sessions (${sessions.length})`,
-                  children: <Table rowKey="id" loading={loading} columns={sessionColumns} dataSource={sessions} />,
+                  children: <Table rowKey="id" loading={loading} columns={sessionColumns} dataSource={sessions} pagination={listPagination} />,
                 },
                 {
                   key: 'single',
@@ -1000,6 +1012,7 @@ const ToolboxPage: React.FC = () => {
                       loading={loading}
                       dataSource={singleSessions}
                       locale={{ emptyText: 'No single staff sign-offs yet.' }}
+                      pagination={listPagination}
                       columns={[
                         {
                           title: 'Signed',
@@ -1066,7 +1079,7 @@ const ToolboxPage: React.FC = () => {
                   key: 'talks',
                   label: 'Talks',
                   children: (
-                    <Table rowKey="id" loading={loading} columns={talkColumns} dataSource={talks} pagination={false} />
+                    <Table rowKey="id" loading={loading} columns={talkColumns} dataSource={talks} pagination={listPagination} />
                   ),
                 },
                 {
@@ -1078,7 +1091,7 @@ const ToolboxPage: React.FC = () => {
                       loading={loading}
                       dataSource={mine}
                       locale={{ emptyText: 'No talks have been assigned to you yet.' }}
-                      pagination={false}
+                      pagination={listPagination}
                       columns={[
                         { title: 'Date', dataIndex: 'deliveredAt', width: 120, render: (v) => formatWhen(v) },
                         { title: 'Talk', dataIndex: 'talkTitle' },
@@ -1124,7 +1137,7 @@ const ToolboxPage: React.FC = () => {
                       loading={loading}
                       dataSource={talks.filter((talk) => talk.signedAt)}
                       locale={{ emptyText: 'You have not signed a toolbox talk yet.' }}
-                      pagination={false}
+                      pagination={listPagination}
                       columns={[
                         {
                           title: 'Signed',
