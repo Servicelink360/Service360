@@ -191,7 +191,7 @@ function buildHtml(opts: {
   </table>
   ${opts.minutes ? `<h2>Minutes</h2><div class="minutes">${formatMinutesHtml(opts.minutes)}</div>` : ''}
   ${opts.notes ? `<p class="notes"><strong>Notes.</strong> ${escapeHtml(opts.notes)}</p>` : ''}
-  <p class="statement">The signature is the name the staff member typed when they submitted their electronic acknowledgment that they completed this toolbox talk.</p>
+  <p class="statement">The signature is the name the staff member typed after reading this toolbox talk.</p>
 </body>
 </html>`;
 }

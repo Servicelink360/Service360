@@ -8,7 +8,7 @@ import { userType } from '@app/constants/statusUser';
 import useMobilePortrait from '@app/library/hooks/useMobilePortrait';
 import { callAPIAsync } from '@app/library/helpers/api';
 import { EyeOutlined, ReadOutlined, ThunderboltFilled } from '@ant-design/icons';
-import { Alert, Button, Modal, Spin, Table, Tag, Tooltip } from 'antd';
+import { Alert, Button, Input, Modal, Spin, Table, Tag, Tooltip, message } from 'antd';
 import moment from 'moment';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHistory } from 'react-router-dom';
@@ -98,6 +98,9 @@ const StaffMyTasksPage: React.FC = () => {
   const [rows, setRows] = useState<any[]>([]);
   const [toolboxTasks, setToolboxTasks] = useState<ToolboxTask[]>([]);
   const [reading, setReading] = useState<ToolboxTask | null>(null);
+  const [justSignedId, setJustSignedId] = useState<number | null>(null);
+  const [signName, setSignName] = useState('');
+  const [signing, setSigning] = useState(false);
   const [viewRow, setViewRow] = useState<any | null>(null);
 
   const profileRaw = localStorage.getItem('profile');
@@ -119,7 +122,7 @@ const StaffMyTasksPage: React.FC = () => {
           (a: ToolboxTask, b: ToolboxTask) =>
             +new Date(a.deliveredAt || 0) - +new Date(b.deliveredAt || 0),
         );
-      setToolboxTasks(upcoming);
+      setToolboxTasks(upcoming.slice(0, 1));
     } catch {
       setRows([]);
       setToolboxTasks([]);
@@ -135,6 +138,56 @@ const StaffMyTasksPage: React.FC = () => {
     }
     void load();
   }, [load, profileType, history]);
+
+  const openTalk = (talk: ToolboxTask) => {
+    const name = profile?.fullName || profile?.full_name || '';
+    setSignName(name);
+    setJustSignedId(null);
+    setReading(talk);
+  };
+
+  const printTalk = async (sessionId: number) => {
+    const res = await callAPIAsync(
+      serviceType.COMMON,
+      `${endPoint.TOOLBOX}/sessions/${sessionId}/pdf`,
+      'GET',
+      null,
+    );
+    const url = res?.data?.url;
+    if (res?.code !== 1 || !url) {
+      message.error(res?.message || 'Could not open the form');
+      return;
+    }
+    const win = window.open(url, '_blank', 'noopener');
+    if (!win) message.warning('Allow pop-ups to print the record');
+  };
+
+  const signTalk = async () => {
+    if (!reading || signing) return;
+    const name = signName.trim();
+    if (!name) {
+      message.error('Enter your name to sign');
+      return;
+    }
+    setSigning(true);
+    try {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.TOOLBOX}/sessions/${reading.sessionId}/acknowledge`,
+        'POST',
+        { signatureName: name },
+      );
+      if (res?.code !== 1) {
+        message.error(res?.message || 'Could not save the sign-off');
+        return;
+      }
+      message.success('Toolbox talk signed');
+      setJustSignedId(reading.sessionId);
+      setToolboxTasks((prev) => prev.filter((row) => row.attendanceId !== reading.attendanceId));
+    } finally {
+      setSigning(false);
+    }
+  };
 
   const openFault = async (row: any) => {
     const faultId = row?.reportFaultId ?? row?.id;
@@ -341,7 +394,7 @@ const StaffMyTasksPage: React.FC = () => {
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}
-                message={`${toolboxTasks.length} toolbox talk${toolboxTasks.length === 1 ? '' : 's'} to attend and read.`}
+                message={`Next toolbox talk: ${toolboxTasks[0].talkTitle} on ${formatDateTime(toolboxTasks[0].deliveredAt)}. Read it, then sign.`}
               />
               {isMobilePortrait ? (
                 <div className="staff-my-tasks-mobile-list" style={{ marginBottom: 16 }}>
@@ -361,7 +414,7 @@ const StaffMyTasksPage: React.FC = () => {
                         </div>
                       </dl>
                       <div className="staff-my-tasks-card__action">
-                        <Button type="primary" block icon={<ReadOutlined />} onClick={() => setReading(talk)}>
+                        <Button type="primary" block icon={<ReadOutlined />} onClick={() => openTalk(talk)}>
                           Read talk
                         </Button>
                       </div>
@@ -397,7 +450,7 @@ const StaffMyTasksPage: React.FC = () => {
                         key: 'read',
                         width: 120,
                         render: (_: unknown, talk: ToolboxTask) => (
-                          <Button type="link" icon={<ReadOutlined />} onClick={() => setReading(talk)}>
+                          <Button type="link" icon={<ReadOutlined />} onClick={() => openTalk(talk)}>
                             Read
                           </Button>
                         ),
@@ -435,15 +488,43 @@ const StaffMyTasksPage: React.FC = () => {
       <Modal
         open={Boolean(reading)}
         title={reading?.talkTitle || 'Toolbox talk'}
-        onCancel={() => setReading(null)}
-        footer={[
-          <Button key="close" type="primary" onClick={() => setReading(null)}>
-            Close
-          </Button>,
-        ]}
+        onCancel={() => {
+          setReading(null);
+          setJustSignedId(null);
+        }}
+        okText={justSignedId ? 'Print' : 'Submit'}
+        cancelText="Close"
+        confirmLoading={signing}
+        onOk={() => {
+          if (justSignedId) {
+            void printTalk(justSignedId);
+            return;
+          }
+          void signTalk();
+        }}
         width={760}
       >
-        {reading ? <TalkToRead talk={reading} /> : null}
+        {reading ? (
+          <>
+            <TalkToRead talk={reading} />
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+              {justSignedId ? (
+                <p style={{ margin: 0 }}>Signed. Print the record if you want a copy.</p>
+              ) : (
+                <>
+                  <h4 style={{ marginBottom: 8 }}>Sign when you have finished reading</h4>
+                  <p style={{ marginTop: 0 }}>Type your name to confirm you have read this toolbox talk.</p>
+                  <Input
+                    value={signName}
+                    placeholder="Your name"
+                    onChange={(e) => setSignName(e.target.value)}
+                    onPressEnter={signTalk}
+                  />
+                </>
+              )}
+            </div>
+          </>
+        ) : null}
       </Modal>
 
       <FaultReportViewModal

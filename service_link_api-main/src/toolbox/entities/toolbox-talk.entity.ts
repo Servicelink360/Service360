@@ -17,7 +17,7 @@ export class ToolboxTalk {
   @Column({ type: 'jsonb', default: [] })
   points: string[];
 
-  @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
+  @Column({ name: 'image_url', type: 'varchar', length: 1000, nullable: true })
   imageUrl?: string | null;
 
   @Column({ name: 'duration_mins', type: 'int', default: 10 })

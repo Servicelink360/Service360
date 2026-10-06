@@ -1,13 +1,14 @@
 import Layout from '@app/components/layout/Layout';
 import { UsersDiv } from '@app/components/common/container.style';
-import { DeleteOutlined, EditOutlined, PlusOutlined, PrinterOutlined, ReloadOutlined, UndoOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, message } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, PrinterOutlined, ReloadOutlined, UndoOutlined, UploadOutlined } from '@ant-design/icons';
+import { Button, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, Upload, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import moment from 'moment';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useHistory } from 'react-router-dom';
 import endPoint from '../../constants/endPoint';
 import serviceType from '../../constants/serviceType';
-import { callAPIAsync } from '../../library/helpers/api';
+import { callAPIAsync, callAPIUploadAsync } from '../../library/helpers/api';
 import { toolboxImageFor } from './toolboxMedia';
 import './toolboxBrief.css';
 
@@ -157,6 +158,7 @@ function TalkBrief({
 }
 
 const ToolboxPage: React.FC = () => {
+  const history = useHistory();
   const isAdmin = readProfileType() === 3;
   const [talks, setTalks] = useState<Talk[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -169,6 +171,7 @@ const ToolboxPage: React.FC = () => {
   const [openTalk, setOpenTalk] = useState<Talk | null>(null);
   const [editTalk, setEditTalk] = useState<Talk | null>(null);
   const [createTalkOpen, setCreateTalkOpen] = useState(false);
+  const [talkImageUploading, setTalkImageUploading] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<number | null>(null);
   const [recordOpen, setRecordOpen] = useState(false);
   const [formPreviewUrl, setFormPreviewUrl] = useState<string | null>(null);
@@ -254,6 +257,25 @@ const ToolboxPage: React.FC = () => {
     refresh();
   }, [refresh]);
 
+  const openScheduleEdit = async (id: number) => {
+    const res = await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/admin/sessions/${id}`, 'GET', null);
+    if (res?.code !== 1 || !res.data) {
+      message.error(res?.message || 'Could not open this schedule');
+      return;
+    }
+    const data = res.data;
+    setEditingSessionId(data.id);
+    form.setFieldsValue({
+      talkId: data.talkId,
+      siteId: data.siteId || 0,
+      deliveredAt: data.deliveredAt ? moment(data.deliveredAt) : moment(),
+      staffIds: (data.attendance || []).map((person: { staffId: number }) => person.staffId),
+      minutes: data.minutes || '',
+      notes: data.notes || '',
+    });
+    setRecordOpen(true);
+  };
+
   const saveSession = async () => {
     let values: any;
     try {
@@ -279,7 +301,7 @@ const ToolboxPage: React.FC = () => {
       message.error(res?.message || 'Could not save the session');
       return;
     }
-    message.success(editingSessionId ? 'Session updated' : 'Talk scheduled and assigned');
+    message.success(editingSessionId ? 'Schedule updated' : 'Talk scheduled and assigned');
     setRecordOpen(false);
     setEditingSessionId(null);
     form.resetFields();
@@ -303,6 +325,7 @@ const ToolboxPage: React.FC = () => {
       brief: values.brief,
       durationMins: values.durationMins || 10,
       points,
+      imageUrl: String(values.imageUrl || '').trim(),
     };
     const res = createTalkOpen
       ? await callAPIAsync(serviceType.COMMON, `${endPoint.TOOLBOX}/admin/talks`, 'POST', payload)
@@ -315,6 +338,27 @@ const ToolboxPage: React.FC = () => {
     setEditTalk(null);
     setCreateTalkOpen(false);
     loadTalks();
+  };
+
+  const uploadTalkImage = async (file: File) => {
+    setTalkImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file, file.name || 'toolbox-talk.png');
+      const res: any = await callAPIUploadAsync(serviceType.COMMON, endPoint.UPLOAD_FILE, 'POST', formData);
+      const url =
+        typeof res?.data === 'string'
+          ? res.data
+          : res?.data?.url || res?.data?.Location || res?.data?.fileUrl || null;
+      if (res?.code !== 1 || !url) {
+        message.error(res?.message || 'Upload failed');
+        return;
+      }
+      editForm.setFieldsValue({ imageUrl: String(url) });
+      message.success('Image uploaded');
+    } finally {
+      setTalkImageUploading(false);
+    }
   };
 
   const loadRecordUrl = async (path: string) => {
@@ -501,6 +545,7 @@ const ToolboxPage: React.FC = () => {
                     durationMins: row.durationMins,
                     brief: row.brief,
                     points: (row.points || []).join('\n'),
+                    imageUrl: row.imageUrl || '',
                   });
                 }}
               >
@@ -825,7 +870,7 @@ const ToolboxPage: React.FC = () => {
                   onClick={() => {
                     setEditTalk(null);
                     setCreateTalkOpen(true);
-                    editForm.setFieldsValue({ title: '', durationMins: 10, brief: '', points: '' });
+                    editForm.setFieldsValue({ title: '', durationMins: 10, brief: '', points: '', imageUrl: '' });
                   }}
                 >
                   New talk
@@ -871,6 +916,64 @@ const ToolboxPage: React.FC = () => {
                           title: 'Signed off',
                           width: 110,
                           render: (_, row) => `${row.acknowledged}/${row.present}`,
+                        },
+                        {
+                          title: 'Action',
+                          key: 'actions',
+                          width: 90,
+                          align: 'right',
+                          render: (_, row) => (
+                            <Space
+                              size={4}
+                              className="new-reports-row-actions"
+                              style={{ width: '100%', justifyContent: 'flex-end' }}
+                            >
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<EditOutlined />}
+                                aria-label="Edit"
+                                title="Edit"
+                                onClick={() => openScheduleEdit(row.id)}
+                              />
+                              <Popconfirm
+                                title={
+                                  <span>
+                                    Move this scheduled talk to Deleted?
+                                    <div style={{ marginTop: 8, fontWeight: 400, fontSize: 12, color: '#595959' }}>
+                                      You can permanently delete it later from the Deleted tab.
+                                    </div>
+                                  </span>
+                                }
+                                okText="Move to Deleted"
+                                okButtonProps={{ danger: true }}
+                                cancelText="Cancel"
+                                onConfirm={async () => {
+                                  const res = await callAPIAsync(
+                                    serviceType.COMMON,
+                                    `${endPoint.TOOLBOX}/admin/sessions/${row.id}`,
+                                    'DELETE',
+                                    null,
+                                  );
+                                  if (res?.code !== 1) {
+                                    message.error(res?.message || 'Could not delete the schedule');
+                                    return;
+                                  }
+                                  message.success('Schedule moved to Deleted');
+                                  refresh();
+                                }}
+                              >
+                                <Button
+                                  type="link"
+                                  danger
+                                  size="small"
+                                  icon={<DeleteOutlined />}
+                                  aria-label="Delete"
+                                  title="Delete"
+                                />
+                              </Popconfirm>
+                            </Space>
+                          ),
                         },
                       ]}
                     />
@@ -989,14 +1092,8 @@ const ToolboxPage: React.FC = () => {
                               {row.acknowledgedAt ? (
                                 <span>{formatWhen(row.acknowledgedAt)}</span>
                               ) : (
-                                <Button
-                                  type="link"
-                                  onClick={() => {
-                                    setSignName(readProfileName());
-                                    setSignSession(row);
-                                  }}
-                                >
-                                  Sign off
+                                <Button type="link" onClick={() => history.push('/my-tasks')}>
+                                  Read and sign
                                 </Button>
                               )}
                               <Button type="link" onClick={() => viewRecord(`sessions/${row.sessionId}/pdf`)}>
@@ -1246,6 +1343,54 @@ const ToolboxPage: React.FC = () => {
             </Form.Item>
             <Form.Item name="points" label="Discussion points, one per line">
               <Input.TextArea rows={4} />
+            </Form.Item>
+            <Form.Item name="imageUrl" hidden>
+              <Input />
+            </Form.Item>
+            <Form.Item label="Picture" extra="Upload a new picture to replace the one shown with this talk.">
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Form.Item noStyle shouldUpdate={(prev, next) => prev.imageUrl !== next.imageUrl}>
+                  {() => {
+                    const url = editForm.getFieldValue('imageUrl');
+                    const preview = url || (editTalk ? toolboxImageFor({ ...editTalk, imageUrl: '' }) : '');
+                    return preview ? (
+                      <img
+                        src={preview}
+                        alt=""
+                        style={{
+                          maxWidth: '100%',
+                          maxHeight: 200,
+                          objectFit: 'contain',
+                          borderRadius: 8,
+                          border: '1px solid #d5e0d8',
+                          background: '#fff',
+                        }}
+                      />
+                    ) : (
+                      <div style={{ color: '#5a6b62' }}>No picture yet</div>
+                    );
+                  }}
+                </Form.Item>
+                <Space wrap>
+                  <Upload
+                    accept="image/*"
+                    showUploadList={false}
+                    customRequest={async ({ file, onSuccess, onError }) => {
+                      try {
+                        await uploadTalkImage(file as File);
+                        onSuccess?.({}, new XMLHttpRequest());
+                      } catch (err) {
+                        onError?.(err as Error);
+                      }
+                    }}
+                  >
+                    <Button icon={<UploadOutlined />} loading={talkImageUploading}>
+                      Upload picture
+                    </Button>
+                  </Upload>
+                  <Button onClick={() => editForm.setFieldsValue({ imageUrl: '' })}>Clear picture</Button>
+                </Space>
+              </Space>
             </Form.Item>
           </Form>
         </Modal>

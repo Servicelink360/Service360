@@ -2721,14 +2721,16 @@ export class ReportFaultsService {
       let toolboxCount = 0;
       try {
         const toolboxRows = await this.reportFaultsRepository.query(
-          `SELECT count(*)::int AS count
-           FROM toolbox_attendance a
-           JOIN toolbox_sessions s ON s.id = a.session_id
-           WHERE a.staff_id = $1
-             AND a.acknowledged_at IS NULL
-             AND s.deleted_at IS NULL
-             AND (s.delivered_at AT TIME ZONE 'Australia/Sydney')::date
-                 >= (NOW() AT TIME ZONE 'Australia/Sydney')::date`,
+          `SELECT CASE WHEN EXISTS (
+             SELECT 1
+             FROM toolbox_attendance a
+             JOIN toolbox_sessions s ON s.id = a.session_id
+             WHERE a.staff_id = $1
+               AND a.acknowledged_at IS NULL
+               AND s.deleted_at IS NULL
+               AND (s.delivered_at AT TIME ZONE 'Australia/Sydney')::date
+                   >= (NOW() AT TIME ZONE 'Australia/Sydney')::date
+           ) THEN 1 ELSE 0 END AS count`,
           [+userInfo.userId],
         );
         toolboxCount = +(toolboxRows?.[0]?.count ?? 0);

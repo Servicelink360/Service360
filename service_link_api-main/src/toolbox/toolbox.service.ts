@@ -148,17 +148,6 @@ export class ToolboxService {
       if (!signoff.minutes) signoff.minutes = talk.brief;
     }
     await this.signoffRepo.save(signoff);
-    const sessions = await this.sessionsRepo.find({ where: { talkId } });
-    if (sessions.length) {
-      const rows = await this.attendanceRepo.find({
-        where: { staffId: +user.userId, sessionId: In(sessions.map((session) => session.id)) },
-      });
-      for (const row of rows) {
-        if (!row.acknowledgedAt) row.acknowledgedAt = now;
-        if (!row.signatureName) row.signatureName = name;
-      }
-      if (rows.length) await this.attendanceRepo.save(rows);
-    }
     return {
       ...errorCode.SUCCESS,
       data: { signedAt: signoff.signedAt, signatureName: signoff.signatureName },
@@ -181,7 +170,7 @@ export class ToolboxService {
 
   async adminCreateTalk(
     user: IUserInfo,
-    body: { title?: string; brief?: string; points?: string[]; durationMins?: number },
+    body: { title?: string; brief?: string; points?: string[]; durationMins?: number; imageUrl?: string | null },
   ) {
     if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
     const title = String(body.title || '').trim();
@@ -198,6 +187,7 @@ export class ToolboxService {
         brief,
         points: Array.isArray(body.points) ? body.points.map((p) => String(p).trim()).filter(Boolean) : [],
         durationMins: Number.isFinite(+body.durationMins) ? +body.durationMins : 10,
+        imageUrl: body.imageUrl ? String(body.imageUrl).trim() : null,
         sortOrder: (+max?.max || 0) + 1,
         status: 1,
       }),
@@ -218,7 +208,7 @@ export class ToolboxService {
   async adminUpdateTalk(
     user: IUserInfo,
     id: number,
-    body: { title?: string; brief?: string; points?: string[]; durationMins?: number; status?: number },
+    body: { title?: string; brief?: string; points?: string[]; durationMins?: number; status?: number; imageUrl?: string | null },
   ) {
     if (!this.isAdmin(user)) return { ...errorCode.EXCEPTION, message: 'Not allowed' };
     const talk = await this.talksRepo.findOne({ where: { id } });
@@ -232,6 +222,7 @@ export class ToolboxService {
       talk.durationMins = +body.durationMins;
     }
     if (body.status !== undefined) talk.status = +body.status === 0 ? 0 : 1;
+    if (body.imageUrl !== undefined) talk.imageUrl = String(body.imageUrl || '').trim() || null;
     await this.talksRepo.save(talk);
     return { ...errorCode.SUCCESS, data: talk };
   }
@@ -459,7 +450,10 @@ export class ToolboxService {
     const countById = new Map(
       counts.map((row) => [
         +(row.sessionId ?? row.sessionid),
-        { present: +row.present || 0, acknowledged: +row.acknowledged || 0 },
+        {
+          present: +row.present || 0,
+          acknowledged: +row.acknowledged || 0,
+        },
       ]),
     );
     const attendance = await this.attendanceRepo.find({
@@ -768,10 +762,16 @@ export class ToolboxService {
     if (!row) return { ...errorCode.NOT_FOUND, message: 'You are not on this talk' };
     const session = await this.sessionsRepo.findOne({ where: { id: sessionId } });
     if (!session) return { ...errorCode.NOT_FOUND, message: 'Session not found' };
-    const signed = await this.signTalk(user, session.talkId, name);
-    if (signed.code !== errorCode.SUCCESS.code) return signed;
-    row.acknowledgedAt = row.acknowledgedAt || new Date();
-    row.signatureName = row.signatureName || name;
+    if (row.recordedBy === 'staff' && row.acknowledgedAt) {
+      return {
+        ...errorCode.SUCCESS,
+        data: { acknowledgedAt: row.acknowledgedAt, signatureName: row.signatureName },
+      };
+    }
+    row.acknowledgedAt = new Date();
+    row.signatureName = name;
+    row.printedName = row.printedName || name;
+    row.recordedBy = 'staff';
     await this.attendanceRepo.save(row);
     return {
       ...errorCode.SUCCESS,

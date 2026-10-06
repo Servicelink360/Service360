@@ -2386,7 +2386,11 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       `);
       await this.dataSource.query(`
         ALTER TABLE public.toolbox_talks
-        ADD COLUMN IF NOT EXISTS image_url VARCHAR(500) NULL;
+        ADD COLUMN IF NOT EXISTS image_url VARCHAR(1000) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.toolbox_talks
+        ALTER COLUMN image_url TYPE VARCHAR(1000);
       `);
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS public.toolbox_sessions (
@@ -2416,7 +2420,14 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       `);
       await this.dataSource.query(`
         ALTER TABLE public.toolbox_attendance
-          ADD COLUMN IF NOT EXISTS signature_name VARCHAR(255) NULL;
+          ADD COLUMN IF NOT EXISTS signature_name VARCHAR(255) NULL,
+          ADD COLUMN IF NOT EXISTS recorded_by VARCHAR(20) NULL;
+      `);
+      await this.dataSource.query(`
+        UPDATE public.toolbox_attendance
+        SET recorded_by = 'office'
+        WHERE acknowledged_at IS NOT NULL
+          AND recorded_by IS NULL;
       `);
       await this.dataSource.query(`
         ALTER TABLE public.toolbox_sessions

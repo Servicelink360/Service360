@@ -19,4 +19,8 @@ export class ToolboxAttendance {
 
   @Column({ name: 'printed_name', type: 'varchar', length: 255, nullable: true })
   printedName?: string | null;
+
+  /** staff = the person signed after reading. office = filled in by an administrator. */
+  @Column({ name: 'recorded_by', type: 'varchar', length: 20, nullable: true })
+  recordedBy?: string | null;
 }
