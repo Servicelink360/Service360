@@ -1994,7 +1994,6 @@ const NewReports: React.FC<{
           });
           list = listed.rows;
           total = listed.count;
-          if (listed.error) message.error(listed.error);
         }
 
         if (safetyAuditTemplateIds) {
