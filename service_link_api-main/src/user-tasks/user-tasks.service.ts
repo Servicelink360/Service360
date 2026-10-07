@@ -2103,12 +2103,9 @@ export class UserTasksService {
         if (!Number.isFinite(customerId) || customerId <= 0) {
           return { ...errorCode.VALIDATION_ERROR, message: 'customerId is required' };
         }
-        // siteId 0 = Other (custom site) — allowed when site name/address are provided
+        // siteId 0 = Other (custom site). Name and address are optional.
         if (!Number.isFinite(siteId) || siteId < 0) {
           return { ...errorCode.VALIDATION_ERROR, message: 'siteId is required' };
-        }
-        if (siteId === 0 && !String(body.siteName || '').trim()) {
-          return { ...errorCode.VALIDATION_ERROR, message: 'siteName is required for custom sites' };
         }
       }
 

@@ -303,6 +303,10 @@ const DashboardWarp = styled.div`
   background: #7b1fa2;
 }
 
+.dashboard-report-badge__circle--adhoc {
+  background: #00897b;
+}
+
 .dashboard-faults-badge {
   display: flex;
   flex-direction: column;

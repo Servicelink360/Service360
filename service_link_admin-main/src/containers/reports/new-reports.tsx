@@ -1613,6 +1613,7 @@ const NewReports: React.FC<{
   const saveProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaUploadRefs = useRef<Record<string, UploadImageMultilHandle | null>>({});
   const submitLockRef = useRef(false);
+  const openEditRef = useRef<(row: any) => void>(() => undefined);
 
   const clearSaveProgressTimer = useCallback(() => {
     if (saveProgressTimerRef.current) {
@@ -1662,6 +1663,8 @@ const NewReports: React.FC<{
   const [clearingDeleted, setClearingDeleted] = useState(false);
   const [filterServices, setFilterServices] = useState<any[]>([]);
   const [visible, setVisible] = useState(false);
+  const [preferAdhocTemplate, setPreferAdhocTemplate] = useState(false);
+  const adhocWarnSiteRef = useRef("");
   const [viewOpen, setViewOpen] = useState(false);
   const [viewRow, setViewRow] = useState<any | null>(null);
   const [viewPhotoKeys, setViewPhotoKeys] = useState<Set<string>>(() => new Set());
@@ -1991,6 +1994,7 @@ const NewReports: React.FC<{
           });
           list = listed.rows;
           total = listed.count;
+          if (listed.error) message.error(listed.error);
         }
 
         if (safetyAuditTemplateIds) {
@@ -2538,8 +2542,10 @@ const NewReports: React.FC<{
     if (Object.keys(patch).length) form.setFieldsValue(patch);
   }, [form, templateItemsForSubmit, profile, isStaffUser]);
 
-  const openCreate = () => {
+  const openCreate = (opts?: { adhoc?: boolean }) => {
     resetSubmitUi();
+    setPreferAdhocTemplate(Boolean(opts?.adhoc));
+    adhocWarnSiteRef.current = "";
     setEditing(null);
     form.resetFields();
     setServices([]);
@@ -2552,15 +2558,38 @@ const NewReports: React.FC<{
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get("create") !== "1") return;
+    const create = params.get("create");
+    if (create !== "1" && create !== "adhoc") return;
     if (+profileType === userType.CUSTOMER) {
       history.replace({ pathname: "/new-reports", search: "" });
       return;
     }
-    openCreate();
+    openCreate({ adhoc: create === "adhoc" });
     history.replace({ pathname: "/new-reports", search: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("open") !== "edit") return;
+    const id = +(params.get("reportId") || 0);
+    if (!id) return;
+    const row = rows.find((r) => +r.id === id);
+    if (!row || visible) return;
+    history.replace({ pathname: "/new-reports", search: `?reportId=${id}` });
+    void openEditRef.current?.(row);
+  }, [location.search, rows, visible, history]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("open") !== "view") return;
+    const id = +(params.get("reportId") || 0);
+    if (!id) return;
+    const row = rows.find((r) => +r.id === id);
+    if (!row || viewOpen) return;
+    history.replace({ pathname: "/new-reports", search: `?reportId=${id}` });
+    void openView(row);
+  }, [location.search, rows, viewOpen, history, openView]);
 
   const applyStaffSiteAssignment = useCallback(async (
     siteId: number,
@@ -2627,6 +2656,7 @@ const NewReports: React.FC<{
 
   const openEdit = useCallback(async (row: any) => {
     resetSubmitUi();
+    setPreferAdhocTemplate(false);
     await markReportOpenedForViewer(row);
 
     let editRow = row;
@@ -2805,6 +2835,7 @@ const NewReports: React.FC<{
     profile,
     init.reportTemplates,
   ]);
+  openEditRef.current = openEdit;
 
   const onPickSite = async (siteId?: number | string) => {
     if (siteId == null || siteId === "") {
@@ -2986,6 +3017,50 @@ const NewReports: React.FC<{
     },
     [services, applyStaffSiteAssignment, form, refreshAutoMergeTemplateFields, isIncidentReportMode],
   );
+
+  useEffect(() => {
+    if (!preferAdhocTemplate || !visible || editing) return;
+    const siteId = form.getFieldValue("siteId");
+    if (siteId == null || siteId === "") return;
+    const other = isOtherJobSite(siteId);
+    if (loadingSiteServices) return;
+    if (!other && servicesSiteId !== +siteId) return;
+    if (form.getFieldValue("reportTemplateId")) return;
+    const siteDeptIds = services
+      .map((dept: any) => +dept.id)
+      .filter((id: number) => Number.isFinite(id) && id > 0);
+    const pool = other
+      ? reportTemplates
+      : reportTemplates.filter((tpl) => templateMatchesSiteServices(tpl, siteDeptIds));
+    const named = (tpl: any) => String(tpl?.name || "").trim();
+    const tpl = pool.find((item) => /^adhoc report$/i.test(named(item)))
+      || pool.find((item) => /adhoc report/i.test(named(item)));
+    if (!tpl) {
+      const warnKey = String(siteId);
+      if (adhocWarnSiteRef.current !== warnKey) {
+        adhocWarnSiteRef.current = warnKey;
+        message.warning("Adhoc Report is not available for this job site.");
+      }
+      return;
+    }
+    form.setFieldsValue({ reportTemplateId: tpl.id });
+    const seedDefaults = () => applyTemplateFieldDefaults(tpl);
+    seedDefaults();
+    setTimeout(seedDefaults, 0);
+    setTimeout(seedDefaults, 50);
+    if (!other) void applyServiceFromTemplate(tpl, +siteId);
+  }, [
+    preferAdhocTemplate,
+    visible,
+    editing,
+    loadingSiteServices,
+    servicesSiteId,
+    services,
+    reportTemplates,
+    form,
+    applyTemplateFieldDefaults,
+    applyServiceFromTemplate,
+  ]);
 
   const onPickService = async (serviceId: string) => {
     const d = services.find((x: any) => String(x.id) === String(serviceId));
@@ -3347,14 +3422,6 @@ const NewReports: React.FC<{
       return;
     }
     if (isOtherJobSite(values.siteId)) {
-      if (!String(values.siteName || "").trim()) {
-        message.error("Enter the custom site name.");
-        return;
-      }
-      if (!String(values.siteAddress || "").trim()) {
-        message.error("Enter the custom site address.");
-        return;
-      }
       if (values.serviceId == null || values.serviceId === "") {
         if (isIncidentReportMode) {
           // Service is hidden on Incident Report — take first site service or assignment silently.
@@ -3777,10 +3844,10 @@ const NewReports: React.FC<{
 
   const canUseBulkDelete =
     (isDeletedReportTab && isAdminUser) ||
-    (!isDeletedReportTab &&
-      (+profileType === userType.ADMIN ||
-        +profileType === userType.CUSTOMER ||
-        +profileType === userType.STAFF));
+      (!isDeletedReportTab &&
+        (+profileType === userType.ADMIN ||
+          +profileType === userType.CUSTOMER ||
+          +profileType === userType.STAFF));
 
   const displayRows = filterReportRowsByKeyword(rows, listSearchDraft);
 
@@ -4535,16 +4602,20 @@ const NewReports: React.FC<{
   const showOtherClientField = showOtherClientServiceFields && isAdminUser;
   const showOtherServiceField = !isIncidentReportMode && showOtherClientServiceFields;
 
-  const whereWhoHint = !templateChosen && !isEditMode
+  const whereWhoHint = preferAdhocTemplate && !isEditMode
+    ? isOtherSite
+      ? "Other site: site name and address are optional. The template is Adhoc Report."
+      : "Select the job site. The template is Adhoc Report. Choose Other for a custom site."
+    : !templateChosen && !isEditMode
     ? useStaffStyleCreate
       ? isOtherSite
             ? isStaffUser
               ? isIncidentForm
-                ? "Other site: enter the site name and address, then choose the incident template."
-                : "Other site: enter the site name and address, then choose Service and template. Client comes from your site assignments."
+                ? "Other site: site name and address are optional. Then choose the incident template."
+                : "Other site: site name and address are optional. Then choose Service and template. Client comes from your site assignments."
               : isIncidentForm
-                ? "Other site: enter the site name and address, then choose client and template."
-                : "Other site: enter the site name and address, then choose client, Service, and template."
+                ? "Other site: site name and address are optional. Then choose client and template."
+                : "Other site: site name and address are optional. Then choose client, Service, and template."
         : isIncidentForm
           ? "Select the job site, then choose an incident report template. Choose Other for a custom site."
           : "Select the job site, then choose a report template. Only templates linked to that site's services are shown. Choose Other for a custom site."
@@ -4560,11 +4631,11 @@ const NewReports: React.FC<{
           ? isOtherSite
             ? isStaffUser
               ? isIncidentForm
-                ? "Enter the custom site name and address. Client is filled from your assignments."
-                : "Enter the custom site name and address. Client is filled from your assignments; choose Service if needed."
+                ? "Site name and address are optional. Client is filled from your assignments."
+                : "Site name and address are optional. Client is filled from your assignments; choose Service if needed."
               : isIncidentForm
-                ? "Enter the custom site name and address. Client must be selected manually."
-                : "Enter the custom site name and address. Client and Service must be selected manually."
+                ? "Site name and address are optional. Client must be selected manually."
+                : "Site name and address are optional. Client and Service must be selected manually."
             : isIncidentForm
               ? "Select the job site for this incident report. Customer is filled from the site assignment."
               : "Select the job site for this report. Customer and Service are filled from the site assignment."
@@ -4617,7 +4688,6 @@ const NewReports: React.FC<{
           <Form.Item
             name="siteName"
             label="Site name"
-            rules={[{ required: true, message: "Enter the site name" }]}
           >
             <Input
               size={controlSize}
@@ -4636,7 +4706,6 @@ const NewReports: React.FC<{
           <Form.Item
             name="siteAddress"
             label="Site address"
-            rules={[{ required: true, message: "Enter the site address" }]}
           >
             <Input
               size={controlSize}
@@ -4653,7 +4722,24 @@ const NewReports: React.FC<{
     </>
   ) : null;
 
-  const templateFieldCol = showTemplateField ? (
+  const templateFieldCol = preferAdhocTemplate && !isEditMode ? (
+    <Col span={modalFieldColSpan}>
+      <Fieldset>
+        <Form.Item label="Report template">
+          <Input
+            size={controlSize}
+            disabled
+            value="Adhoc Report"
+            className={modalUiDark ? "nr-mobile-dark-field" : undefined}
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item name="reportTemplateId" hidden rules={[{ required: true, message: "Adhoc Report is not available for this job site" }]}>
+          <Input />
+        </Form.Item>
+      </Fieldset>
+    </Col>
+  ) : showTemplateField ? (
     <Col span={modalFieldColSpan}>
       <Fieldset>
         <Form.Item
@@ -4828,7 +4914,7 @@ const NewReports: React.FC<{
                   className="nr-app-fab"
                   icon={<FileTextOutlined />}
                   style={staffPrimaryGreen}
-                  onClick={openCreate}
+                  onClick={() => openCreate()}
                   loading={listLoading}
                 >
                   {newReportButtonLabel}
@@ -4987,7 +5073,7 @@ const NewReports: React.FC<{
                   <Button
                     className="nr-btn-new"
                     icon={<FileTextOutlined />}
-                    onClick={openCreate}
+                    onClick={() => openCreate()}
                     loading={listLoading}
                   >
                     {newReportButtonLabel}
