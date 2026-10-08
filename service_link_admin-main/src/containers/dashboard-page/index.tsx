@@ -8,7 +8,10 @@ import actions from "@app/redux/dashboard/actions";
 import { useColorModeOptional } from '@app/context/ColorModeContext';
 import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useHistory, useLocation } from 'react-router-dom';
+import { message } from 'antd';
+import { startCameraSession, type CameraSaveTarget } from '@app/library/helpers/field-camera';
+import CameraSaveChoice from '@app/containers/field-photos/CameraSaveChoice';
 import { userType } from '../../constants/statusUser';
 import intl from '../../library/helpers/intlProvider';
 
@@ -18,6 +21,9 @@ const Dashboard: React.FC = () => {
   const { data } = useSelector((state: any) => state?.dashboard);
   const dispatch = useDispatch();
   const location = useLocation();
+  const history = useHistory();
+  const [cameraChoice, setCameraChoice] = React.useState(false);
+  const [cameraStarting, setCameraStarting] = React.useState(false);
   const { isDark } = useColorModeOptional();
   const isMobilePortrait = useMobilePortrait();
   const dashboardDark = isDark && isMobilePortrait;
@@ -115,15 +121,35 @@ const Dashboard: React.FC = () => {
     </Link>
   );
 
+  const openDashboardCamera = async (target: CameraSaveTarget) => {
+    setCameraStarting(true);
+    try {
+      await startCameraSession(target);
+      setCameraChoice(false);
+      history.push(`/field-photos?camera=${target}`);
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') {
+        message.error(error?.message || 'Could not open the camera');
+      }
+    } finally {
+      setCameraStarting(false);
+    }
+  };
+
   const cameraBadge = (isStaff || isAdmin) ? (
-    <Link to="/field-photos" className="dashboard-report-badge">
+    <button
+      type="button"
+      className="dashboard-report-badge"
+      onClick={() => setCameraChoice(true)}
+      style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
+    >
       <span className="dashboard-report-badge__icon-wrap">
         <div className="dashboard-report-badge__circle dashboard-report-badge__circle--camera dashboard-report-badge__circle--action">
           <CameraOutlined />
         </div>
       </span>
       <div className="dashboard-report-badge__label" style={darkLabelStyle}>Camera</div>
-    </Link>
+    </button>
   ) : null;
 
   const adhocReportBadge = (isStaff || isAdmin) ? (
@@ -237,6 +263,12 @@ const Dashboard: React.FC = () => {
 
   return (
     <Layout title="">
+      <CameraSaveChoice
+        visible={cameraChoice}
+        busy={cameraStarting}
+        onCancel={() => setCameraChoice(false)}
+        onChoose={(target) => void openDashboardCamera(target)}
+      />
       <DashboardWarp className={dashboardDark ? 'dashboard-page--dark' : undefined}>
         {dashboardDark ? (
           <style>{`
