@@ -1,12 +1,16 @@
 import {
   Controller,
+  Get,
   Post,
+  Query,
   Req,
   UploadedFile,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
   Version,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { promises as fs } from 'fs';
@@ -19,6 +23,7 @@ import { fileMapper, filesMapper } from '../helpers/file-mappter';
 import { editFileName, fileFilter, imageFileFilter } from '../helpers/util';
 import { memoryStorage } from 'fastify-multer';
 import { shouldStoreUploadsOnS3, uploadBufferToS3 } from './s3-upload.helper';
+import { lookupStreetAddress } from './reverse-geocode';
 
 const LOCAL_UPLOAD_DIR = './public/upload/files';
 
@@ -27,6 +32,21 @@ const LOCAL_UPLOAD_DIR = './public/upload/files';
 })
 @ApiTags('Upload File')
 export class UploadController {
+  @UseGuards(JwtAuthGuard)
+  @Get('geo/reverse')
+  async reverseGeocode(@Query('lat') latRaw: string, @Query('lng') lngRaw: string) {
+    const lat = Number(latRaw);
+    const lng = Number(lngRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'Choose a valid location' };
+    }
+    const address = await lookupStreetAddress(lat, lng);
+    if (!address) {
+      return { ...errorCode.EXCEPTION, message: 'Could not find a street address for this location' };
+    }
+    return { ...errorCode.SUCCESS, data: { address } };
+  }
+
   @ApiConsumes('multipart/form-data')
   @Post('uploadFile')
   @UseInterceptors(

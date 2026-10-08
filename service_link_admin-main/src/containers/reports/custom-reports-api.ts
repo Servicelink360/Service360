@@ -13,6 +13,7 @@ export type CustomReportListFilters = {
   siteId?: number;
   serviceId?: string;
   keyword?: string;
+  companyId?: number;
 };
 
 export type CustomReportListSort = {
@@ -64,6 +65,7 @@ function listQueryParams(input: CustomReportListParams): Record<string, unknown>
   if (input.siteId) params.siteId = input.siteId;
   if (input.serviceId) params.serviceId = input.serviceId;
   if (input.keyword?.trim()) params.keyword = input.keyword.trim();
+  if (input.companyId) params.companyId = input.companyId;
   if (input.templateCategory?.trim()) {
     params.templateCategory = input.templateCategory.trim().toUpperCase();
   }
@@ -79,11 +81,12 @@ export async function fetchCustomReportsList(input: CustomReportListParams) {
     listQueryParams(input),
   );
   if (res?.code !== 1) {
-    return { rows: [] as any[], count: 0 };
+    return { rows: [] as any[], count: 0, error: res?.message || "Could not load reports" };
   }
   return {
     rows: (res?.data?.rows || []) as any[],
     count: res?.data?.count || 0,
+    error: "" as string,
   };
 }
 

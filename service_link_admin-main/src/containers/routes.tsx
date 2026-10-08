@@ -49,6 +49,7 @@ const routes = [
 	{ path: 'report-faults', component: asyncComponent(() => import('@app/containers/reports/report-faults')) },
 	{ path: 'messages', component: asyncComponent(() => import('@app/containers/messages')) },
 	{ path: 'audit-report', component: asyncComponent(() => import('@app/containers/reports/audit-report')) },
+	{ path: 'monthly-report', component: asyncComponent(() => import('@app/containers/monthly-report')) },
 	{ path: 'ppe-report', component: asyncComponent(() => import('@app/containers/blank')) },
 	{ path: 'action-plans', component: asyncComponent(() => import('@app/containers/blank')) },
 	{ path: 'incident-report', component: asyncComponent(() => import('@app/containers/reports/incident-report')) },

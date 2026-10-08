@@ -65,4 +65,10 @@ export class GetUserTasksByUserDto {
     @IsOptional()
     orderValue?: string
 
+    @ApiProperty({ required: false, description: 'Limit the list to one customer company' })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    companyId?: number
+
 }

@@ -40,6 +40,7 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { AssetsModule } from './assets/assets.module';
 import { TrainingModule } from './training/training.module';
 import { ToolboxModule } from './toolbox/toolbox.module';
+import { MonthlyReportsModule } from './monthly-reports/monthly-reports.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -111,6 +112,7 @@ import { ToolboxModule } from './toolbox/toolbox.module';
     AssetsModule,
     TrainingModule,
     ToolboxModule,
+    MonthlyReportsModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

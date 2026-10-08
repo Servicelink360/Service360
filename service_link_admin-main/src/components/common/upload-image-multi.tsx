@@ -1,4 +1,4 @@
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons'
+import { CameraOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons'
 import {
     Fieldset,
     Label
@@ -9,6 +9,7 @@ import endPoint from '../../constants/endPoint'
 import serviceType from '../../constants/serviceType'
 import { callAPIUploadAsync } from '../../library/helpers/api'
 import { compressImageForUpload } from '../../library/helpers/compress-image'
+import { stampPhotoWithPlace } from '../../library/helpers/stamp-photo'
 import { Image, message, Typography, Upload } from 'antd'
 
 const UPLOAD_CONCURRENCY = 4
@@ -80,6 +81,8 @@ type IProps = {
     deferUpload?: boolean
     /** Same square photo tiles and boxed + as Report Faults. */
     tileGrid?: boolean
+    /** Extra camera button that stamps Sydney time and a street address onto the photo. */
+    stampCamera?: boolean
 }
 
 const filesToUploadList = (files: string[]) => {
@@ -114,7 +117,7 @@ const getBase64 = (file): Promise<string> =>
     });
 
 const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref) => {
-    const { files, onChange, title, multiple = false, isImage, deferUpload = false, tileGrid = false } = props;
+    const { files, onChange, title, multiple = false, isImage, deferUpload = false, tileGrid = false, stampCamera = false } = props;
     const [fileList, setFileList] = useState<any[]>(() => filesToUploadList(files))
     const pendingFilesRef = useRef<Map<string, { file: File; preview?: string }>>(new Map())
     const [pendingCount, setPendingCount] = useState(0)
@@ -355,6 +358,80 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
         })
     }
 
+    const cameraRef = useRef<HTMLInputElement>(null)
+    const [stamping, setStamping] = useState(false)
+
+    const takeStampedPhoto = async (chosen?: File) => {
+        if (!chosen) return
+        setStamping(true)
+        const hide = message.loading('Adding time and address to the photo…', 0)
+        try {
+            const stamped = await stampPhotoWithPlace(chosen)
+            if (deferUpload) {
+                stagePendingFile(stamped)
+            } else {
+                await handleUpdaloadImage({
+                    file: stamped,
+                    onSuccess: () => undefined,
+                    onError: (error: Error) => {
+                        throw error
+                    },
+                    onProgress: () => undefined,
+                })
+            }
+        } catch (error: any) {
+            message.error(error?.message || 'Could not take the photo')
+        } finally {
+            hide()
+            setStamping(false)
+            if (cameraRef.current) cameraRef.current.value = ''
+        }
+    }
+
+    const cameraButton = stampCamera && isImage && (multiple || fileList.length === 0) ? (
+        <>
+            <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                onChange={(event) => {
+                    const chosen = event.target.files?.[0]
+                    void takeStampedPhoto(chosen)
+                }}
+            />
+            <button
+                type="button"
+                disabled={stamping}
+                aria-label="Take photo with time and address"
+                onClick={() => cameraRef.current?.click()}
+                style={{
+                    width: 72,
+                    height: 72,
+                    flex: '0 0 72px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 4,
+                    background: '#ffffff',
+                    border: '2px solid #1f6b3a',
+                    borderRadius: 10,
+                    cursor: stamping ? 'wait' : 'pointer',
+                    boxSizing: 'border-box',
+                    color: '#1f6b3a',
+                    fontSize: 10,
+                    lineHeight: 1.1,
+                    padding: 4,
+                }}
+            >
+                <CameraOutlined style={{ fontSize: 18 }} />
+                Take photo
+            </button>
+        </>
+    ) : null
+
     const [previewOpen, setPreviewOpen] = useState(false)
     const [previewImage, setPreviewImage] = useState('')
     const handlePreview = async (file) => {
@@ -519,6 +596,7 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                             </Upload>
                             </div>
                         ) : null}
+                        {cameraButton}
                     </div>
                 </div>
             ) : (
@@ -549,6 +627,7 @@ const UploadFileMultil = forwardRef<UploadImageMultilHandle, IProps>((props, ref
                     <div style={{ marginTop: 8 }}>Upload</div>
                 </button>
             </Upload>
+            {cameraButton}
             </div>
             )}
             {previewImage && isImage && (

@@ -1022,6 +1022,22 @@ export class UserTasksService {
         }
       }
 
+      if (+userInfo.type === userType.ADMIN && +body.companyId) {
+        query.andWhere(
+          `"usertasks"."customer_id" IN (
+            SELECT c.user_id FROM public.customers c
+            WHERE c.company_id = :monthlyCompanyId
+               OR (
+                 c.company_id IS NULL
+                 AND TRIM(COALESCE(c.company_name, '')) <> ''
+                 AND LOWER(TRIM(c.company_name)) = (
+                   SELECT LOWER(TRIM(cc.name)) FROM public.customer_companies cc WHERE cc.id = :monthlyCompanyId
+                 )
+               )
+          )`,
+          { monthlyCompanyId: +body.companyId },
+        );
+      }
       if (body.startDate && body.endDate) {
         query.andWhere(
           `COALESCE(usertasks.checkIn, usertasks.createdAt) >= :startDate AND COALESCE(usertasks.checkIn, usertasks.createdAt) <= :endDate`,

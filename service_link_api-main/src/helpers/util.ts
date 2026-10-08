@@ -1310,6 +1310,18 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     html = html.replace('{{CONTENT_CLASS}}', auditLayout ? ' tcontent--audit' : '');
     html = html.replace('{{CONTENT}}', content);
 
+    return publishReportPdf(html, {
+        title,
+        submittedBy: getReportPdfSubmittedByLabel(row),
+        submittedStamp: formatReportPdfSubmittedStamp(row, newItems),
+        rowNumber,
+    });
+}
+
+async function publishReportPdf(
+    html: string,
+    meta: { title: string; submittedBy: string; submittedStamp: string; rowNumber: string | number },
+) {
     const isWindows = process.platform === 'win32';
     const execPath =
         process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
@@ -1389,24 +1401,22 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     }
     const numberOfPages = pdfDoc.getPageCount();
     console.log('pdf pages after trim', numberOfPages);
-    const submittedByLabel = getReportPdfSubmittedByLabel(row);
-    const submittedStamp = formatReportPdfSubmittedStamp(row, newItems);
     for (let i = 0; i < numberOfPages; i++) {
         const pg = pdfDoc.getPages()[i];
         if (pg) {
             const pageSize = pg.getSize();
             const bottomX = pageSize.width - 70;
             pg.drawText(`Page ${i + 1}`, { x: bottomX, y: 14, size: 8 });
-            pg.drawText(normalizeUnicodeForPdf(title), { x: 30, y: 40, size: 8 });
+            pg.drawText(normalizeUnicodeForPdf(meta.title), { x: 30, y: 40, size: 8 });
             pg.drawText(
-                `Submitted by: ${normalizeUnicodeForPdf(submittedByLabel)} @ ${submittedStamp}`,
+                `Submitted by: ${normalizeUnicodeForPdf(meta.submittedBy)} @ ${meta.submittedStamp}`,
                 {
                     x: 30,
                     y: 26,
                     size: 8,
                 },
             );
-            pg.drawText(`Submitted Id: ${rowNumber} Your Partner in Facilities www.servicelink.net.au`, {
+            pg.drawText(`Submitted Id: ${meta.rowNumber} Your Partner in Facilities www.servicelink.net.au`, {
                 x: 30,
                 y: 14,
                 size: 8,
@@ -1445,6 +1455,41 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     return joinPublicUrl(config.BASE_UPLOAD_URL || '', relativePdfPath);
 }
 
+/** Same report PDF chrome as a site report: logo, green title bar, field rows, footer. */
+async function convertReportLayoutPdf(input: {
+    title: string;
+    dateLabel: string;
+    contentHtml: string;
+    submittedBy?: string;
+    rowNumber?: string | number;
+}) {
+    const templatePath = resolveReportPdfTemplatePath();
+    let html = fs.readFileSync(templatePath, 'utf8');
+    const legacyLogoUrl = 'http://3.104.215.45:8001/public/upload/files/logo-a8a4.png';
+    const logoDataUri = await resolveReportPdfLogoDataUri();
+    if (logoDataUri) {
+        if (html.includes('{{LOGO_URL}}')) {
+            html = html.replace(/\{\{LOGO_URL\}\}/g, escapeAttr(logoDataUri));
+        }
+        html = html.split(legacyLogoUrl).join(escapeAttr(logoDataUri));
+    } else if (html.includes('{{LOGO_URL}}')) {
+        html = html.replace(/<img class="logo"[^>]*\/>/i, '<!-- report logo not configured -->');
+    }
+    const title = String(input.title || 'Report');
+    html = html.replace('{{TITLE_BAR_CLASS}}', 'title-bar');
+    html = html.replace('{{TITLE}}', escapeHtml(title));
+    html = html.replace('{{CUR_DATE}}', escapeHtml(input.dateLabel || ''));
+    html = html.replace('{{SEVERITY_BADGE}}', '');
+    html = html.replace('{{CONTENT_CLASS}}', ' tcontent--monthly');
+    html = html.split('{{CONTENT}}').join(input.contentHtml || '');
+    return publishReportPdf(html, {
+        title,
+        submittedBy: input.submittedBy || 'ServiceLink',
+        submittedStamp: input.dateLabel || '',
+        rowNumber: input.rowNumber ?? '',
+    });
+}
+
 function dataURItoBlob(dataURI) {
     // convert base64/URLEncoded data component to raw binary data held in a string
     var byteString;
@@ -1481,5 +1526,6 @@ export {
     convertToSlug,
     convertNumber,
     fGetParm,
-    convertHtmlToPdf
+    convertHtmlToPdf,
+    convertReportLayoutPdf,
 }

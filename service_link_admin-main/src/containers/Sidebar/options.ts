@@ -172,6 +172,10 @@ export const optionsCustomer: option[] = [
 			{
 				key: 'audit-report',
 				label: 'sidebar.auditReport',
+			},
+			{
+				key: 'monthly-report',
+				label: 'sidebar.monthlyReport',
 			}
 		]
 	},
@@ -287,6 +291,10 @@ const options: option[] = [
 			{
 				key: 'audit-report',
 				label: 'sidebar.auditReport',
+			},
+			{
+				key: 'monthly-report',
+				label: 'sidebar.monthlyReport',
 			},
 			{
 				key: 'incident-report',

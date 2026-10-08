@@ -41,9 +41,11 @@ const crmEndPoint = {
     ASSETS: 'v1/assets',
     TRAINING: 'v1/training',
     TOOLBOX: 'v1/toolbox',
+    MONTHLY_REPORTS: 'v1/monthly-reports',
     MESSAGES: 'v1/messages',
     /** Multipart upload (must match API UploadController version prefix). */
     UPLOAD_FILE: 'v1/uploadFile',
+    GEO_REVERSE: 'v1/geo/reverse',
     
 }
 

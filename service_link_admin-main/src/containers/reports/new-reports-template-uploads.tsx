@@ -25,6 +25,7 @@ export const TemplateImageUpload = forwardRef<
       ref={ref}
       deferUpload
       tileGrid
+      stampCamera
       multiple={multiple}
       isImage={true}
       title="Media Files"

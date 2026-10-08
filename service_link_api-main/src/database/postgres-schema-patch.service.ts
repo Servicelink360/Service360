@@ -106,6 +106,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureAssetsTable();
     await this.ensureTrainingTables();
     await this.ensureToolboxTables();
+    await this.ensureMonthlyReportEdits();
     await this.ensureReportTemplateSiteFields();
     await this.applyRenameDepartmentsToServices();
 
@@ -2487,6 +2488,50 @@ export class PostgresSchemaPatchService implements OnModuleInit {
    * Ensure common report templates (esp. Public Amenities) include Site Name / Site Address
    * auto-merge fields, and backfill task site columns from sites master data.
    */
+  private async ensureMonthlyReportEdits(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.monthly_report_edits (
+          company_id INTEGER NOT NULL,
+          month VARCHAR(7) NOT NULL,
+          body JSONB NOT NULL,
+          client_visible BOOLEAN NOT NULL DEFAULT false,
+          deleted_at TIMESTAMPTZ NULL,
+          purged_at TIMESTAMPTZ NULL,
+          updated_by INTEGER NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (company_id, month)
+        );
+      `);
+      await this.dataSource.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'monthly_report_edits' AND column_name = 'client_visible'
+          ) THEN
+            ALTER TABLE public.monthly_report_edits ADD COLUMN client_visible BOOLEAN NOT NULL DEFAULT false;
+          END IF;
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'monthly_report_edits' AND column_name = 'deleted_at'
+          ) THEN
+            ALTER TABLE public.monthly_report_edits ADD COLUMN deleted_at TIMESTAMPTZ NULL;
+          END IF;
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'monthly_report_edits' AND column_name = 'purged_at'
+          ) THEN
+            ALTER TABLE public.monthly_report_edits ADD COLUMN purged_at TIMESTAMPTZ NULL;
+          END IF;
+        END $$;
+      `);
+      this.logger.log('monthly report edits table ensured');
+    } catch (e) {
+      this.logger.warn(`monthly report edits patch: ${(e as Error).message}`);
+    }
+  }
+
   private async ensureReportTemplateSiteFields(): Promise<void> {
     try {
       await this.dataSource.query(`

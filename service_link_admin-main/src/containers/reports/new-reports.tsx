@@ -106,6 +106,7 @@ type ListQueryFilters = {
   siteId?: number;
   serviceId?: string;
   keyword?: string;
+  companyId?: number;
 };
 
 type ReportListTab = "active" | "deleted";
@@ -1588,7 +1589,8 @@ function filterReportRowsByKeyword(rows: any[], draft: string): any[] {
 const NewReports: React.FC<{
   lockedTemplateCategory?: string;
   pageTitle?: string;
-}> = ({ lockedTemplateCategory, pageTitle = "sidebar.newReports" }) => {
+  monthly?: boolean;
+}> = ({ lockedTemplateCategory, pageTitle = "sidebar.newReports", monthly = false }) => {
   const intl = useIntl();
   const isIncidentReportMode =
     String(lockedTemplateCategory || "").toUpperCase() === INCIDENT_REPORT_CATEGORY;
@@ -1654,7 +1656,15 @@ const NewReports: React.FC<{
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
-  const [listFilters, setListFilters] = useState<ListQueryFilters>({});
+  const [listFilters, setListFilters] = useState<ListQueryFilters>(() => {
+    if (!monthly) return {};
+    const m = moment().subtract(1, "month");
+    return {
+      startDate: m.clone().startOf("month").format("YYYY-MM-DD"),
+      endDate: m.clone().endOf("month").format("YYYY-MM-DD"),
+    };
+  });
+  const [monthlyCompanies, setMonthlyCompanies] = useState<{ id: number; name: string }[]>([]);
   const [reportListTab, setReportListTab] = useState<ReportListTab>("active");
   const [deletedReportCount, setDeletedReportCount] = useState(0);
   const [listSort, setListSort] = useState({ orderBy: "submittedAt", orderValue: "DESC" });
@@ -1755,7 +1765,27 @@ const NewReports: React.FC<{
   const isStaffUser = +profileType === userType.STAFF;
   const isAdminUser = +profileType === userType.ADMIN;
   const isCustomerUser = +profileType === userType.CUSTOMER;
-  const showReportDeletedTabs = isCustomerUser || isStaffUser || isAdminUser;
+  const showReportDeletedTabs = !monthly && (isCustomerUser || isStaffUser || isAdminUser);
+
+  useEffect(() => {
+    if (!monthly || !isAdminUser) return;
+    void (async () => {
+      const res = await callAPIAsync(
+        serviceType.COMMON,
+        `${endPoint.COMPANIES}/options`,
+        "GET",
+        null,
+      );
+      if (res?.code === 1) {
+        const list = res.data || [];
+        setMonthlyCompanies(list);
+        setListFilters((prev) => {
+          if (prev.companyId || !list.length) return prev;
+          return { ...prev, companyId: +list[0].id };
+        });
+      }
+    })();
+  }, [monthly, isAdminUser]);
   const isDeletedReportTab = showReportDeletedTabs && reportListTab === "deleted";
 
   const patchRowReadState = useCallback(
@@ -1978,6 +2008,11 @@ const NewReports: React.FC<{
             total = list.length;
           }
         } else {
+          if (monthly && +profileType === userType.ADMIN && !+filters.companyId) {
+            setRows([]);
+            setCount(0);
+            return;
+          }
           const listed = await fetchCustomReportsList({
             page: nextPage,
             limit: nextLimit,
@@ -1988,12 +2023,14 @@ const NewReports: React.FC<{
             siteId: filters.siteId,
             serviceId: filters.serviceId,
             keyword: filters.keyword,
+            companyId: filters.companyId,
             sort: sort.orderBy ? sort : undefined,
             templateCategory: lockedTemplateCategory || undefined,
             includeDrafts: isSafetyAuditMode && tab === "active",
           });
           list = listed.rows;
           total = listed.count;
+          if (listed.error) message.error(listed.error);
         }
 
         if (safetyAuditTemplateIds) {
@@ -2039,6 +2076,7 @@ const NewReports: React.FC<{
       init.reportTemplates,
       lockedTemplateCategory,
       isSafetyAuditMode,
+      monthly,
     ],
   );
 
@@ -3842,11 +3880,12 @@ const NewReports: React.FC<{
   ]);
 
   const canUseBulkDelete =
-    (isDeletedReportTab && isAdminUser) ||
+    !monthly &&
+    ((isDeletedReportTab && isAdminUser) ||
       (!isDeletedReportTab &&
         (+profileType === userType.ADMIN ||
           +profileType === userType.CUSTOMER ||
-          +profileType === userType.STAFF));
+          +profileType === userType.STAFF)));
 
   const displayRows = filterReportRowsByKeyword(rows, listSearchDraft);
 
@@ -4881,19 +4920,56 @@ const NewReports: React.FC<{
                 {intl.formatMessage({ id: pageTitle })}
               </h2>
               <p className="nr-list-chrome-sub">
-                {isIncidentReportMode
-                  ? "Submitted incident reports"
-                  : isSafetyAuditMode
-                    ? "Submitted safety audits"
-                    : "Submitted field reports"}
+                {monthly
+                  ? "Completed reports for this customer in the selected month"
+                  : isIncidentReportMode
+                    ? "Submitted incident reports"
+                    : isSafetyAuditMode
+                      ? "Submitted safety audits"
+                      : "Submitted field reports"}
               </p>
             </div>
+          </div>
+        ) : null}
+        {monthly ? (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+            {isAdminUser ? (
+              <Select
+                showSearch
+                allowClear
+                placeholder="Customer"
+                style={{ minWidth: 280 }}
+                optionFilterProp="label"
+                value={listFilters.companyId}
+                onChange={(value) => {
+                  setPage(1);
+                  setListFilters((prev) => ({ ...prev, companyId: value || undefined }));
+                }}
+                options={monthlyCompanies.map((c) => ({ value: c.id, label: c.name }))}
+              />
+            ) : null}
+            <DatePicker
+              picker="month"
+              allowClear={false}
+              format="MMMM YYYY"
+              value={listFilters.startDate ? moment(listFilters.startDate, "YYYY-MM-DD") : undefined}
+              onChange={(value) => {
+                if (!value) return;
+                setPage(1);
+                setListFilters((prev) => ({
+                  ...prev,
+                  startDate: value.clone().startOf("month").format("YYYY-MM-DD"),
+                  endDate: value.clone().endOf("month").format("YYYY-MM-DD"),
+                }));
+              }}
+            />
           </div>
         ) : null}
         <div
           className={`new-reports-list-filters${mobileUiDark ? " new-reports-list-filters--dark" : ""}${
             !isMobilePortrait ? " nr-toolbar-card" : ""
           }`}
+          style={monthly ? { display: "none" } : undefined}
         >
           {isMobilePortrait ? (
             <div className="nr-app-top-row">
@@ -5297,11 +5373,13 @@ const NewReports: React.FC<{
             {!listLoading && displayRows.length === 0 ? (
               <Empty
                 description={
-                  listSearchDraft.trim()
-                    ? "No reports match your search"
-                    : isDeletedReportTab
-                      ? "No deleted reports"
-                      : "No reports found"
+                  monthly && isAdminUser && !listFilters.companyId
+                    ? "Choose a customer"
+                    : listSearchDraft.trim()
+                      ? "No reports match your search"
+                      : isDeletedReportTab
+                        ? "No deleted reports"
+                        : "No reports found"
                 }
                 style={{ margin: "32px 0" }}
               />
@@ -5339,6 +5417,13 @@ const NewReports: React.FC<{
               linkedReportId && +record.id === linkedReportId ? "report-row-highlight" : ""
             }
             scroll={{ x: true }}
+            locale={
+              monthly && isAdminUser && !listFilters.companyId
+                ? { emptyText: "Choose a customer" }
+                : monthly
+                  ? { emptyText: "No reports for this customer in this month." }
+                  : undefined
+            }
             pagination={{
               current: page,
               pageSize: limit,
