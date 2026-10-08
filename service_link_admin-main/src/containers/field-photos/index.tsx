@@ -35,40 +35,20 @@ type LocalPhoto = {
 
 function PhotoGrid({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <style>{`
-        .field-photo-frame {
-          position: relative;
-          width: 100%;
-          aspect-ratio: 3 / 4;
-          overflow: hidden;
-          background: #111;
-        }
-        .field-photo-frame .ant-image {
-          position: absolute;
-          inset: 0;
-          display: block;
-          width: 100%;
-          height: 100%;
-        }
-        .field-photo-frame .ant-image-img {
-          display: block;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          object-position: center bottom;
-        }
-      `}</style>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>{children}</div>
-    </>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>{children}</div>
   );
 }
 
 function PhotoCard({ url, name, caption, onDelete }: { url: string; name?: string; caption: string; onDelete: () => void }) {
   return (
     <div style={{ border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
-      <div className="field-photo-frame">
-        <Image src={url} alt="" />
+      <div style={{ height: 240, background: '#111', overflow: 'hidden' }}>
+        <Image
+          src={url}
+          alt=""
+          wrapperStyle={{ display: 'block', width: '100%', height: 240 }}
+          style={{ display: 'block', width: '100%', height: 240, objectFit: 'cover', objectPosition: 'center bottom' }}
+        />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 8 }}>
         <div style={{ fontSize: 12, color: '#444', minWidth: 0 }}>
@@ -116,7 +96,7 @@ const FieldPhotosPage: React.FC = () => {
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, location.key]);
 
   useEffect(() => {
     const urls: string[] = [];
@@ -285,7 +265,7 @@ const FieldPhotosPage: React.FC = () => {
           onChange={(event) => {
             const chosen = event.target.files?.[0];
             if (!chosen) return;
-            const hide = message.loading('Saving the photo in the app', 0);
+            const hide = message.loading('Saving the photo in the app...', 0);
             void saveInApp(chosen)
               .then(() => message.success('Photo saved in the app'))
               .catch((error: any) => message.error(error?.message || 'Could not save the photo'))
@@ -296,29 +276,12 @@ const FieldPhotosPage: React.FC = () => {
           }}
         />
         <div style={{ marginTop: 20 }}>
-          {phonePhotos.length > 0 ? (
-            <>
-              <h2 style={{ fontSize: 16, margin: '0 0 10px' }}>On this phone</h2>
-              <Image.PreviewGroup>
-                <PhotoGrid>
-                  {phonePhotos.map((photo) => (
-                    <PhotoCard
-                      key={photo.id}
-                      url={photo.url}
-                      caption={photo.createdAt ? new Date(photo.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : ''}
-                      onDelete={() => removePhone(photo.id)}
-                    />
-                  ))}
-                </PhotoGrid>
-              </Image.PreviewGroup>
-            </>
-          ) : null}
-          {photos.length > 0 ? <h2 style={{ fontSize: 16, margin: phonePhotos.length ? '18px 0 10px' : '0 0 10px' }}>In the app</h2> : null}
+          <h2 style={{ fontSize: 16, margin: '0 0 10px' }}>In the app</h2>
           {loading ? (
             <Spin />
-          ) : photos.length === 0 && phonePhotos.length === 0 ? (
-            <Empty description="No photos yet" />
-          ) : photos.length === 0 ? null : (
+          ) : photos.length === 0 ? (
+            <Empty description="No photos saved in the app yet" />
+          ) : (
             <Image.PreviewGroup>
               <PhotoGrid>
                 {photos.map((photo) => (
@@ -333,6 +296,23 @@ const FieldPhotosPage: React.FC = () => {
               </PhotoGrid>
             </Image.PreviewGroup>
           )}
+          {phonePhotos.length > 0 ? (
+            <>
+              <h2 style={{ fontSize: 16, margin: '18px 0 10px' }}>On this phone</h2>
+              <Image.PreviewGroup>
+                <PhotoGrid>
+                  {phonePhotos.map((photo) => (
+                    <PhotoCard
+                      key={photo.id}
+                      url={photo.url}
+                      caption={photo.createdAt ? new Date(photo.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : ''}
+                      onDelete={() => removePhone(photo.id)}
+                    />
+                  ))}
+                </PhotoGrid>
+              </Image.PreviewGroup>
+            </>
+          ) : null}
         </div>
       </div>
       {live ? (
