@@ -1,10 +1,12 @@
+import { lookupCurrentStreetAddress, paintPhotoStamp } from './stamp-photo';
+
 export type CameraSaveTarget = 'phone' | 'app';
 
 type CameraSession = {
   stream: MediaStream;
   target: CameraSaveTarget;
-  phoneDir: any | null;
   facing: 'environment' | 'user';
+  address: string;
 };
 
 let session: CameraSession | null = null;
@@ -13,40 +15,26 @@ export function peekCameraSession() {
   return session;
 }
 
-export function isIosDevice() {
-  const nav = navigator as Navigator & { platform?: string; maxTouchPoints?: number };
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (nav.platform === 'MacIntel' && (nav.maxTouchPoints || 0) > 1);
-}
-
 function stopStream(stream?: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop());
-}
-
-async function pickPicturesFolder() {
-  const picker = (window as any).showDirectoryPicker;
-  if (typeof picker !== 'function') return null;
-  try {
-    return await picker({ mode: 'readwrite', startIn: 'pictures' });
-  } catch (error: any) {
-    if (error?.name === 'AbortError') throw error;
-    return picker({ mode: 'readwrite' });
-  }
 }
 
 export async function startCameraSession(target: CameraSaveTarget, facing: 'environment' | 'user' = 'environment') {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('This browser cannot open the camera. Use the phone browser over a secure connection.');
   }
-  let phoneDir = target === 'phone' ? session?.phoneDir ?? null : null;
-  if (target === 'phone' && !phoneDir) {
-    phoneDir = await pickPicturesFolder();
-  }
+  const previousAddress = session?.address || '';
   stopStream(session?.stream);
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: { facingMode: { ideal: facing } },
-  });
-  session = { stream, target, phoneDir, facing };
+  const [stream, address] = await Promise.all([
+    navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: facing } },
+    }),
+    previousAddress
+      ? Promise.resolve(previousAddress)
+      : lookupCurrentStreetAddress().catch(() => 'Address unavailable'),
+  ]);
+  session = { stream, target, facing, address: address || 'Address unavailable' };
   return session;
 }
 
@@ -55,41 +43,25 @@ export function endCameraSession() {
   session = null;
 }
 
-export async function savePhotoOnPhone(file: File) {
-  const dir = session?.phoneDir;
-  if (dir?.getFileHandle) {
-    const handle = await dir.getFileHandle(file.name, { create: true });
-    const writable = await handle.createWritable();
-    await writable.write(file);
-    await writable.close();
-    return 'folder' as const;
-  }
-  if (isIosDevice()) return 'hold' as const;
-  const url = URL.createObjectURL(file);
+/** Saves the current camera frame onto the phone in the same tap, with no save prompt. */
+export function captureStampedPhotoToPhone(video: HTMLVideoElement) {
+  const sourceWidth = video.videoWidth || 0;
+  const sourceHeight = video.videoHeight || 0;
+  if (!sourceWidth || !sourceHeight) throw new Error('Camera is not ready');
+  const scale = Math.min(1, 2000 / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not take the photo');
+  ctx.drawImage(video, 0, 0, width, height);
+  paintPhotoStamp(ctx, width, height, session?.address || 'Address unavailable');
   const link = document.createElement('a');
-  link.href = url;
-  link.download = file.name;
+  link.href = canvas.toDataURL('image/jpeg', 0.9);
+  link.download = `IMG_${Date.now()}.jpg`;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-  return 'download' as const;
-}
-
-export async function shareHeldPhotos(files: File[]) {
-  const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean };
-  if (!files.length || typeof nav.share !== 'function' || !nav.canShare?.({ files })) {
-    for (const file of files) {
-      const url = URL.createObjectURL(file);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = file.name;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-    }
-    return;
-  }
-  await nav.share({ files });
 }

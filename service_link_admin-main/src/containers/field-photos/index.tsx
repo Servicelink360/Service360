@@ -5,11 +5,9 @@ import serviceType from '@app/constants/serviceType';
 import { userType } from '@app/constants/statusUser';
 import { callAPIAsync, callAPIUploadAsync } from '@app/library/helpers/api';
 import {
+  captureStampedPhotoToPhone,
   endCameraSession,
-  isIosDevice,
   peekCameraSession,
-  savePhotoOnPhone,
-  shareHeldPhotos,
   startCameraSession,
   type CameraSaveTarget,
 } from '@app/library/helpers/field-camera';
@@ -58,7 +56,6 @@ const FieldPhotosPage: React.FC = () => {
   const allowed = profileType === userType.ADMIN || profileType === userType.STAFF;
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const heldRef = useRef<File[]>([]);
   const [photos, setPhotos] = useState<FieldPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [choiceOpen, setChoiceOpen] = useState(false);
@@ -66,7 +63,6 @@ const FieldPhotosPage: React.FC = () => {
   const [live, setLive] = useState(false);
   const [target, setTarget] = useState<CameraSaveTarget>('app');
   const [savedCount, setSavedCount] = useState(0);
-  const [heldCount, setHeldCount] = useState(0);
   const [flash, setFlash] = useState(false);
 
   const load = useCallback(async () => {
@@ -93,8 +89,6 @@ const FieldPhotosPage: React.FC = () => {
     }
     setTarget(next);
     setSavedCount(0);
-    heldRef.current = [];
-    setHeldCount(0);
     setLive(true);
   }, []);
 
@@ -143,44 +137,33 @@ const FieldPhotosPage: React.FC = () => {
     setPhotos((prev) => [{ ...saved.data, takenBy: profile?.fullName || profile?.username || '' }, ...prev]);
   };
 
-  const shutter = async () => {
+  const shutter = () => {
     const video = videoRef.current;
     if (!video) return;
     setFlash(true);
     window.setTimeout(() => setFlash(false), 120);
-    try {
-      const raw = await grabFrame(video);
-      const stamped = await createStampedPhoto(raw);
-      if (target === 'app') {
+    if (target === 'phone') {
+      try {
+        captureStampedPhotoToPhone(video);
+        setSavedCount((count) => count + 1);
+      } catch (error: any) {
+        message.error(error?.message || 'Could not save the photo');
+      }
+      return;
+    }
+    void (async () => {
+      try {
+        const raw = await grabFrame(video);
+        const stamped = await createStampedPhoto(raw);
         await saveInApp(stamped.file, stamped.address);
         setSavedCount((count) => count + 1);
-        return;
+      } catch (error: any) {
+        message.error(error?.message || 'Could not save the photo');
       }
-      const where = await savePhotoOnPhone(stamped.file);
-      if (where === 'hold') {
-        heldRef.current = [...heldRef.current, stamped.file];
-        setHeldCount(heldRef.current.length);
-      } else {
-        setSavedCount((count) => count + 1);
-      }
-    } catch (error: any) {
-      message.error(error?.message || 'Could not save the photo');
-    }
+    })();
   };
 
-  const closeLive = async () => {
-    const held = heldRef.current;
-    if (held.length) {
-      try {
-        await shareHeldPhotos(held);
-        heldRef.current = [];
-        setHeldCount(0);
-      } catch (error: any) {
-        if (error?.name === 'AbortError') return;
-        message.error(error?.message || 'Could not save the photos to the phone');
-        return;
-      }
-    }
+  const closeLive = () => {
     endCameraSession();
     setLive(false);
   };
@@ -210,12 +193,9 @@ const FieldPhotosPage: React.FC = () => {
     setPhotos((prev) => prev.filter((photo) => photo.id !== id));
   };
 
-  const phoneNeedsDone = target === 'phone' && isIosDevice() && !peekCameraSession()?.phoneDir;
   const statusText = target === 'app'
     ? `${savedCount} saved in the app`
-    : phoneNeedsDone
-      ? `${heldCount} ready to save on the phone`
-      : `${savedCount} saved on the phone`;
+    : `${savedCount} saved on the phone`;
 
   return (
     <Layout title="Camera">
@@ -315,7 +295,7 @@ const FieldPhotosPage: React.FC = () => {
           />
           {flash ? <div style={{ position: 'absolute', inset: 0, background: '#fff', opacity: 0.7, pointerEvents: 'none' }} /> : null}
           <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#fff' }}>
-            <button type="button" onClick={() => void closeLive()} aria-label="Close camera" style={{ width: 44, height: 44, borderRadius: 22, border: 0, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>
+            <button type="button" onClick={closeLive} aria-label="Close camera" style={{ width: 44, height: 44, borderRadius: 22, border: 0, background: 'rgba(0,0,0,0.55)', color: '#fff' }}>
               <CloseOutlined />
             </button>
             <div style={{ background: 'rgba(0,0,0,0.55)', borderRadius: 16, padding: '6px 12px', fontSize: 14 }}>{statusText}</div>
@@ -323,21 +303,13 @@ const FieldPhotosPage: React.FC = () => {
               Flip
             </button>
           </div>
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-            {phoneNeedsDone ? (
-              <div style={{ color: '#fff', fontSize: 13, textAlign: 'center', padding: '0 24px' }}>
-                Tap Done when you finish. The phone asks once to save the photos.
-              </div>
-            ) : null}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 24, display: 'flex', justifyContent: 'center' }}>
             <button
               type="button"
               aria-label="Take photo"
-              onClick={() => void shutter()}
+              onClick={shutter}
               style={{ width: 74, height: 74, borderRadius: 37, border: '4px solid #fff', background: '#fff', boxShadow: '0 0 0 6px rgba(255,255,255,0.25)' }}
             />
-            {phoneNeedsDone ? (
-              <Button onClick={() => void closeLive()}>Done</Button>
-            ) : null}
           </div>
         </div>
       ) : null}

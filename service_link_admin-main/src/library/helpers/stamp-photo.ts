@@ -56,6 +56,34 @@ async function streetAddress(location: string | null) {
   return address || 'Address unavailable';
 }
 
+function paintPhotoStamp(ctx: CanvasRenderingContext2D, width: number, height: number, place: string) {
+  const fontSize = Math.max(18, Math.round(width * 0.032));
+  ctx.font = `700 ${fontSize}px sans-serif`;
+  const pad = Math.round(fontSize * 0.7);
+  const lines = [sydneyStamp(), ...wrapLine(ctx, place, width - pad * 2)];
+  const lineHeight = Math.round(fontSize * 1.28);
+  const blockHeight = lineHeight * lines.length;
+  let y = height - pad - blockHeight;
+  ctx.textBaseline = 'top';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.18));
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillStyle = '#ffffff';
+  lines.forEach((line) => {
+    ctx.strokeText(line, pad, y, width - pad * 2);
+    ctx.fillText(line, pad, y, width - pad * 2);
+    y += lineHeight;
+  });
+}
+
+export async function lookupCurrentStreetAddress() {
+  const gps = await getStaffLocationDetailed();
+  return streetAddress(gps.location);
+}
+
+export { paintPhotoStamp };
+
 export async function stampPhotoWithPlace(file: File) {
   const stamped = await createStampedPhoto(file);
   return stamped.file;
@@ -79,25 +107,7 @@ export async function createStampedPhoto(file: File) {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not stamp the photo');
   ctx.drawImage(image, 0, 0, width, height);
-
-  const fontSize = Math.max(18, Math.round(width * 0.032));
-  ctx.font = `700 ${fontSize}px sans-serif`;
-  const pad = Math.round(fontSize * 0.7);
-  const lines = [sydneyStamp(), ...wrapLine(ctx, place, width - pad * 2)];
-  const lineHeight = Math.round(fontSize * 1.28);
-  const blockHeight = lineHeight * lines.length;
-  let y = height - pad - blockHeight;
-  ctx.textBaseline = 'top';
-  ctx.lineJoin = 'round';
-  ctx.miterLimit = 2;
-  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.18));
-  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-  ctx.fillStyle = '#ffffff';
-  lines.forEach((line) => {
-    ctx.strokeText(line, pad, y, width - pad * 2);
-    ctx.fillText(line, pad, y, width - pad * 2);
-    y += lineHeight;
-  });
+  paintPhotoStamp(ctx, width, height, place);
 
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('Could not stamp the photo'))), 'image/jpeg', 0.9);

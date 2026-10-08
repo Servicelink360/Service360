@@ -18,7 +18,7 @@ const CameraSaveChoice: React.FC<{
     destroyOnClose
   >
     <p style={{ marginTop: 0 }}>
-      Choose once. The camera stays open and each photo is saved without asking you to use it.
+      Choose once. The camera stays open. Each photo is saved straight away.
     </p>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <Button size="large" block disabled={busy} onClick={() => onChoose('phone')}>
