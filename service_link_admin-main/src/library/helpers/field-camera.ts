@@ -1,4 +1,5 @@
 import { lookupCurrentStreetAddress, paintPhotoStamp } from './stamp-photo';
+import { savePhonePhoto } from './phone-photos';
 
 export type CameraSaveTarget = 'phone' | 'app';
 
@@ -43,8 +44,8 @@ export function endCameraSession() {
   session = null;
 }
 
-/** Saves the current camera frame onto the phone in the same tap, with no save prompt. */
-export function captureStampedPhotoToPhone(video: HTMLVideoElement) {
+/** Saves the current frame on this phone. Does not start a browser download. */
+export async function captureStampedPhotoToPhone(video: HTMLVideoElement) {
   const sourceWidth = video.videoWidth || 0;
   const sourceHeight = video.videoHeight || 0;
   if (!sourceWidth || !sourceHeight) throw new Error('Camera is not ready');
@@ -58,10 +59,8 @@ export function captureStampedPhotoToPhone(video: HTMLVideoElement) {
   if (!ctx) throw new Error('Could not take the photo');
   ctx.drawImage(video, 0, 0, width, height);
   paintPhotoStamp(ctx, width, height, session?.address || 'Address unavailable');
-  const link = document.createElement('a');
-  link.href = canvas.toDataURL('image/jpeg', 0.9);
-  link.download = `IMG_${Date.now()}.jpg`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('Could not save the photo'))), 'image/jpeg', 0.9);
+  });
+  return savePhonePhoto(blob, session?.address || 'Address unavailable');
 }

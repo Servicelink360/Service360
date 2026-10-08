@@ -12,6 +12,7 @@ import {
   type CameraSaveTarget,
 } from '@app/library/helpers/field-camera';
 import { createStampedPhoto } from '@app/library/helpers/stamp-photo';
+import { deletePhonePhoto, listPhonePhotos } from '@app/library/helpers/phone-photos';
 import { Button, Empty, Image, message, Popconfirm, Spin } from 'antd';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -47,6 +48,62 @@ function grabFrame(video: HTMLVideoElement) {
   });
 }
 
+type LocalPhoto = {
+  id: string;
+  url: string;
+  createdAt: string;
+};
+
+function PhotoGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <style>{`
+        .field-photo-frame {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 3 / 4;
+          overflow: hidden;
+          background: #111;
+        }
+        .field-photo-frame .ant-image {
+          position: absolute;
+          inset: 0;
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+        .field-photo-frame .ant-image-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center bottom;
+        }
+      `}</style>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>{children}</div>
+    </>
+  );
+}
+
+function PhotoCard({ url, name, caption, onDelete }: { url: string; name?: string; caption: string; onDelete: () => void }) {
+  return (
+    <div style={{ border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
+      <div className="field-photo-frame">
+        <Image src={url} alt="" />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 8 }}>
+        <div style={{ fontSize: 12, color: '#444', minWidth: 0 }}>
+          {name ? <div style={{ fontWeight: 600 }}>{name}</div> : null}
+          <div>{caption}</div>
+        </div>
+        <Popconfirm title="Delete this photo?" okText="Delete" cancelText="Cancel" onConfirm={onDelete}>
+          <Button type="text" danger icon={<DeleteOutlined />} aria-label="Delete photo" />
+        </Popconfirm>
+      </div>
+    </div>
+  );
+}
+
 const FieldPhotosPage: React.FC = () => {
   const location = useLocation();
   const profileRaw = localStorage.getItem('profile');
@@ -57,6 +114,7 @@ const FieldPhotosPage: React.FC = () => {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [photos, setPhotos] = useState<FieldPhoto[]>([]);
+  const [phonePhotos, setPhonePhotos] = useState<LocalPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -79,6 +137,21 @@ const FieldPhotosPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const urls: string[] = [];
+    void listPhonePhotos()
+      .then((rows) => {
+        const next = rows.map((row) => {
+          const url = URL.createObjectURL(row.blob);
+          urls.push(url);
+          return { id: row.id, url, createdAt: row.createdAt };
+        });
+        setPhonePhotos(next);
+      })
+      .catch(() => undefined);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const openLive = useCallback((next: CameraSaveTarget) => {
     const current = peekCameraSession();
@@ -143,12 +216,16 @@ const FieldPhotosPage: React.FC = () => {
     setFlash(true);
     window.setTimeout(() => setFlash(false), 120);
     if (target === 'phone') {
-      try {
-        captureStampedPhotoToPhone(video);
-        setSavedCount((count) => count + 1);
-      } catch (error: any) {
-        message.error(error?.message || 'Could not save the photo');
-      }
+      void (async () => {
+        try {
+          const saved = await captureStampedPhotoToPhone(video);
+          const url = URL.createObjectURL(saved.blob);
+          setPhonePhotos((prev) => [{ id: saved.id, url, createdAt: saved.createdAt }, ...prev]);
+          setSavedCount((count) => count + 1);
+        } catch (error: any) {
+          message.error(error?.message || 'Could not save the photo');
+        }
+      })();
       return;
     }
     void (async () => {
@@ -193,6 +270,15 @@ const FieldPhotosPage: React.FC = () => {
     setPhotos((prev) => prev.filter((photo) => photo.id !== id));
   };
 
+  const removePhone = async (id: string) => {
+    await deletePhonePhoto(id);
+    setPhonePhotos((prev) => {
+      const found = prev.find((photo) => photo.id === id);
+      if (found) URL.revokeObjectURL(found.url);
+      return prev.filter((photo) => photo.id !== id);
+    });
+  };
+
   const statusText = target === 'app'
     ? `${savedCount} saved in the app`
     : `${savedCount} saved on the phone`;
@@ -202,7 +288,7 @@ const FieldPhotosPage: React.FC = () => {
       <div style={{ maxWidth: 880, margin: '0 auto', padding: '8px 12px 32px' }}>
         <h1 style={{ fontSize: 22, margin: '8px 0 4px' }}>Camera</h1>
         <p style={{ margin: '0 0 16px', color: '#555' }}>
-          Photos are saved here with the time and street address on the picture. They are not part of a report.
+          Save to the phone keeps the picture on this phone. Save in the app sends it to Service360. Neither is part of a report.
         </p>
         {allowed ? (
           <Button
@@ -224,53 +310,41 @@ const FieldPhotosPage: React.FC = () => {
           onChoose={(next) => void chooseTarget(next)}
         />
         <div style={{ marginTop: 20 }}>
+          {phonePhotos.length > 0 ? (
+            <>
+              <h2 style={{ fontSize: 16, margin: '0 0 10px' }}>On this phone</h2>
+              <Image.PreviewGroup>
+                <PhotoGrid>
+                  {phonePhotos.map((photo) => (
+                    <PhotoCard
+                      key={photo.id}
+                      url={photo.url}
+                      caption={photo.createdAt ? new Date(photo.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : ''}
+                      onDelete={() => removePhone(photo.id)}
+                    />
+                  ))}
+                </PhotoGrid>
+              </Image.PreviewGroup>
+            </>
+          ) : null}
+          {photos.length > 0 ? <h2 style={{ fontSize: 16, margin: phonePhotos.length ? '18px 0 10px' : '0 0 10px' }}>In the app</h2> : null}
           {loading ? (
             <Spin />
-          ) : photos.length === 0 ? (
+          ) : photos.length === 0 && phonePhotos.length === 0 ? (
             <Empty description="No photos yet" />
-          ) : (
+          ) : photos.length === 0 ? null : (
             <Image.PreviewGroup>
-              <style>{`
-                .field-photo-frame {
-                  position: relative;
-                  width: 100%;
-                  aspect-ratio: 3 / 4;
-                  overflow: hidden;
-                  background: #111;
-                }
-                .field-photo-frame .ant-image {
-                  position: absolute;
-                  inset: 0;
-                  display: block;
-                  width: 100%;
-                  height: 100%;
-                }
-                .field-photo-frame .ant-image-img {
-                  display: block;
-                  width: 100%;
-                  height: 100%;
-                  object-fit: cover;
-                  object-position: center bottom;
-                }
-              `}</style>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+              <PhotoGrid>
                 {photos.map((photo) => (
-                  <div key={photo.id} style={{ border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
-                    <div className="field-photo-frame">
-                      <Image src={photo.url} alt="" />
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 8 }}>
-                      <div style={{ fontSize: 12, color: '#444', minWidth: 0 }}>
-                        {isAdmin && photo.takenBy ? <div style={{ fontWeight: 600 }}>{photo.takenBy}</div> : null}
-                        <div>{photo.createdAt ? new Date(photo.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : ''}</div>
-                      </div>
-                      <Popconfirm title="Delete this photo?" okText="Delete" cancelText="Cancel" onConfirm={() => removePhoto(photo.id)}>
-                        <Button type="text" danger icon={<DeleteOutlined />} aria-label="Delete photo" />
-                      </Popconfirm>
-                    </div>
-                  </div>
+                  <PhotoCard
+                    key={photo.id}
+                    url={photo.url}
+                    name={isAdmin ? photo.takenBy : ''}
+                    caption={photo.createdAt ? new Date(photo.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney' }) : ''}
+                    onDelete={() => removePhoto(photo.id)}
+                  />
                 ))}
-              </div>
+              </PhotoGrid>
             </Image.PreviewGroup>
           )}
         </div>
