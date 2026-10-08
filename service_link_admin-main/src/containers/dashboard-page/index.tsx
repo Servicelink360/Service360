@@ -1,7 +1,7 @@
 import Layout from '@app/components/layout/Layout';
 import { CameraOutlined, CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
 import { useDispatch, useSelector } from 'react-redux';
 import actions from "@app/redux/dashboard/actions";
@@ -10,7 +10,7 @@ import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 
 import { Link, useHistory, useLocation } from 'react-router-dom';
 import { message } from 'antd';
-import { startCameraSession, type CameraSaveTarget } from '@app/library/helpers/field-camera';
+import { saveCapturedPhotoInApp, startCameraSession, type CameraSaveTarget } from '@app/library/helpers/field-camera';
 import CameraSaveChoice from '@app/containers/field-photos/CameraSaveChoice';
 import { userType } from '../../constants/statusUser';
 import intl from '../../library/helpers/intlProvider';
@@ -22,6 +22,7 @@ const Dashboard: React.FC = () => {
   const dispatch = useDispatch();
   const location = useLocation();
   const history = useHistory();
+  const appCameraRef = useRef<HTMLInputElement>(null);
   const [cameraChoice, setCameraChoice] = React.useState(false);
   const [cameraStarting, setCameraStarting] = React.useState(false);
   const { isDark } = useColorModeOptional();
@@ -121,18 +122,40 @@ const Dashboard: React.FC = () => {
     </Link>
   );
 
-  const openDashboardCamera = async (target: CameraSaveTarget) => {
-    setCameraStarting(true);
-    try {
-      await startCameraSession(target);
+  const openDashboardCamera = (target: CameraSaveTarget) => {
+    if (target === 'app') {
       setCameraChoice(false);
-      history.push(`/field-photos?camera=${target}`);
-    } catch (error: any) {
-      if (error?.name !== 'AbortError') {
-        message.error(error?.message || 'Could not open the camera');
+      appCameraRef.current?.click();
+      return;
+    }
+    setCameraStarting(true);
+    void (async () => {
+      try {
+        await startCameraSession(target);
+        setCameraChoice(false);
+        history.push(`/field-photos?camera=${target}`);
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') {
+          message.error(error?.message || 'Could not open the camera');
+        }
+      } finally {
+        setCameraStarting(false);
       }
+    })();
+  };
+
+  const saveAppPhoto = async (chosen?: File) => {
+    if (!chosen) return;
+    const hide = message.loading('Saving the photo in the app…', 0);
+    try {
+      await saveCapturedPhotoInApp(chosen);
+      history.push('/field-photos');
+      message.success('Photo saved in the app');
+    } catch (error: any) {
+      message.error(error?.message || 'Could not save the photo');
     } finally {
-      setCameraStarting(false);
+      hide();
+      if (appCameraRef.current) appCameraRef.current.value = '';
     }
   };
 
@@ -267,7 +290,18 @@ const Dashboard: React.FC = () => {
         visible={cameraChoice}
         busy={cameraStarting}
         onCancel={() => setCameraChoice(false)}
-        onChoose={(target) => void openDashboardCamera(target)}
+        onChoose={openDashboardCamera}
+      />
+      <input
+        ref={appCameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={(event) => {
+          const chosen = event.target.files?.[0];
+          void saveAppPhoto(chosen);
+        }}
       />
       <DashboardWarp className={dashboardDark ? 'dashboard-page--dark' : undefined}>
         {dashboardDark ? (

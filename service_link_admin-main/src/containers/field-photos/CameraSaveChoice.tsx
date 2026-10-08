@@ -18,7 +18,7 @@ const CameraSaveChoice: React.FC<{
     destroyOnClose
   >
     <p style={{ marginTop: 0 }}>
-      Choose once. Each photo is saved straight away, with no download question.
+      Save to the phone keeps each photo on this phone. Save in the app opens the phone camera and asks you to use the photo.
     </p>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <Button size="large" block disabled={busy} onClick={() => onChoose('phone')}>

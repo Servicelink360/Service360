@@ -3,15 +3,15 @@ import Layout from '@app/components/layout/Layout';
 import endPoint from '@app/constants/endPoint';
 import serviceType from '@app/constants/serviceType';
 import { userType } from '@app/constants/statusUser';
-import { callAPIAsync, callAPIUploadAsync } from '@app/library/helpers/api';
+import { callAPIAsync } from '@app/library/helpers/api';
 import {
   captureStampedPhotoToPhone,
   endCameraSession,
   peekCameraSession,
+  saveCapturedPhotoInApp,
   startCameraSession,
   type CameraSaveTarget,
 } from '@app/library/helpers/field-camera';
-import { createStampedPhoto } from '@app/library/helpers/stamp-photo';
 import { deletePhonePhoto, listPhonePhotos } from '@app/library/helpers/phone-photos';
 import { Button, Empty, Image, message, Popconfirm, Spin } from 'antd';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,27 +26,6 @@ type FieldPhoto = {
   userId: number;
   takenBy?: string;
 };
-
-function grabFrame(video: HTMLVideoElement) {
-  const width = video.videoWidth || 0;
-  const height = video.videoHeight || 0;
-  if (!width || !height) throw new Error('Camera is not ready');
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not take the photo');
-  ctx.drawImage(video, 0, 0, width, height);
-  return new Promise<File>((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('Could not take the photo'));
-        return;
-      }
-      resolve(new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.92);
-  });
-}
 
 type LocalPhoto = {
   id: string;
@@ -113,6 +92,7 @@ const FieldPhotosPage: React.FC = () => {
   const allowed = profileType === userType.ADMIN || profileType === userType.STAFF;
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const appCameraRef = useRef<HTMLInputElement>(null);
   const [photos, setPhotos] = useState<FieldPhoto[]>([]);
   const [phonePhotos, setPhonePhotos] = useState<LocalPhoto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,8 +148,8 @@ const FieldPhotosPage: React.FC = () => {
   useEffect(() => {
     const mode = new URLSearchParams(location.search).get('camera');
     const current = peekCameraSession();
-    if ((mode === 'phone' || mode === 'app') && current?.stream) {
-      openLive(mode);
+    if (mode === 'phone' && current?.stream) {
+      openLive('phone');
     }
   }, [location.search, openLive]);
 
@@ -182,32 +162,30 @@ const FieldPhotosPage: React.FC = () => {
     void video.play().catch(() => undefined);
   }, [live]);
 
-  const chooseTarget = async (next: CameraSaveTarget) => {
-    setStarting(true);
-    try {
-      await startCameraSession(next);
+  const chooseTarget = (next: CameraSaveTarget) => {
+    if (next === 'app') {
       setChoiceOpen(false);
-      openLive(next);
-    } catch (error: any) {
-      if (error?.name === 'AbortError') return;
-      message.error(error?.message || 'Could not open the camera');
-    } finally {
-      setStarting(false);
+      appCameraRef.current?.click();
+      return;
     }
+    setStarting(true);
+    void (async () => {
+      try {
+        await startCameraSession(next);
+        setChoiceOpen(false);
+        openLive(next);
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return;
+        message.error(error?.message || 'Could not open the camera');
+      } finally {
+        setStarting(false);
+      }
+    })();
   };
 
-  const saveInApp = async (file: File, address: string) => {
-    const formData = new FormData();
-    formData.append('file', file, file.name);
-    const uploaded = await callAPIUploadAsync(serviceType.COMMON, endPoint.UPLOAD_FILE, 'POST', formData);
-    const url = String(uploaded?.data || '').trim();
-    if (uploaded?.code !== 1 || !url) throw new Error(uploaded?.message || 'Could not upload the photo');
-    const saved = await callAPIAsync(serviceType.COMMON, endPoint.FIELD_PHOTOS, 'POST', {
-      fileUrl: url,
-      address,
-    });
-    if (saved?.code !== 1) throw new Error(saved?.message || 'Could not save the photo');
-    setPhotos((prev) => [{ ...saved.data, takenBy: profile?.fullName || profile?.username || '' }, ...prev]);
+  const saveInApp = async (file: File) => {
+    const saved = await saveCapturedPhotoInApp(file);
+    setPhotos((prev) => [{ ...saved, takenBy: profile?.fullName || profile?.username || '' }, ...prev]);
   };
 
   const shutter = () => {
@@ -226,18 +204,7 @@ const FieldPhotosPage: React.FC = () => {
           message.error(error?.message || 'Could not save the photo');
         }
       })();
-      return;
     }
-    void (async () => {
-      try {
-        const raw = await grabFrame(video);
-        const stamped = await createStampedPhoto(raw);
-        await saveInApp(stamped.file, stamped.address);
-        setSavedCount((count) => count + 1);
-      } catch (error: any) {
-        message.error(error?.message || 'Could not save the photo');
-      }
-    })();
   };
 
   const closeLive = () => {
@@ -307,7 +274,26 @@ const FieldPhotosPage: React.FC = () => {
           visible={choiceOpen}
           busy={starting}
           onCancel={() => setChoiceOpen(false)}
-          onChoose={(next) => void chooseTarget(next)}
+          onChoose={chooseTarget}
+        />
+        <input
+          ref={appCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={(event) => {
+            const chosen = event.target.files?.[0];
+            if (!chosen) return;
+            const hide = message.loading('Saving the photo in the app', 0);
+            void saveInApp(chosen)
+              .then(() => message.success('Photo saved in the app'))
+              .catch((error: any) => message.error(error?.message || 'Could not save the photo'))
+              .finally(() => {
+                hide();
+                if (appCameraRef.current) appCameraRef.current.value = '';
+              });
+          }}
         />
         <div style={{ marginTop: 20 }}>
           {phonePhotos.length > 0 ? (

@@ -1,4 +1,7 @@
-import { lookupCurrentStreetAddress, paintPhotoStamp } from './stamp-photo';
+import { callAPIAsync, callAPIUploadAsync } from './api';
+import endPoint from '../../constants/endPoint';
+import serviceType from '../../constants/serviceType';
+import { lookupCurrentStreetAddress, paintPhotoStamp, createStampedPhoto } from './stamp-photo';
 import { savePhonePhoto } from './phone-photos';
 
 export type CameraSaveTarget = 'phone' | 'app';
@@ -63,4 +66,20 @@ export async function captureStampedPhotoToPhone(video: HTMLVideoElement) {
     canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('Could not save the photo'))), 'image/jpeg', 0.9);
   });
   return savePhonePhoto(blob, session?.address || 'Address unavailable');
+}
+
+/** Phone camera confirm ("Use this photo"), then store the stamped picture in the app. */
+export async function saveCapturedPhotoInApp(file: File) {
+  const stamped = await createStampedPhoto(file);
+  const formData = new FormData();
+  formData.append('file', stamped.file, stamped.file.name);
+  const uploaded = await callAPIUploadAsync(serviceType.COMMON, endPoint.UPLOAD_FILE, 'POST', formData);
+  const url = String(uploaded?.data || '').trim();
+  if (uploaded?.code !== 1 || !url) throw new Error(uploaded?.message || 'Could not upload the photo');
+  const saved = await callAPIAsync(serviceType.COMMON, endPoint.FIELD_PHOTOS, 'POST', {
+    fileUrl: url,
+    address: stamped.address,
+  });
+  if (saved?.code !== 1 || !saved.data) throw new Error(saved?.message || 'Could not save the photo');
+  return saved.data as { id: number; url: string; address: string; createdAt: string; userId: number };
 }
