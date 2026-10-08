@@ -121,10 +121,35 @@ const FieldPhotosPage: React.FC = () => {
             <Empty description="No photos yet" />
           ) : (
             <Image.PreviewGroup>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+              <style>{`
+                .field-photo-frame {
+                  position: relative;
+                  width: 100%;
+                  aspect-ratio: 3 / 4;
+                  overflow: hidden;
+                  background: #111;
+                }
+                .field-photo-frame .ant-image {
+                  position: absolute;
+                  inset: 0;
+                  display: block;
+                  width: 100%;
+                  height: 100%;
+                }
+                .field-photo-frame .ant-image-img {
+                  display: block;
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  object-position: center bottom;
+                }
+              `}</style>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
                 {photos.map((photo) => (
                   <div key={photo.id} style={{ border: '1px solid #e5e5e5', borderRadius: 10, overflow: 'hidden', background: '#fff' }}>
-                    <Image src={photo.url} alt="" style={{ width: '100%', height: 180, objectFit: 'cover' }} />
+                    <div className="field-photo-frame">
+                      <Image src={photo.url} alt="" />
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: 8 }}>
                       <div style={{ fontSize: 12, color: '#444', minWidth: 0 }}>
                         {isAdmin && photo.takenBy ? <div style={{ fontWeight: 600 }}>{photo.takenBy}</div> : null}
