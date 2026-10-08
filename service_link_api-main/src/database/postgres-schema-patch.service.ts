@@ -107,6 +107,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureTrainingTables();
     await this.ensureToolboxTables();
     await this.ensureMonthlyReportEdits();
+    await this.ensureFieldPhotos();
     await this.ensureReportTemplateSiteFields();
     await this.applyRenameDepartmentsToServices();
 
@@ -2529,6 +2530,23 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('monthly report edits table ensured');
     } catch (e) {
       this.logger.warn(`monthly report edits patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureFieldPhotos(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.field_photos (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          file_url TEXT NOT NULL,
+          address TEXT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `);
+      this.logger.log('field photos table ensured');
+    } catch (e) {
+      this.logger.warn(`field photos patch: ${(e as Error).message}`);
     }
   }
 

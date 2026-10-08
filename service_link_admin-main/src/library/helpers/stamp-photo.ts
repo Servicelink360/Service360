@@ -57,6 +57,12 @@ async function streetAddress(location: string | null) {
 }
 
 export async function stampPhotoWithPlace(file: File) {
+  const stamped = await createStampedPhoto(file);
+  return stamped.file;
+}
+
+/** Stamped JPEG plus the street address written on it. */
+export async function createStampedPhoto(file: File) {
   const [place, image] = await Promise.all([
     getStaffLocationDetailed().then((gps) => streetAddress(gps.location)),
     loadImage(file),
@@ -96,5 +102,6 @@ export async function stampPhotoWithPlace(file: File) {
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('Could not stamp the photo'))), 'image/jpeg', 0.9);
   });
-  return new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  const stamped = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+  return { file: stamped, address: place };
 }

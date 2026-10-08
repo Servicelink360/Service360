@@ -41,6 +41,7 @@ import { AssetsModule } from './assets/assets.module';
 import { TrainingModule } from './training/training.module';
 import { ToolboxModule } from './toolbox/toolbox.module';
 import { MonthlyReportsModule } from './monthly-reports/monthly-reports.module';
+import { FieldPhotosModule } from './field-photos/field-photos.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -113,6 +114,7 @@ import { MonthlyReportsModule } from './monthly-reports/monthly-reports.module';
     TrainingModule,
     ToolboxModule,
     MonthlyReportsModule,
+    FieldPhotosModule,
   ],
   controllers: [DeployStatusController],
   providers: [AppService],

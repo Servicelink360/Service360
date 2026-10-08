@@ -31,6 +31,11 @@ export const optionsStaff: option[] = [
 		leftIcon: 'icon-site',
 	},
 	{
+		key: 'field-photos',
+		label: 'sidebar.camera',
+		leftIcon: 'icon-site',
+	},
+	{
 		key: 'user-sites',
 		label: 'sidebar.jobSites',
 		leftIcon: 'icon-site',
@@ -189,6 +194,11 @@ const options: option[] = [
 	{
 		key: 'messages',
 		label: 'sidebar.messages',
+		leftIcon: 'icon-site',
+	},
+	{
+		key: 'field-photos',
+		label: 'sidebar.camera',
 		leftIcon: 'icon-site',
 	},
 	{

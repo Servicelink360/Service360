@@ -1,5 +1,5 @@
 import Layout from '@app/components/layout/Layout';
-import { CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { CameraOutlined, CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
 import React, { useCallback, useEffect } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
@@ -115,6 +115,17 @@ const Dashboard: React.FC = () => {
     </Link>
   );
 
+  const cameraBadge = (isStaff || isAdmin) ? (
+    <Link to="/field-photos" className="dashboard-report-badge">
+      <span className="dashboard-report-badge__icon-wrap">
+        <div className="dashboard-report-badge__circle dashboard-report-badge__circle--camera dashboard-report-badge__circle--action">
+          <CameraOutlined />
+        </div>
+      </span>
+      <div className="dashboard-report-badge__label" style={darkLabelStyle}>Camera</div>
+    </Link>
+  ) : null;
+
   const adhocReportBadge = (isStaff || isAdmin) ? (
     <Link to="/new-reports?create=adhoc" className="dashboard-report-badge">
       <span className="dashboard-report-badge__icon-wrap">
@@ -213,6 +224,7 @@ const Dashboard: React.FC = () => {
         isAdmin || isCustomer,
       )}
       {adhocReportBadge}
+      {cameraBadge}
       {faultsReportsBadge(
         isStaff ? '/report-faults?create=1' : '/report-faults',
         !isStaff,
