@@ -74,18 +74,23 @@ export async function stampPhotoWithPlace(file: File) {
   if (!ctx) throw new Error('Could not stamp the photo');
   ctx.drawImage(image, 0, 0, width, height);
 
-  const fontSize = Math.max(16, Math.round(width * 0.028));
-  ctx.font = `600 ${fontSize}px sans-serif`;
-  const lines = [sydneyStamp(), ...wrapLine(ctx, place, width - fontSize * 1.4)];
-  const lineHeight = Math.round(fontSize * 1.35);
-  const pad = Math.round(fontSize * 0.55);
-  const barHeight = pad * 2 + lineHeight * lines.length;
-  ctx.fillStyle = 'rgba(0,0,0,0.66)';
-  ctx.fillRect(0, height - barHeight, width, barHeight);
-  ctx.fillStyle = '#ffffff';
+  const fontSize = Math.max(18, Math.round(width * 0.032));
+  ctx.font = `700 ${fontSize}px sans-serif`;
+  const pad = Math.round(fontSize * 0.7);
+  const lines = [sydneyStamp(), ...wrapLine(ctx, place, width - pad * 2)];
+  const lineHeight = Math.round(fontSize * 1.28);
+  const blockHeight = lineHeight * lines.length;
+  let y = height - pad - blockHeight;
   ctx.textBaseline = 'top';
-  lines.forEach((line, index) => {
-    ctx.fillText(line, pad, height - barHeight + pad + index * lineHeight, width - pad * 2);
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  ctx.lineWidth = Math.max(3, Math.round(fontSize * 0.18));
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillStyle = '#ffffff';
+  lines.forEach((line) => {
+    ctx.strokeText(line, pad, y, width - pad * 2);
+    ctx.fillText(line, pad, y, width - pad * 2);
+    y += lineHeight;
   });
 
   const blob = await new Promise<Blob>((resolve, reject) => {
