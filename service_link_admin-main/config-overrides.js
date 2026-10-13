@@ -76,6 +76,8 @@ module.exports = override(
   addWebpackAlias({
     '@app/lib': path.resolve(__dirname, 'src/library'),
     '@app': path.resolve(__dirname, 'src'),
+    // CRA 3 / webpack 4 cannot parse the ESM build. The UMD bundle is already transpiled.
+    'livekit-client': path.resolve(__dirname, 'node_modules/livekit-client/dist/livekit-client.umd.js'),
   }),
   pointForkTsCheckerAtTypecheckConfig,
   addProcessBrowserPolyfill,

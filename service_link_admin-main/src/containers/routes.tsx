@@ -51,6 +51,7 @@ const routes = [
 	{ path: 'audit-report', component: asyncComponent(() => import('@app/containers/reports/audit-report')) },
 	{ path: 'monthly-report', component: asyncComponent(() => import('@app/containers/monthly-report')) },
 	{ path: 'field-photos', component: asyncComponent(() => import('@app/containers/field-photos')) },
+	{ path: 'meetings/:meetingId', component: asyncComponent(() => import('@app/containers/meetings')), exact: true },
 	{ path: 'ppe-report', component: asyncComponent(() => import('@app/containers/blank')) },
 	{ path: 'action-plans', component: asyncComponent(() => import('@app/containers/blank')) },
 	{ path: 'incident-report', component: asyncComponent(() => import('@app/containers/reports/incident-report')) },

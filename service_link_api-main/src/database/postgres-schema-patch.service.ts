@@ -108,6 +108,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureToolboxTables();
     await this.ensureMonthlyReportEdits();
     await this.ensureFieldPhotos();
+    await this.ensureMeetings();
     await this.ensureReportTemplateSiteFields();
     await this.applyRenameDepartmentsToServices();
 
@@ -2547,6 +2548,34 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       this.logger.log('field photos table ensured');
     } catch (e) {
       this.logger.warn(`field photos patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureMeetings(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.meetings (
+          id SERIAL PRIMARY KEY,
+          room_name TEXT NOT NULL UNIQUE,
+          host_user_id INTEGER NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          ended_at TIMESTAMPTZ NULL
+        );
+      `);
+      this.logger.log('meetings table ensured');
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.meeting_invites (
+          id SERIAL PRIMARY KEY,
+          meeting_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          invited_by INTEGER NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (meeting_id, user_id)
+        );
+      `);
+      this.logger.log('meeting invites table ensured');
+    } catch (e) {
+      this.logger.warn(`meetings patch: ${(e as Error).message}`);
     }
   }
 

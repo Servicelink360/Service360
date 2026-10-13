@@ -311,6 +311,10 @@ const DashboardWarp = styled.div`
   background: #212121;
 }
 
+.dashboard-report-badge__circle--meet {
+  background: #1565c0;
+}
+
 .dashboard-faults-badge {
   display: flex;
   flex-direction: column;
