@@ -6,15 +6,17 @@ import { UploadImageMultilHandle } from "@app/components/common/upload-image-mul
 import { UsersDiv } from "@app/components/common/container.style";
 import endPoint from "@app/constants/endPoint";
 import serviceType from "@app/constants/serviceType";
-import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownOutlined, EditOutlined, EnvironmentOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, EnvironmentOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync } from "../../library/helpers/api";
 import { getStaffLocationDetailed } from "@app/library/helpers/geolocation";
 import { Button, Checkbox, Col, DatePicker, Divider, Empty, Form, Image, Input, InputNumber, message, Modal, Pagination, Popconfirm, Progress, Row, Select, Space, Spin, Table, Tabs, Tag, Tooltip, Typography } from "antd";
+import * as FileSaver from "file-saver";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import styled, { createGlobalStyle, css } from "styled-components";
+import { buildStoredZip, photoDownloadName } from "./report-photo-zip";
 import { ReportsMobileDarkPageStyles } from "./reports-mobile-dark-styles";
 import { ReportsMobileAppShellStyles } from "./reports-mobile-app-shell";
 import MobileReportPdfOverlay from "@app/components/common/MobileReportPdfOverlay";
@@ -1678,6 +1680,7 @@ const NewReports: React.FC<{
   const [viewOpen, setViewOpen] = useState(false);
   const [viewRow, setViewRow] = useState<any | null>(null);
   const [viewPhotoKeys, setViewPhotoKeys] = useState<Set<string>>(() => new Set());
+  const [photoDownloadBusy, setPhotoDownloadBusy] = useState(false);
   const [markingUnreadId, setMarkingUnreadId] = useState<number | null>(null);
   const [editing, setEditing] = useState<any | null>(null);
   const [form] = Form.useForm();
@@ -2314,6 +2317,12 @@ const NewReports: React.FC<{
 
   const viewReports = viewRow?.reports;
   const viewReportBlocks = useMemo(() => buildSubmittedReportBlocks(viewReports), [viewReports]);
+  const viewPhotoUrls = useMemo(
+    () => viewReportBlocks.flatMap((block) => (block.kind === "photos" ? block.urls : [])),
+    [viewReportBlocks],
+  );
+  const allViewPhotosSelected =
+    viewPhotoUrls.length > 0 && viewPhotoUrls.every((url) => viewPhotoKeys.has(url));
 
   const viewStatusPill = useMemo(() => {
     if (!viewRow) return null;
@@ -2372,6 +2381,42 @@ const NewReports: React.FC<{
       else next.delete(url);
       return next;
     });
+  };
+
+  const setAllViewPhotos = (checked: boolean) => {
+    setViewPhotoKeys(checked ? new Set(viewPhotoUrls) : new Set());
+  };
+
+  const downloadSelectedViewPhotos = async () => {
+    const urls = viewPhotoUrls.filter((url) => viewPhotoKeys.has(url));
+    if (!urls.length) {
+      message.warning("Select photos to download");
+      return;
+    }
+    setPhotoDownloadBusy(true);
+    const hide = message.loading("Downloading photos...", 0);
+    try {
+      const files: { name: string; data: Uint8Array }[] = [];
+      for (let i = 0; i < urls.length; i++) {
+        const res = await fetch(urls[i]);
+        if (!res.ok) throw new Error("Could not download a photo");
+        files.push({
+          name: photoDownloadName(urls[i], i),
+          data: new Uint8Array(await res.arrayBuffer()),
+        });
+      }
+      const reportId = viewRow?.id || "report";
+      if (files.length === 1) {
+        FileSaver.saveAs(new Blob([files[0].data as BlobPart]), files[0].name);
+      } else {
+        FileSaver.saveAs(buildStoredZip(files), `report-${reportId}-photos.zip`);
+      }
+    } catch {
+      message.error("Could not download the photos");
+    } finally {
+      hide();
+      setPhotoDownloadBusy(false);
+    }
   };
 
   const confirmDeleteViewReport = () => {
@@ -5608,6 +5653,36 @@ const NewReports: React.FC<{
                 ) : null}
               </Col>
             </Row>
+
+            {viewPhotoUrls.length ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginTop: 18,
+                }}
+              >
+                <Checkbox
+                  checked={allViewPhotosSelected}
+                  indeterminate={viewPhotoKeys.size > 0 && !allViewPhotosSelected}
+                  onChange={(e) => setAllViewPhotos(e.target.checked)}
+                >
+                  Select all photos
+                </Checkbox>
+                <Button
+                  icon={<DownloadOutlined />}
+                  disabled={!viewPhotoKeys.size}
+                  loading={photoDownloadBusy}
+                  onClick={() => void downloadSelectedViewPhotos()}
+                  style={staffPrimaryGreen}
+                >
+                  Download{viewPhotoKeys.size ? ` (${viewPhotoKeys.size})` : ""}
+                </Button>
+              </div>
+            ) : null}
 
             <div style={{ fontSize: 14, marginTop: 20 }}>
               {viewReportBlocks.map((block) => {
