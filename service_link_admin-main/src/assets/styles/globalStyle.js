@@ -1376,31 +1376,68 @@ html[data-color-mode="dark"] .ant-select-item-option-selected:not(.ant-select-it
 @media (max-width: 768px) and (orientation: portrait) {
   .dashboard-report-badges {
     display: grid !important;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 12px 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 22px 10px;
     justify-items: center;
-    margin-top: 16px;
-    padding: 0 8px;
+    align-items: start;
+    margin-top: 8px;
+    padding: 0 6px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .dashboard-report-badge,
+  button.dashboard-report-badge,
+  .dashboard-faults-badge,
+  .dashboard-messages-badge {
+    width: 100%;
+    max-width: 120px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    line-height: 1.2;
+    appearance: none;
+    -webkit-appearance: none;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .dashboard-report-badge__icon-wrap,
+  .dashboard-faults-badge__icon-wrap,
+  .dashboard-messages-badge__icon-wrap {
+    width: 76px !important;
+    height: 76px !important;
+    flex: 0 0 76px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
   }
 
   .dashboard-report-badge__circle,
   .dashboard-faults-badge__icon-wrap,
   .dashboard-messages-badge__icon-wrap {
-    width: 64px !important;
-    height: 64px !important;
-    font-size: 26px !important;
+    width: 76px !important;
+    height: 76px !important;
+    font-size: 30px !important;
   }
 
   .dashboard-report-badge__circle--action {
-    font-size: 28px !important;
+    font-size: 32px !important;
   }
 
   .dashboard-report-badge__label,
-  .dashboard-messages-badge__label {
-    margin-top: 8px;
-    font-size: 11px;
+  .dashboard-messages-badge__label,
+  .dashboard-page--dark .dashboard-report-badge__label,
+  .dashboard-page--dark .dashboard-messages-badge__label {
+    width: 100%;
+    min-height: 2.4em;
+    margin-top: 8px !important;
+    font-size: 13px !important;
+    font-weight: 600;
     text-align: center;
-    line-height: 1.2;
+    line-height: 1.2 !important;
   }
 
   .dashboard-messages-badge__icon-wrap {

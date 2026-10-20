@@ -137,7 +137,7 @@ const HowToPage: React.FC = () => (
               <strong>Report templates</strong> —{' '}
               <NavLink to="/report-templates">Master data → Report templates</NavLink>
               {' · '}
-              <NavLink to="/safety-audit-templates">Safety audit templates</NavLink>
+              <NavLink to="/safety-audit-templates">Audit templates</NavLink>
               {' · '}
               <NavLink to="/safety-audits">Safety audits</NavLink>
               {' · '}

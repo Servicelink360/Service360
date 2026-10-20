@@ -1,5 +1,5 @@
 import Layout from '@app/components/layout/Layout';
-import { CameraOutlined, CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import { CameraOutlined, CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
@@ -10,8 +10,10 @@ import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 
 import { Link, useHistory, useLocation } from 'react-router-dom';
 import { message } from 'antd';
-import { saveCapturedPhotoInApp, startCameraSession, type CameraSaveTarget } from '@app/library/helpers/field-camera';
+import { saveCapturedPhotoInApp, type CameraSaveTarget } from '@app/library/helpers/field-camera';
 import CameraSaveChoice from '@app/containers/field-photos/CameraSaveChoice';
+import PhoneCamera from '@app/containers/field-photos/PhoneCamera';
+import { beginPhoneLocation, primeShutter, requestPhoneCamera } from '@app/library/helpers/phone-shot';
 import { userType } from '../../constants/statusUser';
 import endPoint from '@app/constants/endPoint';
 import serviceType from '@app/constants/serviceType';
@@ -27,9 +29,11 @@ const Dashboard: React.FC = () => {
   const history = useHistory();
   const appCameraRef = useRef<HTMLInputElement>(null);
   const [cameraChoice, setCameraChoice] = React.useState(false);
-  const [cameraStarting, setCameraStarting] = React.useState(false);
-  const [meetingStarting, setMeetingStarting] = React.useState(false);
-  const [meetingInvites, setMeetingInvites] = React.useState<{ id: number; hostName: string }[]>([]);
+  const [phoneOpen, setPhoneOpen] = React.useState(false);
+  const [phoneSave, setPhoneSave] = React.useState<CameraSaveTarget>('phone');
+  const [phoneRequest, setPhoneRequest] = React.useState<Promise<MediaStream> | null>(null);
+  const [meetingInvites, setMeetingInvites] = React.useState<{ id: number; hostName: string; mine?: boolean }[]>([]);
+  const [callHidden, setCallHidden] = React.useState<number | null>(null);
   const { isDark } = useColorModeOptional();
   const isMobilePortrait = useMobilePortrait();
   const dashboardDark = isDark && isMobilePortrait;
@@ -42,22 +46,29 @@ const Dashboard: React.FC = () => {
     loadDashboard();
   }, [loadDashboard, location.pathname]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadInvites = useCallback(() => {
     void (async () => {
       const res = await callAPIAsync(serviceType.COMMON, endPoint.MEETINGS_INBOX, 'GET', null);
-      if (!cancelled && res?.code === 1 && Array.isArray(res.data)) {
+      if (res?.code === 1 && Array.isArray(res.data)) {
         setMeetingInvites(res.data);
       }
     })();
-    return () => { cancelled = true; };
-  }, [location.pathname]);
+  }, []);
 
   useEffect(() => {
-    const onFocus = () => loadDashboard();
+    loadInvites();
+    const timer = window.setInterval(loadInvites, 8000);
+    return () => window.clearInterval(timer);
+  }, [loadInvites, location.pathname]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      loadDashboard();
+      loadInvites();
+    };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [loadDashboard]);
+  }, [loadDashboard, loadInvites]);
 
   useEffect(() => {
     const cls = 'dashboard-page-body-dark';
@@ -139,25 +150,21 @@ const Dashboard: React.FC = () => {
   );
 
   const openDashboardCamera = (target: CameraSaveTarget) => {
-    if (target === 'app') {
-      setCameraChoice(false);
-      appCameraRef.current?.click();
+    beginPhoneLocation();
+    setCameraChoice(false);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      if (target === 'app') {
+        appCameraRef.current?.click();
+        return;
+      }
+      message.error('This phone browser cannot open the camera.');
       return;
     }
-    setCameraStarting(true);
-    void (async () => {
-      try {
-        await startCameraSession(target);
-        setCameraChoice(false);
-        history.push(`/field-photos?camera=${target}`);
-      } catch (error: any) {
-        if (error?.name !== 'AbortError') {
-          message.error(error?.message || 'Could not open the camera');
-        }
-      } finally {
-        setCameraStarting(false);
-      }
-    })();
+    primeShutter();
+    const pending = requestPhoneCamera('environment');
+    setPhoneSave(target);
+    setPhoneRequest(pending);
+    setPhoneOpen(true);
   };
 
   const saveAppPhoto = async (chosen?: File) => {
@@ -172,25 +179,6 @@ const Dashboard: React.FC = () => {
     } finally {
       hide();
       if (appCameraRef.current) appCameraRef.current.value = '';
-    }
-  };
-
-  const startMeeting = async () => {
-    if (meetingStarting) return;
-    setMeetingStarting(true);
-    const hide = message.loading('Starting the meeting…', 0);
-    try {
-      const res = await callAPIAsync(serviceType.COMMON, endPoint.MEETINGS, 'POST', {});
-      if (res?.code !== 1 || !res?.data?.id) {
-        message.error(res?.message || 'Could not start the meeting');
-        return;
-      }
-      history.push(`/meetings/${res.data.id}`);
-    } catch (error: any) {
-      message.error(error?.message || 'Could not start the meeting');
-    } finally {
-      hide();
-      setMeetingStarting(false);
     }
   };
 
@@ -210,22 +198,8 @@ const Dashboard: React.FC = () => {
     </button>
   ) : null;
 
-  const meetBadge = (isStaff || isAdmin) ? (
-    <button
-      type="button"
-      className="dashboard-report-badge"
-      onClick={() => void startMeeting()}
-      disabled={meetingStarting}
-      style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
-    >
-      <span className="dashboard-report-badge__icon-wrap">
-        <div className="dashboard-report-badge__circle dashboard-report-badge__circle--meet dashboard-report-badge__circle--action">
-          <VideoCameraOutlined />
-        </div>
-      </span>
-      <div className="dashboard-report-badge__label" style={darkLabelStyle}>Meet</div>
-    </button>
-  ) : null;
+  const invitedMeeting = meetingInvites[0];
+  const incoming = !!((isStaff || isCustomer) && invitedMeeting && !invitedMeeting.mine && callHidden !== invitedMeeting.id);
 
   const adhocReportBadge = (isStaff || isAdmin) ? (
     <Link to="/new-reports?create=adhoc" className="dashboard-report-badge">
@@ -326,7 +300,6 @@ const Dashboard: React.FC = () => {
       )}
       {adhocReportBadge}
       {cameraBadge}
-      {meetBadge}
       {faultsReportsBadge(
         isStaff ? '/report-faults?create=1' : '/report-faults',
         !isStaff,
@@ -341,55 +314,78 @@ const Dashboard: React.FC = () => {
     <Layout title="">
       <CameraSaveChoice
         visible={cameraChoice}
-        busy={cameraStarting}
+        busy={false}
         onCancel={() => setCameraChoice(false)}
         onChoose={openDashboardCamera}
       />
+      {phoneOpen && phoneRequest ? (
+        <PhoneCamera
+          request={phoneRequest}
+          saveTo={phoneSave}
+          onSaved={() => {
+            if (phoneSave === 'app') history.push('/field-photos');
+          }}
+          onClose={() => setPhoneOpen(false)}
+        />
+      ) : null}
       <input
         ref={appCameraRef}
         type="file"
         accept="image/*"
         capture="environment"
-        style={{ display: 'none' }}
+        style={{ position: 'fixed', left: 0, top: 0, width: 1, height: 1, opacity: 0 }}
         onChange={(event) => {
           const chosen = event.target.files?.[0];
           void saveAppPhoto(chosen);
         }}
       />
       <DashboardWarp className={dashboardDark ? 'dashboard-page--dark' : undefined}>
+        {incoming && invitedMeeting ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+            margin: '0 0 16px',
+            padding: '14px 16px',
+            borderRadius: 16,
+            background: '#143d24',
+            color: '#ffffff',
+          }}>
+            <div>
+              <strong style={{ display: 'block', fontSize: 18 }}>Incoming Team Meeting {invitedMeeting.id}</strong>
+              <span style={{ fontSize: 15 }}>{invitedMeeting.hostName} started Team Meeting {invitedMeeting.id}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setCallHidden(invitedMeeting.id)}
+                style={{ height: 44, padding: '0 14px', borderRadius: 10, border: 0, background: '#ffffff', color: '#143d24', fontWeight: 700 }}
+              >
+                Not now
+              </button>
+              <Link
+                to={`/meetings/${invitedMeeting.id}`}
+                style={{ display: 'inline-flex', alignItems: 'center', height: 44, padding: '0 16px', borderRadius: 10, background: '#1f6b3a', color: '#ffffff', fontWeight: 800, textDecoration: 'none' }}
+              >
+                Answer
+              </Link>
+            </div>
+          </div>
+        ) : null}
         {dashboardDark ? (
           <style>{`
             .dashboard-page--dark .dashboard-report-badge__label,
             .dashboard-page--dark .dashboard-messages-badge__label {
               color: #ffffff !important;
-              font-size: 15px !important;
               font-weight: 700 !important;
-              line-height: 1.25 !important;
             }
             .dashboard-page--dark .dashboard-section-heading {
               color: #ffffff !important;
               font-weight: 700 !important;
             }
           `}</style>
-        ) : null}
-        {meetingInvites.length ? (
-          <div className="dashboard-item dashboard-item--flush" style={{ marginBottom: 16 }}>
-            <h1 className="dashboard-section-heading" style={darkHeadingStyle}>Meeting invitation</h1>
-            <div className="dashboard-report-badges">
-              {meetingInvites.map((invite) => (
-                <Link key={invite.id} to={`/meetings/${invite.id}`} className="dashboard-report-badge">
-                  <span className="dashboard-report-badge__icon-wrap">
-                    <div className="dashboard-report-badge__circle dashboard-report-badge__circle--meet dashboard-report-badge__circle--action">
-                      <VideoCameraOutlined />
-                    </div>
-                  </span>
-                  <div className="dashboard-report-badge__label" style={darkLabelStyle}>
-                    From {invite.hostName || 'Admin'}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
         ) : null}
         {showReportsSection ? (
           <div className="dashboard-item dashboard-item--flush">

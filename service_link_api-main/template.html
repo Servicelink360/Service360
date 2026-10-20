@@ -15,18 +15,20 @@
             width: 740px;
             margin: 0 auto;
             font-family: 'Segoe UI', 'DejaVu Sans', 'Liberation Sans', Arial, sans-serif;
-            color: #1f2937;
+            color: #0f172a;
             background: #ffffff;
-            font-size: 13px;
-            line-height: 1.4;
+            font-size: 12.5px;
+            line-height: 1.45;
         }
 
         .container {
-            padding: 4px 8px 0;
+            padding: 2px 4px 0;
         }
 
         .header {
-            margin-bottom: 14px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #166534;
         }
 
         .header-row {
@@ -37,24 +39,25 @@
         }
 
         .logo {
-            height: 78px;
+            height: 72px;
             width: auto;
             display: block;
         }
 
         .header-contact {
             text-align: right;
-            color: #4b5563;
-            font-size: 11.5px;
-            line-height: 1.55;
-            padding-top: 6px;
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.5;
+            padding-top: 4px;
         }
 
         .header-contact .company {
-            color: #166534;
+            color: #14532d;
             font-weight: 700;
             font-size: 13px;
-            margin-bottom: 2px;
+            letter-spacing: 0.02em;
+            margin-bottom: 3px;
         }
 
         .title-bar {
@@ -62,11 +65,12 @@
             justify-content: space-between;
             align-items: center;
             gap: 12px;
-            background: linear-gradient(90deg, #166534 0%, #22a05a 100%);
+            background: linear-gradient(105deg, #14532d 0%, #166534 42%, #22a05a 100%);
             color: #ffffff;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 14px;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(22, 101, 52, 0.18);
         }
 
         .title-bar--severity-low {
@@ -86,9 +90,10 @@
         }
 
         .title-bar .report-title {
-            font-size: 18px;
+            font-size: 19px;
             font-weight: 700;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
         }
 
         .title-bar-meta {
@@ -101,33 +106,159 @@
 
         .title-bar .report-date,
         .title-bar .report-severity {
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 700;
             opacity: 0.98;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 4px 10px;
+            background: rgba(255, 255, 255, 0.22);
+            padding: 5px 11px;
             border-radius: 999px;
+            white-space: nowrap;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+        }
+
+        .audit-scorecard-wrap {
+            margin: 0 0 12px;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        .audit-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 16px;
+            align-items: center;
+            margin: 0 0 8px;
+            padding: 8px 12px;
+            border: 1px solid #dbe3ec;
+            border-radius: 10px;
+            background: #f8fafc;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #334155;
+        }
+
+        .audit-legend .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
             white-space: nowrap;
         }
 
-        .tcontent {
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            /* overflow:hidden on multi-page blocks creates blank trailing pages in Chromium PDF */
-            overflow: visible;
-            background: #fff;
+        .audit-legend .pill {
+            min-width: 28px;
+            justify-content: center;
+            padding: 3px 8px;
+            font-size: 11px;
         }
 
-        .section-head {
-            background: #f0fdf4;
-            color: #166534;
-            font-size: 12px;
+        .audit-scorecard {
+            display: flex;
+            gap: 8px;
+        }
+
+        .score-card {
+            flex: 1;
+            min-width: 0;
+            border-radius: 10px;
+            padding: 10px 8px 9px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .score-card .score-num {
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            color: #0f172a;
+        }
+
+        .score-card .score-status {
+            font-size: 12.5px;
+            font-weight: 800;
+            line-height: 1.25;
+            letter-spacing: 0.01em;
+            padding: 2px 0 1px;
+        }
+
+        .score-card .score-label {
+            margin-top: 3px;
+            font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.04em;
             text-transform: uppercase;
-            padding: 8px 12px;
-            border-top: 1px solid #dcfce7;
-            border-bottom: 1px solid #dcfce7;
+            color: #64748b;
+        }
+
+        .score-c {
+            background: linear-gradient(180deg, #ecfdf5 0%, #f0fdf4 100%);
+            border-color: #86efac;
+        }
+        .score-c .score-num { color: #166534; }
+
+        .score-nc {
+            background: linear-gradient(180deg, #fef2f2 0%, #fff1f2 100%);
+            border-color: #fca5a5;
+        }
+        .score-nc .score-num { color: #b91c1c; }
+
+        .score-na {
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+            border-color: #cbd5e1;
+        }
+        .score-na .score-num { color: #475569; }
+
+        .score-rate {
+            background: linear-gradient(180deg, #eff6ff 0%, #f0f9ff 100%);
+            border-color: #93c5fd;
+        }
+        .score-rate .score-num { color: #1d4ed8; }
+
+        .score-overall {
+            background: #fff;
+            border-color: #cbd5e1;
+            flex: 1.35;
+        }
+        .score-overall--ok {
+            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+            border-color: #34d399;
+        }
+        .score-overall--ok .score-status { color: #047857; }
+        .score-overall--action {
+            background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+            border-color: #fbbf24;
+        }
+        .score-overall--action .score-status { color: #b45309; }
+        .score-overall--critical {
+            background: linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%);
+            border-color: #f87171;
+        }
+        .score-overall--critical .score-status { color: #991b1b; }
+
+        .tcontent {
+            border: 1px solid #dbe3ec;
+            border-radius: 12px;
+            /* overflow:hidden on multi-page blocks creates blank trailing pages in Chromium PDF */
+            overflow: visible;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .tcontent.tcontent--compliance {
+            border-color: #c7e4d1;
+        }
+
+        .section-head {
+            background: linear-gradient(90deg, #14532d 0%, #166534 70%, #1a7a3c 100%);
+            color: #ffffff;
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 9px 14px;
+            border-top: none;
+            border-bottom: none;
             break-inside: avoid;
             page-break-inside: avoid;
             display: flex;
@@ -138,26 +269,27 @@
 
         .section-head:first-child {
             border-top: none;
+            border-radius: 11px 11px 0 0;
         }
 
         .section-head-meta {
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 700;
             letter-spacing: 0.02em;
             text-transform: none;
-            color: #15803d;
-            background: #ffffff;
-            border: 1px solid #bbf7d0;
+            color: #14532d;
+            background: rgba(255, 255, 255, 0.92);
+            border: none;
             border-radius: 999px;
-            padding: 2px 8px;
+            padding: 3px 9px;
             white-space: nowrap;
         }
 
         .field-row {
             display: flex;
             align-items: stretch;
-            border-bottom: 1px solid #eef2f7;
-            min-height: 32px;
+            border-bottom: 1px solid #e8eef5;
+            min-height: 34px;
             break-inside: avoid;
             page-break-inside: avoid;
         }
@@ -209,24 +341,28 @@
             width: 38%;
             flex-shrink: 0;
             background: #f8fafc;
-            color: #475569;
-            font-size: 12px;
+            color: #334155;
+            font-size: 11.5px;
             font-weight: 600;
-            padding: 8px 12px;
-            border-right: 1px solid #eef2f7;
+            padding: 9px 12px;
+            border-right: 1px solid #e8eef5;
             display: flex;
             align-items: center;
         }
 
         .field-value {
             width: 62%;
-            padding: 8px 12px;
-            color: #111827;
-            font-size: 13px;
+            padding: 9px 12px;
+            color: #0f172a;
+            font-size: 12.5px;
             font-weight: 500;
             display: flex;
             align-items: center;
             word-break: break-word;
+        }
+
+        .tcontent.tcontent--compliance .field-value {
+            font-weight: 600;
         }
 
         .field-value .value-text {
@@ -279,25 +415,61 @@
         }
 
         .pill {
-            display: inline-block;
-            padding: 3px 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
             border-radius: 999px;
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 700;
             letter-spacing: 0.02em;
-            line-height: 1.3;
+            line-height: 1.25;
+            white-space: nowrap;
         }
 
-        .pill-yes {
+        .pill .pill-code {
+            display: inline-block;
+            min-width: 18px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            opacity: 0.9;
+        }
+
+        .pill-yes,
+        .pill-compliant {
             background: #dcfce7;
             color: #166534;
             border: 1px solid #86efac;
+            min-width: 34px;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
         }
 
-        .pill-no {
+        .pill-no,
+        .pill-noncompliant {
             background: #fee2e2;
             color: #991b1b;
             border: 1px solid #fca5a5;
+            min-width: 34px;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+        }
+
+        .pill-na {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            min-width: 34px;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
         }
 
         .pill-select {
@@ -414,6 +586,8 @@
                 <div class="report-date">{{CUR_DATE}}</div>
             </div>
         </div>
+
+        {{SCORECARD}}
 
         <div class="tcontent{{CONTENT_CLASS}}">
             {{CONTENT}}

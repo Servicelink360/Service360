@@ -2574,6 +2574,38 @@ export class PostgresSchemaPatchService implements OnModuleInit {
         );
       `);
       this.logger.log('meeting invites table ensured');
+      await this.dataSource.query(`
+        DO $$
+        DECLARE cname text;
+        BEGIN
+          SELECT con.conname INTO cname
+          FROM pg_constraint con
+          JOIN pg_class rel ON rel.oid = con.conrelid
+          JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+          WHERE nsp.nspname = 'public'
+            AND rel.relname = 'meetings'
+            AND con.contype = 'u'
+            AND pg_get_constraintdef(con.oid) ILIKE '%room_name%'
+          LIMIT 1;
+          IF cname IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE public.meetings DROP CONSTRAINT %I', cname);
+          END IF;
+        END $$;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.meeting_attendance (
+          id SERIAL PRIMARY KEY,
+          meeting_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          left_at TIMESTAMPTZ NULL
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS meeting_attendance_meeting_id_idx
+          ON public.meeting_attendance (meeting_id, joined_at);
+      `);
+      this.logger.log('meeting attendance table ensured');
     } catch (e) {
       this.logger.warn(`meetings patch: ${(e as Error).message}`);
     }

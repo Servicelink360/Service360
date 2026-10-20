@@ -86,10 +86,9 @@ const CameraSaveChoice: React.FC<{
           font-size: 18px !important;
         }
       `}</style>
-      <p className="camera-save-choice__lead">Where should this photo go?</p>
       <div className="camera-save-choice__actions">
         <Button className="camera-save-choice__phone" block disabled={busy} onClick={() => onChoose('phone')}>
-          Save to the phone
+          Use phone camera
         </Button>
         <Button className="camera-save-choice__app" block disabled={busy} onClick={() => onChoose('app')}>
           Save in the app

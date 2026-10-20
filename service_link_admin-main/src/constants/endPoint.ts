@@ -48,6 +48,10 @@ const crmEndPoint = {
     MEETINGS_PEOPLE: 'v1/meetings/people',
     MEETINGS_INVITE: 'v1/meetings/invite',
     MEETINGS_INBOX: 'v1/meetings/inbox',
+    MEETINGS_END: 'v1/meetings/end',
+    MEETINGS_CLEAR: 'v1/meetings/clear',
+    MEETINGS_LEAVE: 'v1/meetings/leave',
+    MEETINGS_HISTORY: 'v1/meetings/history',
     MESSAGES: 'v1/messages',
     /** Multipart upload (must match API UploadController version prefix). */
     UPLOAD_FILE: 'v1/uploadFile',

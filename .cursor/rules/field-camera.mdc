@@ -1,0 +1,26 @@
+---
+description: Do not change how field photos are taken. Stamp order is time, street address, then coordinates underneath.
+globs: service_link_admin-main/src/containers/field-photos/**/*,service_link_admin-main/src/library/helpers/phone-shot.ts,service_link_admin-main/src/library/helpers/stamp-photo.ts,service_link_admin-main/src/library/helpers/field-camera.ts
+alwaysApply: true
+---
+
+# Field camera — do not change how the picture is taken
+
+The shutter already works. When fixing the stamp, location text, or where the photo is stored, leave the capture path alone.
+
+## How the picture is taken
+
+- Both buttons open the in-app camera (`PhoneCamera`). Do not switch **Save in the app** back to `<input type="file" capture>`. That picker shows iOS Retake / Use Photo and drops the photo.
+- The shutter copies the live video frame onto a canvas at the moment of the tap, then the stamp is painted on that frame.
+- **Use phone camera** keeps the file on the phone only (iPhone share sheet, Android download). It does not upload.
+- **Save in the app** uploads that same stamped frame to Service360. It does not use the share sheet.
+
+## Stamp on the image
+
+Top to bottom, in this order only:
+
+1. Sydney time
+2. Street address
+3. Coordinates (`lat, lng`) under the address
+
+Do not put the coordinates above the address. Do not drop the coordinates. Do not stamp placeholder lines such as "Location unavailable".

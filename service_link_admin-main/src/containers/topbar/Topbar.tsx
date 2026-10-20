@@ -74,7 +74,10 @@ export default function Topbar() {
             <button
               type="button"
               className="topbarDashboardBtn"
-              onClick={() => history.push('/dashboard')}
+              onClick={() => {
+                window.dispatchEvent(new Event('service360-home'));
+                if (location.pathname !== '/dashboard') history.push('/dashboard');
+              }}
               aria-label="Home"
               style={topbarDark ? { color: '#ffffff' } : undefined}
             >

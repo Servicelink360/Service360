@@ -1,6 +1,86 @@
 /** Max length for user_task_reports.value when DB column is still varchar(5000). */
 export const USER_TASK_REPORT_VALUE_MAX = 4800;
 
+const COMPLIANCE_TOTAL_FIELDS = {
+  c: 'total compliant',
+  nc: 'total non-compliant',
+  na: 'total not applicable',
+} as const;
+
+export function classifyComplianceResult(value: unknown): 'C' | 'NC' | 'NA' | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  if (/^NC\b/i.test(raw) || /^non[-\s]?compliant\b/i.test(raw)) return 'NC';
+  if (/^NA\b/i.test(raw) || /^n\/?a\b/i.test(raw) || /^not\s+applicable\b/i.test(raw)) return 'NA';
+  if (/^C\b/i.test(raw) || /^compliant\b/i.test(raw)) return 'C';
+  return null;
+}
+
+export function countComplianceResultValues(
+  items: Array<{ name?: string; type?: string; value?: any }>,
+): { c: number; nc: number; na: number; total: number } {
+  let c = 0;
+  let nc = 0;
+  let na = 0;
+  for (const item of items || []) {
+    const type = String(item?.type || '').toUpperCase();
+    if (type !== 'SELECT' && type !== 'DROPDOWN') continue;
+    if (isComplianceTotalFieldName(String(item?.name || ''))) continue;
+    const kind = classifyComplianceResult(item?.value);
+    if (kind === 'C') c += 1;
+    else if (kind === 'NC') nc += 1;
+    else if (kind === 'NA') na += 1;
+  }
+  return { c, nc, na, total: c + nc + na };
+}
+
+function complianceFieldKey(name: string): string {
+  return String(name || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function isComplianceTotalFieldName(name: string): boolean {
+  const n = complianceFieldKey(name);
+  return (
+    n === COMPLIANCE_TOTAL_FIELDS.c ||
+    n === COMPLIANCE_TOTAL_FIELDS.nc ||
+    n === COMPLIANCE_TOTAL_FIELDS.na
+  );
+}
+
+/**
+ * Count C / NC / NA checklist answers and write the totals into
+ * Total compliant / Total non-compliant / Total not applicable.
+ * Used on save and again when building the report PDF.
+ */
+export function applyComplianceResultTotals<T extends { name?: string; type?: string; value?: any }>(
+  items: T[],
+): T[] {
+  if (!Array.isArray(items) || !items.length) return items;
+  let c = 0;
+  let nc = 0;
+  let na = 0;
+  for (const item of items) {
+    const type = String(item?.type || '').toUpperCase();
+    if (type !== 'SELECT' && type !== 'DROPDOWN') continue;
+    if (isComplianceTotalFieldName(String(item?.name || ''))) continue;
+    const kind = classifyComplianceResult(item?.value);
+    if (kind === 'C') c += 1;
+    else if (kind === 'NC') nc += 1;
+    else if (kind === 'NA') na += 1;
+  }
+  if (c + nc + na === 0) return items;
+  return items.map((item) => {
+    const n = complianceFieldKey(String(item?.name || ''));
+    if (n === COMPLIANCE_TOTAL_FIELDS.c) return { ...item, value: String(c) };
+    if (n === COMPLIANCE_TOTAL_FIELDS.nc) return { ...item, value: String(nc) };
+    if (n === COMPLIANCE_TOTAL_FIELDS.na) return { ...item, value: String(na) };
+    return item;
+  });
+}
+
 const MEDIA_FIELD_TYPES = new Set([
   'IMAGES',
   'PHOTOS',

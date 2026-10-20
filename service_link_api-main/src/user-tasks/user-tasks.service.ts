@@ -27,6 +27,7 @@ import { CreateCustomReportsDto } from './dto/create-custom-reports.dto';
 import { buildExceptionResult } from '../helpers/serialize-error-for-client';
 import {
   expandReportItemsForStorage,
+  applyComplianceResultTotals,
   mergeChunkedReportItems,
   ReportItemInput,
 } from './user-task-report-value.util';
@@ -335,7 +336,7 @@ export class UserTasksService {
     site?: { siteName?: string | null; siteAddress?: string | null },
   ): Promise<void> {
     await manager.query(`DELETE FROM public.user_task_reports WHERE user_task_id = $1`, [userTaskId]);
-    let expanded = expandReportItemsForStorage(items || []);
+    let expanded = expandReportItemsForStorage(applyComplianceResultTotals(items || []));
     if (site) {
       const tmp = expanded.map((item) => {
         const nItem = new UserTaskReport();
@@ -602,7 +603,7 @@ export class UserTasksService {
 
     if (body.items) {
       const items = [];
-      for (const item of expandReportItemsForStorage(body.items)) {
+      for (const item of expandReportItemsForStorage(applyComplianceResultTotals(body.items))) {
         const nItem = new UserTaskReport();
         nItem.createdAt = new Date();
         nItem.name = item.name;
@@ -1863,7 +1864,7 @@ export class UserTasksService {
 
       if (body.items) {
         const items = [];
-        for (const item of expandReportItemsForStorage(body.items)) {
+        for (const item of expandReportItemsForStorage(applyComplianceResultTotals(body.items))) {
           const nItem = new UserTaskReport();
           nItem.createdAt = new Date();
           nItem.name = item.name != null ? String(item.name) : '';

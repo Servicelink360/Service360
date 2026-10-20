@@ -202,6 +202,16 @@ const options: option[] = [
 		leftIcon: 'icon-site',
 	},
 	{
+		key: 'team-meeting',
+		label: 'sidebar.teamMeeting',
+		leftIcon: 'icon-site',
+	},
+	{
+		key: 'meeting-history',
+		label: 'sidebar.meetingHistory',
+		leftIcon: 'icon-site',
+	},
+	{
 		key: 'invoices',
 		label: 'sidebar.invoices',
 		leftIcon: 'icon-package',

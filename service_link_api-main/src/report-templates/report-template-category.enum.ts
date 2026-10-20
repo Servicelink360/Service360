@@ -11,7 +11,7 @@ export const DEFAULT_REPORT_TEMPLATE_CATEGORIES: ReportTemplateCategoryOption[] 
   { id: 'WASTE_MANAGEMENT', name: 'Waste Management' },
   { id: 'PUBLIC_AMENITIES', name: 'Public Amenities' },
   { id: 'INSPECTIONS', name: 'Inspections' },
-  { id: 'SAFETY_AUDIT', name: 'Safety Audit' },
+  { id: 'SAFETY_AUDIT', name: 'Audit' },
   { id: 'INCIDENT', name: 'Incident Reports' },
   { id: 'GENERAL', name: 'General' },
 ]

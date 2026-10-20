@@ -11,6 +11,11 @@ import { User } from "../users/entities/user.entity";
 import * as moment from 'moment';
 import { PDFDocument, rgb } from 'pdf-lib'
 import { userType } from '../constants/user';
+import {
+    applyComplianceResultTotals,
+    classifyComplianceResult,
+    countComplianceResultValues,
+} from '../user-tasks/user-task-report-value.util';
 const sharp = require('sharp');
 
 /** Footer / [REPORT_BY]: staff name for field submissions; generic label for admin-portal submissions. */
@@ -820,10 +825,11 @@ function isSafetyAuditPdf(row: any, items: any[]): boolean {
     const name = String(row?.reportTemplate?.name || row?.taskName || '')
         .trim()
         .toLowerCase();
-    if (name.includes('safety audit')) return true;
+    if (name.includes('safety audit') || name.includes('environmental audit')) return true;
     const list = Array.isArray(items) ? items : [];
     const yesNoCount = list.filter((it) => normalizeReportFieldType(it?.type) === 'YES_NO').length;
-    return yesNoCount >= 8 && yesNoCount > list.length * 0.4;
+    if (yesNoCount >= 8 && yesNoCount > list.length * 0.4) return true;
+    return countComplianceResultValues(list).total >= 8;
 }
 
 function countYesNoValues(items: any[]): { yes: number; no: number; blank: number; total: number } {
@@ -852,6 +858,69 @@ function getTitleBarClassForAudit(counts: { yes: number; no: number; total: numb
     return 'title-bar';
 }
 
+function getTitleBarClassForCompliance(counts: { c: number; nc: number; na: number; total: number }): string {
+    if (counts.total <= 0) return 'title-bar';
+    if (counts.nc === 0 && counts.c > 0) return 'title-bar title-bar--severity-low';
+    if (counts.nc >= 5 || counts.nc / counts.total >= 0.3) {
+        return 'title-bar title-bar--severity-high';
+    }
+    if (counts.nc > 0) return 'title-bar title-bar--severity-medium';
+    return 'title-bar';
+}
+
+function findOverallAssessmentLabel(items: any[]): string {
+    for (const it of items || []) {
+        const name = String(it?.name || '').trim().toLowerCase();
+        if (!name.includes('overall assessment')) continue;
+        const value = String(it?.value ?? '').trim();
+        if (value) return value;
+    }
+    return '';
+}
+
+function buildComplianceScorecardHtml(
+    counts: { c: number; nc: number; na: number; total: number },
+    overall: string,
+): string {
+    if (counts.total <= 0) return '';
+    const rate = Math.round((counts.c / counts.total) * 100);
+    const overallLower = overall.toLowerCase();
+    let overallClass = 'score-overall';
+    if (overallLower.includes('satisfactory')) overallClass += ' score-overall--ok';
+    else if (overallLower.includes('critical')) overallClass += ' score-overall--critical';
+    else if (overallLower.includes('action')) overallClass += ' score-overall--action';
+    return `
+      <div class="audit-scorecard-wrap">
+        <div class="audit-legend">
+          <span class="legend-item"><span class="pill pill-compliant">C</span> Compliant</span>
+          <span class="legend-item"><span class="pill pill-noncompliant">NC</span> Non-compliant</span>
+          <span class="legend-item"><span class="pill pill-na">NA</span> Not applicable</span>
+        </div>
+        <div class="audit-scorecard">
+          <div class="score-card score-c">
+            <div class="score-num">${counts.c}</div>
+            <div class="score-label">C · Compliant</div>
+          </div>
+          <div class="score-card score-nc">
+            <div class="score-num">${counts.nc}</div>
+            <div class="score-label">NC · Non-compliant</div>
+          </div>
+          <div class="score-card score-na">
+            <div class="score-num">${counts.na}</div>
+            <div class="score-label">NA · Not applicable</div>
+          </div>
+          <div class="score-card score-rate">
+            <div class="score-num">${rate}%</div>
+            <div class="score-label">Compliance rate</div>
+          </div>
+          <div class="score-card ${overallClass}">
+            <div class="score-status">${escapeHtml(overall || 'Pending')}</div>
+            <div class="score-label">Overall assessment</div>
+          </div>
+        </div>
+      </div>`;
+}
+
 function fieldRow(encName: string, innerHtml: string, opts?: { stack?: boolean }): string {
     const rowClass = opts?.stack ? 'field-row field-row--stack' : 'field-row';
     return `
@@ -878,12 +947,39 @@ function selectValuePill(fieldName: string, val: unknown): string {
     if (!text) return `<span class="value-text muted">—</span>`;
     const lower = text.toLowerCase();
     const nameLower = String(fieldName || '').toLowerCase();
-    if (nameLower.includes('severity')) {
+    const compliance = classifyComplianceResult(text);
+    if (compliance === 'C') {
+        return `<span class="pill pill-compliant" title="Compliant">C</span>`;
+    }
+    if (compliance === 'NC') {
+        return `<span class="pill pill-noncompliant" title="Non-compliant">NC</span>`;
+    }
+    if (compliance === 'NA') {
+        return `<span class="pill pill-na" title="Not applicable">NA</span>`;
+    }
+    if (nameLower.includes('overall assessment')) {
+        if (lower.includes('satisfactory')) {
+            return `<span class="pill pill-severity-low">${escapeHtml(text)}</span>`;
+        }
+        if (lower.includes('critical')) {
+            return `<span class="pill pill-severity-critical">${escapeHtml(text)}</span>`;
+        }
+        if (lower.includes('action')) {
+            return `<span class="pill pill-severity-medium">${escapeHtml(text)}</span>`;
+        }
+    }
+    if (nameLower.includes('severity') || nameLower === 'risk' || nameLower.endsWith(' risk')) {
         if (lower === 'low') return `<span class="pill pill-severity-low">${escapeHtml(text)}</span>`;
         if (lower === 'medium') return `<span class="pill pill-severity-medium">${escapeHtml(text)}</span>`;
         if (lower === 'high' || lower === 'critical') {
             return `<span class="pill pill-severity-high">${escapeHtml(text)}</span>`;
         }
+    }
+    if (nameLower.includes('status')) {
+        if (lower === 'open') return `<span class="pill pill-severity-medium">${escapeHtml(text)}</span>`;
+        if (lower.includes('progress')) return `<span class="pill pill-select">${escapeHtml(text)}</span>`;
+        if (lower === 'closed') return `<span class="pill pill-severity-low">${escapeHtml(text)}</span>`;
+        if (lower.includes('escalat')) return `<span class="pill pill-severity-high">${escapeHtml(text)}</span>`;
     }
     if (nameLower.includes('incident type') || nameLower.includes('type')) {
         return `<span class="pill pill-select">${escapeHtml(text)}</span>`;
@@ -1221,7 +1317,10 @@ async function renderReportField(
 
 async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     normalizePdfTaskSiteFields(row);
-    const newItems = ensurePdfSiteReportItems(row, Array.isArray(rItems) ? rItems : []);
+    const withTotals = applyComplianceResultTotals(
+        Array.isArray(rItems) ? rItems : [],
+    );
+    const newItems = ensurePdfSiteReportItems(row, withTotals);
     if (!row.reports?.length && newItems.length) {
         row.reports = newItems;
     }
@@ -1244,6 +1343,12 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     }
 
     const auditLayout = isSafetyAuditPdf(row, newItems);
+    const complianceCounts = countComplianceResultValues(newItems);
+    const overallAssessment = findOverallAssessmentLabel(newItems);
+    const scorecardHtml =
+        complianceCounts.total > 0
+            ? buildComplianceScorecardHtml(complianceCounts, overallAssessment)
+            : '';
     let content = ``;
     if (newItems.length > 0) {
         const checkNote = newItems.find((c: any) => c.name === 'Note');
@@ -1267,9 +1372,12 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
                     const inSection = newItems.filter(
                         (x: any) => getReportFieldSection(x, row) === section,
                     );
-                    const sc = countYesNoValues(inSection);
-                    if (sc.total > 0) {
-                        sectionMeta = `<span class="section-head-meta">${sc.yes}/${sc.total} Yes</span>`;
+                    const yn = countYesNoValues(inSection);
+                    const cc = countComplianceResultValues(inSection);
+                    if (cc.total > 0) {
+                        sectionMeta = `<span class="section-head-meta">${cc.c} C · ${cc.nc} NC · ${cc.na} NA</span>`;
+                    } else if (yn.total > 0) {
+                        sectionMeta = `<span class="section-head-meta">${yn.yes}/${yn.total} Yes</span>`;
                     }
                 }
                 content += `<div class="section-head"><span>${escapeHtml(section)}</span>${sectionMeta}</div>`;
@@ -1293,21 +1401,34 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
                   ? 'Critical'
                   : '';
     const auditCounts = auditLayout ? countYesNoValues(newItems) : null;
-    const titleBarClass = auditLayout
-        ? getTitleBarClassForAudit(auditCounts!)
-        : getTitleBarClassForSeverity(severityLevel);
+    let titleBarClass = getTitleBarClassForSeverity(severityLevel);
+    if (complianceCounts.total > 0) {
+        titleBarClass = getTitleBarClassForCompliance(complianceCounts);
+    } else if (auditLayout && auditCounts) {
+        titleBarClass = getTitleBarClassForAudit(auditCounts);
+    }
     const metaBadge = severityLabel
         ? `<div class="report-severity">Severity: ${escapeHtml(severityLabel)}</div>`
-        : auditCounts && auditCounts.total > 0
-          ? `<div class="report-severity">${auditCounts.yes} Yes · ${auditCounts.no} No</div>`
-          : '';
+        : complianceCounts.total > 0
+          ? `<div class="report-severity">${complianceCounts.c} C · ${complianceCounts.nc} NC · ${complianceCounts.na} NA</div>`
+          : auditCounts && auditCounts.total > 0
+            ? `<div class="report-severity">${auditCounts.yes} Yes · ${auditCounts.no} No</div>`
+            : '';
+    const contentClass = [
+        auditLayout ? 'tcontent--audit' : '',
+        complianceCounts.total > 0 ? 'tcontent--compliance' : '',
+    ]
+        .filter(Boolean)
+        .map((c) => ` ${c}`)
+        .join('');
 
     html = html.replace('{{TITLE_BAR_CLASS}}', titleBarClass);
     html = html.replace('{{TITLE}}', escapeHtml(title));
     // Header shows date only (time appears in report body fields).
     html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format(REPORT_PDF_DATE_FORMAT)));
     html = html.replace('{{SEVERITY_BADGE}}', metaBadge);
-    html = html.replace('{{CONTENT_CLASS}}', auditLayout ? ' tcontent--audit' : '');
+    html = html.replace('{{SCORECARD}}', scorecardHtml);
+    html = html.replace('{{CONTENT_CLASS}}', contentClass);
     html = html.replace('{{CONTENT}}', content);
 
     return publishReportPdf(html, {
@@ -1480,6 +1601,7 @@ async function convertReportLayoutPdf(input: {
     html = html.replace('{{TITLE}}', escapeHtml(title));
     html = html.replace('{{CUR_DATE}}', escapeHtml(input.dateLabel || ''));
     html = html.replace('{{SEVERITY_BADGE}}', '');
+    html = html.replace('{{SCORECARD}}', '');
     html = html.replace('{{CONTENT_CLASS}}', ' tcontent--monthly');
     html = html.split('{{CONTENT}}').join(input.contentHtml || '');
     return publishReportPdf(html, {

@@ -571,7 +571,7 @@ const Unit: React.FC<ReportTemplatesPageProps> = ({
                                                 placeholder="Select category"
                                                 options={
                                                   isSafetyAuditMode
-                                                    ? [{ label: 'Safety Audit', value: SAFETY_AUDIT_CATEGORY }]
+                                                    ? [{ label: 'Audit', value: SAFETY_AUDIT_CATEGORY }]
                                                     : categoryOptions
                                                         .filter((item) => item.id !== SAFETY_AUDIT_CATEGORY)
                                                         .map(item => ({ label: item.name, value: item.id }))
@@ -619,7 +619,7 @@ const Unit: React.FC<ReportTemplatesPageProps> = ({
                         title={
                             modalType === actionType.ADD
                                 ? isSafetyAuditMode
-                                    ? "Add safety audit template"
+                                    ? "Add audit template"
                                     : "Add new template"
                                 : modalType === actionType.VIEW
                                     ? "View template"
@@ -636,7 +636,7 @@ const Unit: React.FC<ReportTemplatesPageProps> = ({
                         isSuccess={success}
                         categoryOptions={
                           isSafetyAuditMode
-                            ? [{ id: SAFETY_AUDIT_CATEGORY, name: 'Safety Audit' }]
+                            ? [{ id: SAFETY_AUDIT_CATEGORY, name: 'Audit' }]
                             : categoryOptions.filter((item) => item.id !== SAFETY_AUDIT_CATEGORY)
                         }
                         staffOptions={staffOptions}

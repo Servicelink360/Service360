@@ -56,11 +56,24 @@ async function streetAddress(location: string | null) {
   return address || 'Address unavailable';
 }
 
+function formatGeo(location: string | null) {
+  if (!location) return '';
+  const [lat, lng] = location.split(',');
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return '';
+  return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+}
+
 function paintPhotoStamp(ctx: CanvasRenderingContext2D, width: number, height: number, place: string) {
   const fontSize = Math.max(18, Math.round(width * 0.032));
   ctx.font = `700 ${fontSize}px sans-serif`;
   const pad = Math.round(fontSize * 0.7);
-  const lines = [sydneyStamp(), ...wrapLine(ctx, place, width - pad * 2)];
+  const placeLines = String(place || '')
+    .split('\n')
+    .flatMap((part) => wrapLine(ctx, part.trim(), width - pad * 2))
+    .filter(Boolean);
+  const lines = [sydneyStamp(), ...placeLines].slice(0, 6);
   const lineHeight = Math.round(fontSize * 1.28);
   const blockHeight = lineHeight * lines.length;
   let y = height - pad - blockHeight;
@@ -77,9 +90,16 @@ function paintPhotoStamp(ctx: CanvasRenderingContext2D, width: number, height: n
   });
 }
 
-export async function lookupCurrentStreetAddress() {
+export async function lookupCurrentPlace() {
   const gps = await getStaffLocationDetailed();
-  return streetAddress(gps.location);
+  const geo = formatGeo(gps.location);
+  const address = await streetAddress(gps.location);
+  return { address, geo };
+}
+
+export async function lookupCurrentStreetAddress() {
+  const place = await lookupCurrentPlace();
+  return [place.address, place.geo].filter((line) => line && line !== 'Address unavailable').join('\n') || 'Location unavailable';
 }
 
 export { paintPhotoStamp };
@@ -91,10 +111,11 @@ export async function stampPhotoWithPlace(file: File) {
 
 /** Stamped JPEG plus the street address written on it. */
 export async function createStampedPhoto(file: File) {
-  const [place, image] = await Promise.all([
-    getStaffLocationDetailed().then((gps) => streetAddress(gps.location)),
+  const [found, image] = await Promise.all([
+    lookupCurrentPlace(),
     loadImage(file),
   ]);
+  const place = [found.address, found.geo].filter((line) => line && line !== 'Address unavailable').join('\n') || 'Location unavailable';
   const maxEdge = 2000;
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
@@ -110,7 +131,27 @@ export async function createStampedPhoto(file: File) {
   paintPhotoStamp(ctx, width, height, place);
 
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((result) => (result ? resolve(result) : reject(new Error('Could not stamp the photo'))), 'image/jpeg', 0.9);
+    let settled = false;
+    const finish = (result: Blob | null, error?: Error) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      if (result) resolve(result);
+      else reject(error || new Error('Could not stamp the photo'));
+    };
+    const timer = window.setTimeout(() => {
+      try {
+        const data = canvas.toDataURL('image/jpeg', 0.85);
+        const encoded = data.split(',')[1] || '';
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        finish(new Blob([bytes], { type: 'image/jpeg' }));
+      } catch (error) {
+        finish(null, error instanceof Error ? error : new Error('Could not stamp the photo'));
+      }
+    }, 800);
+    canvas.toBlob((result) => finish(result), 'image/jpeg', 0.9);
   });
   const stamped = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
   return { file: stamped, address: place };

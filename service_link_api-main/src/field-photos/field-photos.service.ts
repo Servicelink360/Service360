@@ -49,7 +49,7 @@ export class FieldPhotosService {
     }
     const fileUrl = cleanUrl(body?.fileUrl);
     if (!fileUrl) return { ...errorCode.VALIDATION_ERROR, message: 'Photo could not be saved' };
-    const address = String(body?.address || '').trim().slice(0, 300);
+    const address = String(body?.address || '').trim().slice(0, 500);
     const rows = await this.dataSource.query(
       `INSERT INTO public.field_photos (user_id, file_url, address)
        VALUES ($1, $2, $3)

@@ -315,6 +315,33 @@ const DashboardWarp = styled.div`
   background: #1565c0;
 }
 
+.dashboard-report-badge__circle--meet-alert {
+  animation: meet-button-buzz 0.45s linear infinite, meet-button-color 1.4s linear infinite;
+}
+
+@keyframes meet-button-buzz {
+  0% { transform: rotate(0deg) scale(1); }
+  20% { transform: rotate(-14deg) scale(1.08); }
+  40% { transform: rotate(14deg) scale(1.12); }
+  60% { transform: rotate(-10deg) scale(1.06); }
+  80% { transform: rotate(8deg) scale(1.1); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+@keyframes meet-button-color {
+  0% { background: #1565c0; box-shadow: 0 0 0 0 rgba(21, 101, 192, 0.65); }
+  25% { background: #c62828; box-shadow: 0 0 0 14px rgba(198, 40, 40, 0); }
+  50% { background: #ef6c00; box-shadow: 0 0 0 0 rgba(239, 108, 0, 0.65); }
+  75% { background: #2e7d32; box-shadow: 0 0 0 14px rgba(46, 125, 50, 0); }
+  100% { background: #1565c0; box-shadow: 0 0 0 0 rgba(21, 101, 192, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-report-badge__circle--meet-alert {
+    animation: meet-button-color 1.4s linear infinite;
+  }
+}
+
 .dashboard-faults-badge {
   display: flex;
   flex-direction: column;
