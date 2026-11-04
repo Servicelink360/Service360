@@ -1087,7 +1087,12 @@ export class UserTasksService {
     const inprogressTask = await this.getAllUserTasksByUserId(userInfo, params, true);
     params.status = 's';
     const successTask = await this.getAllUserTasksByUserId(userInfo, params, true);
-    return { pendingTaskCount: pendingTask.data.rows.length, inprogressTaskCount: inprogressTask.data, successTaskCount: successTask.data }
+    const pendingRows = pendingTask?.data?.rows;
+    return {
+      pendingTaskCount: Array.isArray(pendingRows) ? pendingRows.length : 0,
+      inprogressTaskCount: inprogressTask?.data ?? 0,
+      successTaskCount: successTask?.data ?? 0,
+    };
   }
 
   async countTaskbyStatus(userInfo: IUserInfo, status: number) {

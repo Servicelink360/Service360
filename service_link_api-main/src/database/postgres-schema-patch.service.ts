@@ -208,6 +208,15 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     try {
       await this.dataSource.query(`
         ALTER TABLE public.user_tasks
+        ADD COLUMN IF NOT EXISTS media_required integer NOT NULL DEFAULT 2;
+      `);
+    } catch (e) {
+      this.logger.warn(`user_tasks.media_required patch: ${(e as Error).message}`);
+    }
+
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE public.user_tasks
         ALTER COLUMN report_template_id DROP NOT NULL;
       `);
     } catch (e) {

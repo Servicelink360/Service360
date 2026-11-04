@@ -1235,7 +1235,7 @@ export class SitesService {
         .innerJoinAndSelect('sites.items', 'items')
         .innerJoinAndSelect('items.tasks', 'tasks')
         .innerJoinAndSelect('tasks.shifts', 'shifts')
-        .innerJoin('items.service', 'Service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
+        .innerJoin('items.service', 'service').addSelect(['service.id', 'service.name', 'service.frequencyType'])
         .innerJoin('items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
         .leftJoin('customer.customerInfo', 'customerInfo').addSelect(['customerInfo.companyName'])
       if (+siteId) {
