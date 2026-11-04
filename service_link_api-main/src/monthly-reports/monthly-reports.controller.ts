@@ -38,6 +38,8 @@ export class MonthlyReportsController {
     return customHttpCode(res, await this.monthlyReportsService.restoreReport(req.user, body));
   }
 
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @Put('visibility')
   async setVisibility(@Res() res, @Body() body, @Request() req) {
     return customHttpCode(res, await this.monthlyReportsService.setClientVisible(req.user, body));
