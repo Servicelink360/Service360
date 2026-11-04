@@ -98,9 +98,9 @@ export class CommonService {
     const siteCount = await this.sitesService.getCount(userInfo)
     const taskCount = await this.tasksService.getCount(userInfo)
     const currentTask = await this.userTasksService.currentTask(userInfo)
-    const pendingTaskCount = parseFloat(currentTask.pendingTaskCount)
-    const inprogressTaskCount = (currentTask.inprogressTaskCount)
-    const successTaskCount = (currentTask.successTaskCount)
+    const pendingTaskCount = Number(currentTask?.pendingTaskCount ?? 0)
+    const inprogressTaskCount = Number(currentTask?.inprogressTaskCount ?? 0)
+    const successTaskCount = Number(currentTask?.successTaskCount ?? 0)
 
 
     const params = new GetUserTasksByUserDto();
