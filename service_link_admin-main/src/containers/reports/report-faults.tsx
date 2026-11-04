@@ -1,5 +1,6 @@
 ﻿/* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
 import {
+    ArrowLeftOutlined,
     CheckCircleFilled,
     DeleteOutlined,
     EditOutlined,
@@ -590,14 +591,12 @@ const ReportFaults: React.FC = () => {
         setViewFaultOpen(false);
         setViewFaultRow(null);
         const params = new URLSearchParams(location.search);
-        if (params.get('faultId')) {
-            const returnTo = params.get('returnTo');
-            if (returnTo === 'urgent' || returnTo === 'tasks-faults') {
-                setMainFaultTab('urgent');
-                history.replace({ pathname: '/report-faults', search: 'tab=urgent' });
-            } else {
-                history.replace({ pathname: '/report-faults', search: '' });
-            }
+        const returnTo = params.get("returnTo");
+        // Keep faultId (and from=messages) so the list stays on this report only.
+        // Only leave the deep-link when returning to the urgent tab.
+        if (returnTo === "urgent" || returnTo === "tasks-faults") {
+            setMainFaultTab("urgent");
+            history.replace({ pathname: "/report-faults", search: "tab=urgent" });
         }
     }, [history, location.search]);
 
@@ -1880,6 +1879,9 @@ const ReportFaults: React.FC = () => {
         );
     };
 
+    const fromMessages =
+        new URLSearchParams(location.search).get("from") === "messages";
+
     return (
         <Layout title="sidebar.reportFaults">
             {isMobilePortrait ? <ReportsMobileAppShellStyles /> : null}
@@ -1901,6 +1903,31 @@ const ReportFaults: React.FC = () => {
                     showMobileFaultCards ? " report-faults-list-wrap--mobile-portrait" : ""
                 }${faultsPageDark ? " new-reports-page-dark new-reports-theme-dark" : ""}`}
             >
+                {fromMessages && !viewFaultOpen ? (
+                    <button
+                        type="button"
+                        onClick={() => history.push("/messages")}
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            alignSelf: "flex-start",
+                            margin: "0 0 12px",
+                            padding: "8px 12px",
+                            border: "1px solid #d9e8d4",
+                            borderRadius: 8,
+                            background: "#e8f5e3",
+                            color: "#2f6b22",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            lineHeight: 1.2,
+                            cursor: "pointer",
+                        }}
+                    >
+                        <ArrowLeftOutlined style={{ fontSize: 12 }} />
+                        <span>Back to messages</span>
+                    </button>
+                ) : null}
                 {isUrgentReportsTab ? (
                     <TasksFaultsPanel tabsAboveTable={reportFaultMainTabsEl} />
                 ) : (
@@ -2475,6 +2502,9 @@ const ReportFaults: React.FC = () => {
                 }
                 onDelegationSaved={onDelegationSaved}
                 onFaultCompleted={onFaultCompleted}
+                onBackToMessages={
+                    fromMessages ? () => history.push("/messages") : undefined
+                }
             />
         </Layout>
     );

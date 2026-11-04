@@ -1,0 +1,526 @@
+/* Mobile dark shell — plain CSS so it always wins over Ant / styled-components white defaults.
+   Triggers (any of these is enough):
+   - body.app-shell-dark (Dashboard effect)
+   - #main-content.app-content--dark / .dashboard-content--dark (same shellDark flag) */
+
+body.app-shell-dark #main-content,
+body.app-shell-dark .isomorphicContent,
+body.app-shell-dark .isoContentMainLayout,
+#main-content.app-content--dark,
+#main-content.dashboard-content--dark {
+  background: #000000 !important;
+  background-color: #000000 !important;
+}
+
+body.app-shell-dark .isoLayoutContentWrapper,
+body.app-shell-dark .isoExampleWrapper {
+  background: transparent !important;
+}
+
+body.app-shell-dark .isoBoxWrapper,
+#main-content.app-content--dark .isoBoxWrapper,
+#main-content.dashboard-content--dark .isoBoxWrapper {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  border: 1px solid #333333 !important;
+  color: #f0f0f0 !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 20px 60px rgba(0, 0, 0, 0.95) !important;
+}
+
+body.app-shell-dark .isoBoxWrapper,
+body.app-shell-dark .isoBoxWrapper h1,
+body.app-shell-dark .isoBoxWrapper h2,
+body.app-shell-dark .isoBoxWrapper h3,
+body.app-shell-dark .isoBoxWrapper h4,
+body.app-shell-dark .isoBoxWrapper h5,
+body.app-shell-dark .isoBoxWrapper p,
+body.app-shell-dark .isoBoxWrapper label,
+body.app-shell-dark .isoBoxWrapper .ant-form-item-label > label,
+body.app-shell-dark .isoBoxWrapper .ant-form label,
+body.app-shell-dark .isoBoxWrapper .ant-tabs-tab,
+body.app-shell-dark .isoBoxWrapper .ant-tabs-tab-btn,
+body.app-shell-dark .isoBoxWrapper .ant-empty-description,
+body.app-shell-dark .isoBoxWrapper .ant-table,
+body.app-shell-dark .isoBoxWrapper .ant-table-cell,
+#main-content.app-content--dark .isoBoxWrapper,
+#main-content.app-content--dark .isoBoxWrapper .ant-form-item-label > label,
+#main-content.app-content--dark .isoBoxWrapper .ant-tabs-tab-btn,
+#main-content.dashboard-content--dark .isoBoxWrapper .ant-form-item-label > label,
+#main-content.dashboard-content--dark .isoBoxWrapper .ant-tabs-tab-btn {
+  color: #f0f0f0 !important;
+}
+
+/* Do NOT force color on all spans — that washes out Normal/Pending badges */
+
+/* Tables (tickets use plain antd Table — not AntTables.styles) */
+body.app-shell-dark .ant-table-wrapper,
+body.app-shell-dark .ant-table,
+body.app-shell-dark .ant-table-container,
+body.app-shell-dark .ant-table-content,
+body.app-shell-dark .ant-table-header,
+body.app-shell-dark .ant-table-body,
+body.app-shell-dark .ant-table-tbody,
+body.app-shell-dark .ant-spin-nested-loading,
+body.app-shell-dark .ant-spin-container,
+#main-content.app-content--dark .ant-table-wrapper,
+#main-content.app-content--dark .ant-table,
+#main-content.app-content--dark .ant-table-container,
+#main-content.app-content--dark .ant-table-content,
+#main-content.app-content--dark .ant-table-body,
+#main-content.app-content--dark .ant-spin-container,
+#main-content.dashboard-content--dark .ant-table-wrapper,
+#main-content.dashboard-content--dark .ant-table,
+#main-content.dashboard-content--dark .ant-table-container,
+#main-content.dashboard-content--dark .ant-table-body {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-table-thead > tr > th,
+#main-content.app-content--dark .ant-table-thead > tr > th,
+#main-content.dashboard-content--dark .ant-table-thead > tr > th {
+  background: #397d36 !important;
+  color: #ffffff !important;
+  border-bottom-color: #2f5f2c !important;
+}
+
+body.app-shell-dark .ant-table-tbody > tr > td,
+body.app-shell-dark .ant-table-tbody > tr > th,
+body.app-shell-dark .ant-table-placeholder > .ant-table-cell,
+body.app-shell-dark .ant-table-cell,
+#main-content.app-content--dark .ant-table-tbody > tr > td,
+#main-content.app-content--dark .ant-table-cell,
+#main-content.dashboard-content--dark .ant-table-tbody > tr > td,
+#main-content.dashboard-content--dark .ant-table-cell {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  border-bottom-color: #2a2a2a !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-table-tbody > tr:hover > td,
+body.app-shell-dark .ant-table-tbody > tr.ant-table-row:hover > td,
+#main-content.app-content--dark .ant-table-tbody > tr:hover > td,
+#main-content.dashboard-content--dark .ant-table-tbody > tr:hover > td {
+  background: #1c1c1c !important;
+  background-color: #1c1c1c !important;
+}
+
+body.app-shell-dark .ant-table-footer,
+#main-content.app-content--dark .ant-table-footer {
+  background: #1a1a1a !important;
+  color: #f0f0f0 !important;
+}
+
+/* Keyword / form controls — styled Input hard-codes #fff */
+body.app-shell-dark .ant-input,
+body.app-shell-dark input.ant-input,
+body.app-shell-dark .ant-input-affix-wrapper,
+body.app-shell-dark .ant-input-affix-wrapper > input.ant-input,
+body.app-shell-dark .ant-input-affix-wrapper .ant-input,
+body.app-shell-dark .ant-input-group,
+body.app-shell-dark .ant-input-group-addon,
+body.app-shell-dark .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+body.app-shell-dark .ant-picker,
+body.app-shell-dark textarea.ant-input,
+#main-content.app-content--dark .ant-input,
+#main-content.app-content--dark input.ant-input,
+#main-content.app-content--dark .ant-input-affix-wrapper,
+#main-content.app-content--dark .ant-input-affix-wrapper > input.ant-input,
+#main-content.app-content--dark .ant-input-affix-wrapper .ant-input,
+#main-content.app-content--dark .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+#main-content.app-content--dark .ant-picker,
+#main-content.app-content--dark textarea.ant-input,
+#main-content.dashboard-content--dark .ant-input,
+#main-content.dashboard-content--dark .ant-input-affix-wrapper,
+#main-content.dashboard-content--dark .ant-input-affix-wrapper > input.ant-input,
+#main-content.dashboard-content--dark .ant-input-affix-wrapper .ant-input {
+  background: #1a1a1a !important;
+  background-color: #1a1a1a !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
+  box-shadow: none !important;
+}
+
+body.app-shell-dark .ant-input::placeholder,
+body.app-shell-dark input::placeholder,
+body.app-shell-dark textarea::placeholder,
+#main-content.app-content--dark .ant-input::placeholder,
+#main-content.app-content--dark input::placeholder {
+  color: #8c8c8c !important;
+}
+
+body.app-shell-dark .ant-input-clear-icon,
+body.app-shell-dark .ant-select-arrow,
+body.app-shell-dark .ant-input-affix-wrapper .anticon,
+#main-content.app-content--dark .ant-input-clear-icon,
+#main-content.app-content--dark .ant-input-affix-wrapper .anticon {
+  color: #bfbfbf !important;
+}
+
+body.app-shell-dark .ant-tabs-nav::before,
+#main-content.app-content--dark .ant-tabs-nav::before {
+  border-bottom-color: #333333 !important;
+}
+
+body.app-shell-dark .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn,
+#main-content.app-content--dark .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #85c179 !important;
+}
+
+body.app-shell-dark .ant-btn-default:not(.mobile-sidebar-close),
+#main-content.app-content--dark .ant-btn-default:not(.mobile-sidebar-close) {
+  background: #1a1a1a !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .isoBoxWrapper a:not(.ant-btn),
+#main-content.app-content--dark .isoBoxWrapper a:not(.ant-btn) {
+  color: #85c179 !important;
+}
+
+body.app-shell-dark .ant-pagination-item,
+#main-content.app-content--dark .ant-pagination-item {
+  background: #1a1a1a !important;
+  border-color: #444444 !important;
+}
+
+body.app-shell-dark .ant-pagination-item a,
+body.app-shell-dark .ant-pagination-prev .ant-pagination-item-link,
+body.app-shell-dark .ant-pagination-next .ant-pagination-item-link,
+#main-content.app-content--dark .ant-pagination-item a {
+  color: #f0f0f0 !important;
+  background: transparent !important;
+}
+
+body.app-shell-dark .ant-pagination-item-active,
+#main-content.app-content--dark .ant-pagination-item-active {
+  border-color: #4a7c59 !important;
+}
+
+/* Modals / drawers / popovers portal to body — outside #main-content */
+body.app-shell-dark .ant-modal-mask {
+  background: rgba(0, 0, 0, 0.72) !important;
+}
+
+body.app-shell-dark .ant-modal-content {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  color: #f0f0f0 !important;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.85) !important;
+}
+
+body.app-shell-dark .ant-modal-header {
+  background: #121212 !important;
+  border-bottom: 1px solid #333333 !important;
+}
+
+body.app-shell-dark .ant-modal-title,
+body.app-shell-dark .ant-modal-title span,
+body.app-shell-dark .ant-modal-confirm-title,
+body.app-shell-dark .ant-modal-confirm-content {
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-modal-close {
+  top: 12px !important;
+  right: 12px !important;
+  width: 36px !important;
+  height: 36px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: #2a2a2a !important;
+  border: 1px solid #555555 !important;
+  color: #f0f0f0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45) !important;
+}
+
+body.app-shell-dark .ant-modal-close:hover {
+  background: #3a3a3a !important;
+  color: #ffffff !important;
+}
+
+body.app-shell-dark .ant-modal-close-x {
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-modal-close .anticon {
+  color: #f0f0f0 !important;
+  font-size: 14px !important;
+}
+
+/* Also circle the close on light mobile modals inside the shell viewport */
+@media (max-width: 768px) and (orientation: portrait) {
+  .ant-modal-close {
+    top: 12px !important;
+    right: 12px !important;
+    width: 36px !important;
+    height: 36px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: #ffffff !important;
+    border: 1px solid #d9d9d9 !important;
+    color: #333333 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  .ant-modal-close-x {
+    width: 36px !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    font-size: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  body.app-shell-dark .ant-modal-close {
+    background: #2a2a2a !important;
+    border-color: #555555 !important;
+    color: #f0f0f0 !important;
+  }
+}
+
+body.app-shell-dark .ant-modal-body {
+  background: #121212 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-modal-footer {
+  background: #121212 !important;
+  border-top: 1px solid #333333 !important;
+}
+
+body.app-shell-dark .ant-modal-body .ant-form-item-label > label,
+body.app-shell-dark .ant-modal-body label,
+body.app-shell-dark .ant-modal-body .ant-form label,
+body.app-shell-dark .ant-modal-body p {
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-modal-body .ant-input,
+body.app-shell-dark .ant-modal-body input.ant-input,
+body.app-shell-dark .ant-modal-body .ant-input-affix-wrapper,
+body.app-shell-dark .ant-modal-body .ant-input-affix-wrapper > input.ant-input,
+body.app-shell-dark .ant-modal-body .ant-input-affix-wrapper .ant-input,
+body.app-shell-dark .ant-modal-body .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+body.app-shell-dark .ant-modal-body .ant-picker,
+body.app-shell-dark .ant-modal-body textarea.ant-input {
+  background: #1a1a1a !important;
+  background-color: #1a1a1a !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-modal-body .ant-select-selection-placeholder,
+body.app-shell-dark .ant-modal-body .ant-select-selection-item {
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-modal-body .ant-select-arrow,
+body.app-shell-dark .ant-modal-body .ant-input-clear-icon {
+  color: #bfbfbf !important;
+}
+
+body.app-shell-dark .ant-modal-footer .ant-btn-default {
+  background: #1a1a1a !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
+}
+
+/* Select / dropdown menus also portal to body */
+body.app-shell-dark .ant-select-dropdown,
+body.app-shell-dark .ant-select-dropdown .rc-virtual-list {
+  background: #1a1a1a !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-select-item,
+body.app-shell-dark .ant-select-item-option {
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+body.app-shell-dark .ant-select-item-option:hover:not(.ant-select-item-option-disabled) {
+  background: #262626 !important;
+}
+
+body.app-shell-dark .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: #2a3d2e !important;
+  color: #ffffff !important;
+}
+
+body.app-shell-dark .ant-popover-inner,
+body.app-shell-dark .ant-popconfirm-inner-content,
+body.app-shell-dark .ant-popover-message-title {
+  background: #1a1a1a !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-popover-inner-content,
+body.app-shell-dark .ant-popover-message {
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-drawer-content,
+body.app-shell-dark .ant-drawer-header,
+body.app-shell-dark .ant-drawer-body {
+  background: #121212 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-drawer-title,
+body.app-shell-dark .ant-drawer-close {
+  color: #f0f0f0 !important;
+}
+
+/* Mobile nav close — circle always; dark mode uses outlined dark disc + white X */
+.mobile-left-nav-drawer button.mobile-sidebar-close {
+  position: fixed !important;
+  top: 12px !important;
+  right: 12px !important;
+  left: auto !important;
+  z-index: 1101 !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+html[data-color-mode='dark'] .mobile-left-nav-drawer button.mobile-sidebar-close,
+html[data-color-mode='dark'] .mobile-sidebar-close,
+body.app-shell-dark .mobile-left-nav-drawer button.mobile-sidebar-close,
+body.app-shell-dark .mobile-left-nav-drawer .mobile-sidebar-close {
+  background: rgba(0, 0, 0, 0.45) !important;
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  border: 2px solid rgba(255, 255, 255, 0.85) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-color-mode='dark'] .mobile-sidebar-close .anticon,
+body.app-shell-dark .mobile-sidebar-close .anticon {
+  color: #ffffff !important;
+  font-size: 18px !important;
+}
+
+html[data-color-mode='dark'] .mobile-sidebar-close:hover,
+html[data-color-mode='dark'] .mobile-sidebar-close:focus,
+body.app-shell-dark .mobile-sidebar-close:hover,
+body.app-shell-dark .mobile-sidebar-close:focus {
+  background: rgba(0, 0, 0, 0.65) !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+/* Fault / report status + priority badges (were washed out by light Tag + forced white text) */
+body.app-shell-dark .fault-priority-pill--normal,
+#main-content.app-content--dark .fault-priority-pill--normal,
+#main-content.dashboard-content--dark .fault-priority-pill--normal {
+  background: #111a2c !important;
+  border-color: #3c5a99 !important;
+  color: #91caff !important;
+}
+
+body.app-shell-dark .fault-priority-pill--normal .fault-priority-pill__icon,
+body.app-shell-dark .fault-priority-pill--normal .anticon,
+#main-content.app-content--dark .fault-priority-pill--normal .fault-priority-pill__icon,
+#main-content.app-content--dark .fault-priority-pill--normal .anticon {
+  color: #91caff !important;
+}
+
+body.app-shell-dark .fault-priority-pill--urgent,
+#main-content.app-content--dark .fault-priority-pill--urgent,
+#main-content.dashboard-content--dark .fault-priority-pill--urgent {
+  background: #2a1215 !important;
+  border-color: #a61d24 !important;
+  color: #ff7875 !important;
+}
+
+body.app-shell-dark .fault-priority-pill--urgent .fault-priority-pill__icon,
+body.app-shell-dark .fault-priority-pill--urgent .anticon,
+#main-content.app-content--dark .fault-priority-pill--urgent .fault-priority-pill__icon,
+#main-content.app-content--dark .fault-priority-pill--urgent .anticon {
+  color: #ff7875 !important;
+}
+
+body.app-shell-dark .fault-status-tag.ant-tag,
+body.app-shell-dark .ant-tag.fault-status-tag,
+#main-content.app-content--dark .fault-status-tag.ant-tag {
+  border: 1px solid transparent !important;
+  font-weight: 600 !important;
+}
+
+body.app-shell-dark .fault-status-tag--pending.ant-tag,
+body.app-shell-dark .ant-tag-processing.fault-status-tag--pending,
+#main-content.app-content--dark .fault-status-tag--pending.ant-tag {
+  background: #111a2c !important;
+  border-color: #3c5a99 !important;
+  color: #91caff !important;
+}
+
+body.app-shell-dark .fault-status-tag--completed.ant-tag,
+body.app-shell-dark .ant-tag-success.fault-status-tag--completed,
+#main-content.app-content--dark .fault-status-tag--completed.ant-tag {
+  background: #162312 !important;
+  border-color: #3c8618 !important;
+  color: #95de64 !important;
+}
+
+body.app-shell-dark .fault-status-tag--overdue.ant-tag,
+body.app-shell-dark .ant-tag-error.fault-status-tag--overdue,
+#main-content.app-content--dark .fault-status-tag--overdue.ant-tag {
+  background: #2a1215 !important;
+  border-color: #a61d24 !important;
+  color: #ff7875 !important;
+}
+
+/* Generic ant-tag on dark shell (Pending default / processing without our class) */
+body.app-shell-dark .nr-mobile-fault-card .ant-tag,
+body.app-shell-dark .ant-tag-default,
+body.app-shell-dark .ant-tag-processing,
+#main-content.app-content--dark .nr-mobile-fault-card .ant-tag,
+#main-content.app-content--dark .ant-tag-processing {
+  background: #111a2c !important;
+  border-color: #3c5a99 !important;
+  color: #91caff !important;
+}
+
+body.app-shell-dark .nr-mobile-fault-card .ant-tag-success,
+#main-content.app-content--dark .nr-mobile-fault-card .ant-tag-success {
+  background: #162312 !important;
+  border-color: #3c8618 !important;
+  color: #95de64 !important;
+}
+
+body.app-shell-dark .nr-mobile-fault-card .ant-tag-error,
+body.app-shell-dark .nr-mobile-fault-card .ant-tag-red,
+#main-content.app-content--dark .nr-mobile-fault-card .ant-tag-error {
+  background: #2a1215 !important;
+  border-color: #a61d24 !important;
+  color: #ff7875 !important;
+}

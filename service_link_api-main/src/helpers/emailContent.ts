@@ -36,13 +36,15 @@ export const emailTaskAssignedHtml = (opts: {
   customerName?: string;
   startAt?: string;
   endAt?: string;
-  linkPath?: 'task-today' | 'user-task-today';
+  linkPath?: 'task-today' | 'user-task-today' | 'my-tasks';
   taskTodayStatus?: string;
 }): string => {
   const link =
     opts.linkPath === 'task-today'
       ? emailTaskTodayUrl(opts.taskTodayStatus ?? 'p')
-      : emailUserTaskTodayUrl();
+      : opts.linkPath === 'user-task-today'
+        ? emailUserTaskTodayUrl()
+        : emailMyTasksUrl();
   const lines = [
     `<p>Hello ${opts.fullName},</p>`,
     `<p>New task has been assigned to you</p>`,

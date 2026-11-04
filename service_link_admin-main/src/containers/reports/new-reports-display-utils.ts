@@ -187,6 +187,7 @@ export function formatMobileReportCardTitle(row: any): string {
   return `${base} ${m.format("D MMM")} ${m.format("HH:mm")}`;
 }
 
+/** Admin New Reports list column — staff person name (or Admin). */
 export function formatSubmittedByRow(row: any): string {
   const staffName = String(row?.staff?.fullName || row?.staff?.username || "").trim();
   const creatorType = row?.createdUser?.type != null ? +row.createdUser.type : 0;
@@ -197,6 +198,18 @@ export function formatSubmittedByRow(row: any): string {
     return "Admin";
   }
   return staffName || EM_DASH;
+}
+
+/** View modal / PDF-style label: always Usr-{id}. */
+export function formatSubmittedByUserCode(row: any): string {
+  const staffId = row?.staffId != null ? +row.staffId : +(row?.staff?.id || 0);
+  if (Number.isFinite(staffId) && staffId > 0) return `Usr-${staffId}`;
+  const createdBy =
+    row?.createdBy != null
+      ? +row.createdBy
+      : +(row?.createdUser?.id || row?.user?.id || 0);
+  if (Number.isFinite(createdBy) && createdBy > 0) return `Usr-${createdBy}`;
+  return EM_DASH;
 }
 
 export function formatCustomerDisplayName(row: any): string {

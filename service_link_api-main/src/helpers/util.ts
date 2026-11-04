@@ -8,7 +8,8 @@ import { errorCode } from "../constants/errorCode";
 import { redisKey } from "../constants/redisKey";
 import { IErrorData } from "../interfaces/IErrorData";
 import { User } from "../users/entities/user.entity";
-import * as moment from 'moment';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const moment = require('moment');
 import { PDFDocument, rgb } from 'pdf-lib'
 import { userType } from '../constants/user';
 import {
@@ -18,22 +19,19 @@ import {
 } from '../user-tasks/user-task-report-value.util';
 const sharp = require('sharp');
 
-/** Footer / [REPORT_BY]: staff name for field submissions; generic label for admin-portal submissions. */
-const REPORT_PDF_ADMIN_SUBMITTED_LABEL = 'Admin';
-
-function isAdminSubmittedReport(row: any): boolean {
-    const creatorType = row?.createdUser?.type != null ? +row.createdUser.type : 0;
-    if (creatorType === userType.ADMIN) return true;
-    const createdBy = row?.createdBy != null ? +row.createdBy : 0;
-    const staffId = row?.staffId != null ? +row.staffId : 0;
-    return createdBy > 0 && staffId > 0 && createdBy !== staffId;
+/** Footer / [REPORT_BY]: always Usr-{id} — never a person name or "Admin". */
+function staffUserLabelFromId(id: unknown): string {
+    const n = id != null ? +id : 0;
+    return Number.isFinite(n) && n > 0 ? `Usr-${n}` : '';
 }
 
 function getReportPdfSubmittedByLabel(row: any): string {
-    if (isAdminSubmittedReport(row)) return REPORT_PDF_ADMIN_SUBMITTED_LABEL;
-    const staffName = String(row?.staff?.fullName || row?.staff?.username || '').trim();
-    if (staffName) return staffName;
-    return String(row?.user?.fullName || row?.user?.username || '').trim();
+    // Prefer the staff the report is for; otherwise the user who created it.
+    const fromStaff = staffUserLabelFromId(row?.staffId ?? row?.staff?.id);
+    if (fromStaff) return fromStaff;
+    const fromCreator = staffUserLabelFromId(row?.createdBy ?? row?.createdUser?.id ?? row?.user?.id);
+    if (fromCreator) return fromCreator;
+    return 'Usr-0';
 }
 
 /** Australian Eastern — matches admin list/modal display (report-faults, attendance). */
@@ -665,12 +663,42 @@ function parseReportMediaList(v: unknown): string[] {
     try {
         const p = JSON.parse(s);
         if (Array.isArray(p)) return p.map(String).map((x) => x.trim()).filter(Boolean);
+        if (p && typeof p === 'object') {
+            const before = Array.isArray((p as any).before)
+                ? (p as any).before.map(String).map((x: string) => x.trim()).filter(Boolean)
+                : [];
+            const after = Array.isArray((p as any).after)
+                ? (p as any).after.map(String).map((x: string) => x.trim()).filter(Boolean)
+                : [];
+            if (before.length || after.length || 'before' in (p as object) || 'after' in (p as object)) {
+                return [...before, ...after];
+            }
+        }
         if (typeof p === 'string' && p.trim()) return [p.trim()];
     } catch {
         if (/^https?:\/\//i.test(s) || s.startsWith('/') || /^data:image\//i.test(s)) return [s];
         return s.split(/[,|;\n\r]+/).map((x) => x.trim()).filter(Boolean);
     }
     return [];
+}
+
+function parseBeforeAfterReportMedia(v: unknown): { before: string[]; after: string[] } | null {
+    if (v == null || v === '') return null;
+    try {
+        const p = typeof v === 'string' ? JSON.parse(v) : v;
+        if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+        if (!('before' in p) && !('after' in p)) return null;
+        return {
+            before: Array.isArray((p as any).before)
+                ? (p as any).before.map(String).map((x: string) => x.trim()).filter(Boolean)
+                : [],
+            after: Array.isArray((p as any).after)
+                ? (p as any).after.map(String).map((x: string) => x.trim()).filter(Boolean)
+                : [],
+        };
+    } catch {
+        return null;
+    }
 }
 
 function resolveReportPdfTemplatePath(): string {
@@ -1046,7 +1074,12 @@ function isPdfSiteAddressItem(it: any): boolean {
     return t === '[SITE_ADDRESS]' || n === 'site address';
 }
 
-/** Ensure Site Name / Site Address appear near the top of every report PDF. */
+function isPdfDescriptionItem(it: any): boolean {
+    const n = String(it?.name || '').trim().toLowerCase().replace(/:$/, '');
+    return n === 'description' || n === 'task description';
+}
+
+/** Ensure Site Name / Site Address (and task Description) appear near the top of every report PDF. */
 function ensurePdfSiteReportItems(row: any, items: any[]): any[] {
     const list = Array.isArray(items) ? [...items] : [];
     const templateItems = Array.isArray(row?.reportTemplate?.items)
@@ -1055,6 +1088,7 @@ function ensurePdfSiteReportItems(row: any, items: any[]): any[] {
 
     const hasName = list.some(isPdfSiteNameItem);
     const hasAddress = list.some(isPdfSiteAddressItem);
+    const hasDescription = list.some(isPdfDescriptionItem);
 
     const templateName = templateItems.find(isPdfSiteNameItem);
     const templateAddress = templateItems.find(isPdfSiteAddressItem);
@@ -1064,6 +1098,7 @@ function ensurePdfSiteReportItems(row: any, items: any[]): any[] {
         row,
         list.find(isPdfSiteAddressItem) || templateAddress,
     );
+    const description = String(row?.description || '').trim();
 
     const inject: any[] = [];
     if (!hasName) {
@@ -1094,6 +1129,14 @@ function ensurePdfSiteReportItems(row: any, items: any[]): any[] {
             }
         }
     }
+    if (!hasDescription && description) {
+        inject.push({
+            name: 'Description',
+            type: 'TEXTAREA',
+            value: description,
+            order: -18,
+        });
+    }
 
     if (!inject.length) return list;
     return [...inject, ...list].sort(
@@ -1101,8 +1144,7 @@ function ensurePdfSiteReportItems(row: any, items: any[]): any[] {
     );
 }
 
-async function buildImagesBlock(fieldName: string, value: unknown): Promise<string> {
-    const urls = parseReportMediaList(value);
+async function buildImagesGalleryHtml(urls: string[]): Promise<{ parts: string[]; html: string }> {
     const parts: string[] = [];
     for (const src of urls) {
         try {
@@ -1118,12 +1160,58 @@ async function buildImagesBlock(fieldName: string, value: unknown): Promise<stri
             );
         }
     }
+    return {
+        parts,
+        html: parts.length ? `<div class="images">${parts.join('')}</div>` : '',
+    };
+}
+
+/** Normalize stored before/after photo field titles for PDF (Before Photos first). */
+function normalizeBeforeAfterPhotoLabel(fieldName: string): string {
+    const n = String(fieldName || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\u2013\u2014\u2212]/g, '-')
+        .replace(/\s+/g, ' ');
+    if (/(^|[-\s])before(\s+photos?)?$/.test(n) || n.endsWith('- before') || n.endsWith('— before')) {
+        return 'Before Photos';
+    }
+    if (/(^|[-\s])after(\s+photos?)?$/.test(n) || n.endsWith('- after') || n.endsWith('— after')) {
+        return 'After Photos';
+    }
+    if (/before\s*(and|&|\+)\s*after/.test(n)) {
+        return 'Before and After Photos';
+    }
+    return String(fieldName || '').trim() || 'Photos';
+}
+
+async function buildImagesBlock(fieldName: string, value: unknown): Promise<string> {
+    const split = parseBeforeAfterReportMedia(value);
+    if (split) {
+        // Always Before Photos first, then After Photos — never "… - After" under the parent title.
+        const before = await buildImagesGalleryHtml(split.before);
+        const after = await buildImagesGalleryHtml(split.after);
+        return `
+          <div class="field-row">
+            <div class="field-label">Before Photos</div>
+            <div class="field-value"><span class="value-text muted">${before.parts.length ? '' : 'No images'}</span></div>
+          </div>
+          ${before.html}
+          <div class="field-row">
+            <div class="field-label">After Photos</div>
+            <div class="field-value"><span class="value-text muted">${after.parts.length ? '' : 'No images'}</span></div>
+          </div>
+          ${after.html}`;
+    }
+    const urls = parseReportMediaList(value);
+    const gallery = await buildImagesGalleryHtml(urls);
+    const label = normalizeBeforeAfterPhotoLabel(fieldName);
     return `
           <div class="field-row">
-            <div class="field-label">${escapeHtml(fieldName)}</div>
-            <div class="field-value"><span class="value-text muted">${parts.length ? '' : 'No images'}</span></div>
+            <div class="field-label">${escapeHtml(label)}</div>
+            <div class="field-value"><span class="value-text muted">${gallery.parts.length ? '' : 'No images'}</span></div>
           </div>
-          ${parts.length ? `<div class="images">${parts.join('')}</div>` : ''}`;
+          ${gallery.html}`;
 }
 
 async function renderReportField(
@@ -1315,12 +1403,28 @@ async function renderReportField(
     return '';
 }
 
-async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
+function beforeAfterPhotoSortKey(name: unknown): number {
+    const label = normalizeBeforeAfterPhotoLabel(String(name || ''));
+    if (label === 'Before Photos') return 0;
+    if (label === 'After Photos') return 1;
+    return 2;
+}
+
+async function convertHtmlToPdf(
+    row: any,
+    rItems: any,
+    rowNumber: number,
+    options?: { asBuffer?: boolean },
+): Promise<any> {
     normalizePdfTaskSiteFields(row);
     const withTotals = applyComplianceResultTotals(
         Array.isArray(rItems) ? rItems : [],
     );
-    const newItems = ensurePdfSiteReportItems(row, withTotals);
+    const newItems = ensurePdfSiteReportItems(row, withTotals).slice().sort((a: any, b: any) => {
+        const byOrder = (+a?.order || 0) - (+b?.order || 0);
+        if (byOrder !== 0) return byOrder;
+        return beforeAfterPhotoSortKey(a?.name) - beforeAfterPhotoSortKey(b?.name);
+    });
     if (!row.reports?.length && newItems.length) {
         row.reports = newItems;
     }
@@ -1387,7 +1491,11 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
         }
     }
 
-    const title = row?.reportTemplate?.name ?? 'Report';
+    const title =
+        row?.reportTemplate?.name ||
+        (row?.type && String(row.type).toUpperCase() !== 'CUSTOM'
+            ? 'Completed task report'
+            : 'Report');
     const reportWhen = getReportPdfReferenceMoment(row, newItems);
     const severityLevel = getReportSeverityLevel(newItems);
     const severityLabel =
@@ -1431,18 +1539,23 @@ async function convertHtmlToPdf(row: any, rItems: any, rowNumber: number) {
     html = html.replace('{{CONTENT_CLASS}}', contentClass);
     html = html.replace('{{CONTENT}}', content);
 
-    return publishReportPdf(html, {
-        title,
-        submittedBy: getReportPdfSubmittedByLabel(row),
-        submittedStamp: formatReportPdfSubmittedStamp(row, newItems),
-        rowNumber,
-    });
+    return publishReportPdf(
+        html,
+        {
+            title,
+            submittedBy: getReportPdfSubmittedByLabel(row),
+            submittedStamp: formatReportPdfSubmittedStamp(row, newItems),
+            rowNumber,
+        },
+        options,
+    );
 }
 
 async function publishReportPdf(
     html: string,
     meta: { title: string; submittedBy: string; submittedStamp: string; rowNumber: string | number },
-) {
+    options?: { asBuffer?: boolean },
+): Promise<any> {
     const isWindows = process.platform === 'win32';
     const execPath =
         process.env.PUPPETEER_EXECUTABLE_PATH?.trim() ||
@@ -1515,10 +1628,31 @@ async function publishReportPdf(
     const pdfDoc = await PDFDocument.load(documentAsBytes);
     // A4 ~842pt tall; usable content ~842 - top/bottom margins (~86pt) ≈ 756pt ≈ 1008px @ 96dpi.
     const approxContentPxPerPage = 980;
-    const expectedPages = Math.max(1, Math.ceil(contentHeightPx / approxContentPxPerPage));
-    console.log('pdf pages before trim', pdfDoc.getPageCount(), 'contentHeightPx', contentHeightPx, 'expected', expectedPages);
-    while (pdfDoc.getPageCount() > expectedPages && pdfDoc.getPageCount() > 1) {
-        pdfDoc.removePage(pdfDoc.getPageCount() - 1);
+    const expectedFromHeight = Math.max(1, Math.ceil(contentHeightPx / approxContentPxPerPage));
+    // CSS page-break-before / break-before:page creates extra print pages that scrollHeight
+    // does not account for. Height-only trim was dropping sections 3–5 from monthly PDFs.
+    const forcedBreaks = (html.match(/page-break-before\s*:\s*always|break-before\s*:\s*page/gi) || []).length;
+    const expectedPages = Math.max(expectedFromHeight, forcedBreaks > 0 ? forcedBreaks + 1 : 1);
+    console.log(
+        'pdf pages before trim',
+        pdfDoc.getPageCount(),
+        'contentHeightPx',
+        contentHeightPx,
+        'expectedFromHeight',
+        expectedFromHeight,
+        'forcedBreaks',
+        forcedBreaks,
+        'expected',
+        expectedPages,
+    );
+    if (forcedBreaks === 0) {
+        while (pdfDoc.getPageCount() > expectedPages && pdfDoc.getPageCount() > 1) {
+            pdfDoc.removePage(pdfDoc.getPageCount() - 1);
+        }
+    } else {
+        // Keep every Chromium page — height estimates under-count CSS page breaks and were
+        // cutting monthly reports off after section 2.
+        console.log('pdf skip height trim (forced page breaks present)');
     }
     const numberOfPages = pdfDoc.getPageCount();
     console.log('pdf pages after trim', numberOfPages);
@@ -1554,6 +1688,12 @@ async function publishReportPdf(
 
     const pdfBytes = await pdfDoc.save();
     const finalBuffer = Buffer.from(pdfBytes);
+
+    // On-demand download: return bytes only — do not store/upload to AWS.
+    if (options?.asBuffer) {
+        await fs.promises.unlink(localPdfPath).catch(() => undefined);
+        return finalBuffer;
+    }
 
     if (shouldUploadReportPdfsToS3()) {
         try {

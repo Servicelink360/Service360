@@ -539,16 +539,20 @@ export class MonthlyReportsService {
        LIMIT 500`,
       [ids, start, end],
     );
-    return rows.map((row: any) => ({
-      id: +row.id,
-      date: row.created_at,
-      site: row.site_name || '',
-      service: row.service_name || '',
-      title: row.subject || row.issue || 'Fault',
-      detail: stripHtml(row.issue),
-      priority: +row.priority === 1 ? 'Urgent' : 'Normal',
-      status: faultStatus(+row.status),
-    }));
+    return rows.map((row: any) => {
+      const created = row.created_at ? new Date(row.created_at) : null;
+      return {
+        id: +row.id,
+        // ISO date reported — client formats as DD/MM/YYYY for the feedback table.
+        date: created && !Number.isNaN(created.getTime()) ? created.toISOString() : row.created_at,
+        site: row.site_name || '',
+        service: row.service_name || '',
+        title: row.subject || row.issue || 'Fault',
+        detail: stripHtml(row.issue),
+        priority: +row.priority === 1 ? 'Urgent' : 'Normal',
+        status: faultStatus(+row.status),
+      };
+    });
   }
 
   private async countFaults(ids: number[], start: string, end: string) {
@@ -909,15 +913,15 @@ function pdfProse(title: string, value: unknown) {
   return `<div class="mp-prose"><h3>${pdfText(title)}</h3><p>${pdfText(pdfNil(value))}</p></div>`;
 }
 
-function pdfSection(title: string, body: string) {
-  return `<section class="mp-sec"><h2>${pdfText(title)}</h2>${body}</section>`;
+function pdfSection(title: string, body: string, id = '') {
+  const anchor = id ? ` id="${id}"` : '';
+  return `<section class="mp-sec"${anchor}><h2>${pdfText(title)}</h2>${body}</section>`;
 }
 
 function pdfMark(value: unknown) {
   const text = String(value ?? '').trim();
   if (!text) return '<span class="mp-muted">—</span>';
-  const yes = /^y/i.test(text);
-  return `<span class="pill ${yes ? 'pill-yes' : 'pill-no'}">${pdfText(text)}</span>`;
+  return pdfText(text);
 }
 
 const CHART_COLORS = ['#0f5c3f', '#147a54', '#3b82f6', '#6366f1', '#f59e0b', '#dc2626'];
@@ -964,6 +968,100 @@ function weeklyChartSvg(rows: { week: string; jobs: number; faults: number; tick
   return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Weekly volume">${parts.join('')}</svg><div class="mp-legend">${legend}</div>`;
 }
 
+function wrapChartLabel(text: string, maxChars = 14): string[] {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [''];
+  const lines: string[] = [];
+  let current = '';
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxChars) {
+      current = next;
+      return;
+    }
+    if (current) lines.push(current);
+    current = word.length > maxChars ? `${word.slice(0, maxChars - 1)}…` : word;
+  });
+  if (current) lines.push(current);
+  return lines.slice(0, 3);
+}
+
+/** Grouped bars: Schedule vs Completed by site group (Innerwest-style KPI chart). */
+function inspectionChartSvg(
+  rows: { group: string; schedule: number; completed: number }[],
+  title: string,
+) {
+  const data = rows.filter((row) => row.group || row.schedule || row.completed);
+  if (!data.length) return '';
+  const series = [
+    { key: 'schedule' as const, color: '#166534', name: 'Schedule for this month' },
+    { key: 'completed' as const, color: '#86efac', name: 'Completed' },
+  ];
+  const maxRaw = Math.max(1, ...data.flatMap((row) => [row.schedule, row.completed]));
+  const max = maxRaw <= 4 ? 4 : Math.ceil(maxRaw / 4) * 4;
+  const n = data.length;
+  const width = n <= 2 ? 420 : n <= 4 ? 500 : 560;
+  const height = 278;
+  const padL = 44;
+  const padB = 68;
+  const padT = 22;
+  const padR = 16;
+  const plotW = width - padL - padR;
+  const plotH = height - padT - padB;
+  const usable = n <= 2 ? plotW * 0.55 : plotW;
+  const offsetX = n <= 2 ? padL + (plotW - usable) / 2 : padL;
+  const groupW = usable / n;
+  const barW = Math.max(14, Math.min(36, (groupW - 20) / 2));
+  const gap = 6;
+  const parts: string[] = [];
+  for (let step = 0; step <= 4; step += 1) {
+    const y = padT + plotH - (plotH * step) / 4;
+    const label = String(Math.round((max * step) / 4));
+    parts.push(
+      `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${width - padR}" y2="${y.toFixed(1)}" stroke="#e8f0eb" stroke-width="1"/>`,
+    );
+    parts.push(
+      `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="12" fill="#6b7280">${label}</text>`,
+    );
+  }
+  parts.push(
+    `<text x="12" y="${(padT + plotH / 2).toFixed(1)}" text-anchor="middle" font-size="11" fill="#6b7280" transform="rotate(-90 12 ${(padT + plotH / 2).toFixed(1)})">Schedule reports</text>`,
+  );
+  data.forEach((row, index) => {
+    const gx = offsetX + index * groupW + (groupW - barW * 2 - gap) / 2;
+    series.forEach((item, seriesIndex) => {
+      const value = row[item.key];
+      const h = (value / max) * plotH;
+      const x = gx + seriesIndex * (barW + gap);
+      const y = padT + plotH - h;
+      parts.push(
+        `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, value ? 3 : 0).toFixed(1)}" rx="4" fill="${item.color}"/>`,
+      );
+      if (value > 0) {
+        parts.push(
+          `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f241c">${value}</text>`,
+        );
+      }
+    });
+    const pct = row.schedule > 0 ? Math.round((row.completed / row.schedule) * 100) : row.completed > 0 ? 100 : 0;
+    const midX = offsetX + index * groupW + groupW / 2;
+    const topY = padT + plotH - (Math.max(row.schedule, row.completed) / max) * plotH;
+    parts.push(
+      `<text x="${midX.toFixed(1)}" y="${(topY - 18).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#166534">${pct}%</text>`,
+    );
+    const lines = wrapChartLabel(row.group, n <= 2 ? 18 : n <= 4 ? 14 : 12);
+    lines.forEach((line, lineIndex) => {
+      parts.push(
+        `<text x="${midX.toFixed(1)}" y="${(height - 44 + lineIndex * 13).toFixed(1)}" text-anchor="middle" font-size="12" fill="#374151">${pdfText(line)}</text>`,
+      );
+    });
+  });
+  const legend = series
+    .map((item) => `<span class="mp-key"><i style="background:${item.color}"></i>${item.name}</span>`)
+    .join('');
+  return `<div class="mp-inspect-chart"><div class="mp-inspect-chart-head"><strong>${pdfText(title)}</strong><span>Schedule vs completed by site group</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${pdfText(title)}">${parts.join('')}</svg><div class="mp-legend">${legend}</div></div>`;
+}
+
 function serviceChartSvg(rows: { name: string; value: number }[]) {
   const slices = rows.filter((row) => row.value > 0);
   if (!slices.length) return '<p class="mp-nil">No service totals recorded.</p>';
@@ -998,8 +1096,7 @@ function serviceChartSvg(rows: { name: string; value: number }[]) {
   paths.push(`<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f5c3f">${total}</text>`);
   paths.push(`<text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="13" fill="#6b7280">jobs</text>`);
   const legend = slices.map((row, index) => {
-    const pct = Math.round((row.value / total) * 100);
-    return `<div class="mp-slice"><i style="background:${CHART_COLORS[index % CHART_COLORS.length]}"></i><span>${pdfText(row.name)}</span><b>${row.value}</b><em>${pct}%</em></div>`;
+    return `<div class="mp-slice"><i style="background:${CHART_COLORS[index % CHART_COLORS.length]}"></i><span>${pdfText(row.name)}</span><b>${row.value}</b></div>`;
   }).join('');
   return `<div class="mp-donut"><svg viewBox="0 0 156 156" role="img" aria-label="Work by service">${paths.join('')}</svg><div class="mp-slices">${legend}</div></div>`;
 }
@@ -1031,26 +1128,79 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
 
   const streamHtml = streams.map((stream) => {
     const summary = asRows(stream.summary);
-    return `<div class="mp-stream"><h3>${pdfText(String(stream.heading || 'Service'))}</h3>${
-      String(stream.note || '').trim() ? `<p class="mp-note">${pdfText(String(stream.note))}</p>` : ''
-    }${pdfTable(
-      ['Site group', 'Work', 'Schedule', 'Completed', 'Comments'],
+    const visits = asRows(stream.visits);
+    const showQuality = stream.showQuality === true || stream.showQuality === 'true';
+    const periodHint = String(summary[0]?.month || draft.periodLabel || '').trim();
+    const chartTitleBase = String(stream.detailHeading || stream.heading || 'Site inspections').trim();
+    const chartTitle = periodHint
+      ? `${chartTitleBase} – Overall Result (${periodHint})`
+      : `${chartTitleBase} – Overall Result`;
+    const chartRows = summary.map((row) => ({
+      group: String(row.group || 'Sites'),
+      schedule: pdfNum(row.schedule),
+      completed: pdfNum(row.completed),
+    }));
+    const summaryTable = pdfTable(
+      ['Month', 'Site', 'Description', 'Schedule for this month', 'Completed', 'Comments'],
       summary.map((row) => [
+        String(row.month || ''),
         String(row.group || ''),
         String(row.description || ''),
         String(row.schedule || ''),
         String(row.completed || ''),
         String(row.comments || ''),
       ]),
-      [2, 3],
-    )}</div>`;
+      [3, 4],
+    );
+    const visitTable = visits.length
+      ? pdfTable(
+          showQuality
+            ? ['Sites', 'Date of Inspection', 'Cleaning Quality(%)', 'Comments']
+            : ['Sites', 'Date of Service', 'Comments'],
+          visits.map((row) =>
+            showQuality
+              ? [
+                  String(row.site || ''),
+                  String(row.dates || row.date || ''),
+                  String(row.quality || ''),
+                  String(row.comments || ''),
+                ]
+              : [
+                  String(row.site || ''),
+                  String(row.dates || row.date || ''),
+                  String(row.comments || ''),
+                ],
+          ),
+          showQuality ? [2] : [],
+        )
+      : '';
+    const detailHead = String(stream.detailHeading || '').trim();
+    const detailNote = String(stream.detailNote || '').trim();
+    const chartHtml = inspectionChartSvg(chartRows, chartTitle);
+    return `<div class="mp-stream"><h3>${pdfText(String(stream.heading || 'Service'))}</h3>${
+      String(stream.note || '').trim() ? `<p class="mp-note">${pdfText(String(stream.note))}</p>` : ''
+    }${summaryTable}${chartHtml}${
+      detailHead || visitTable
+        ? `${detailHead ? `<h3>${pdfText(detailHead)}</h3>` : ''}${
+            detailNote ? `<p class="mp-note">${pdfText(detailNote)}</p>` : ''
+          }${visitTable}`
+        : ''
+    }</div>`;
   }).join('');
 
   return `<style>
     .tcontent--monthly { border: none; background: transparent; }
     .mp, .mp p, .mp td, .mp th, .mp h2, .mp h3, .mp span, .mp strong, .mp b, .mp em, .mp .pill { font-size: 13px; line-height: 1.45; }
     .mp { color: #1f2937; }
-    .mp-kpis { display: flex; gap: 8px; margin-bottom: 14px; }
+    .mp-toc { margin: 0 0 14px; padding: 10px 12px; border: 1px solid #d1fae5; border-radius: 10px; background: #f0fdf4; break-inside: avoid; page-break-inside: avoid; }
+    .mp-toc h2 { margin: 0 0 8px; padding: 7px 10px; background: #166534; color: #fff; border-radius: 8px; font-weight: 700; }
+    .mp-toc-row { display: flex; align-items: baseline; gap: 6px; margin: 0 0 3px; font-weight: 700; color: #0f241c; }
+    .mp-toc-row.sub { padding-left: 14px; font-weight: 400; color: #4d6359; }
+    .mp-toc-row a { color: inherit; text-decoration: none; }
+    .mp-toc-row a:hover { color: #166534; text-decoration: underline; }
+    .mp-toc-row i { flex: 1; min-width: 16px; border-bottom: 1px dotted #9ca3af; }
+    .mp-toc-row b { flex: 0 0 auto; font-weight: 700; color: #166534; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .mp-kpis { display: flex; gap: 8px; margin: 10px 0 0; }
     .mp-kpi { flex: 1; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 10px 12px; }
     .mp-kpi-v { font-weight: 700; color: #166534; line-height: 1.2; }
     .mp-kpi-l { margin-top: 2px; font-weight: 700; color: #4d6359; }
@@ -1058,7 +1208,8 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     .mp-identity div { flex: 1; }
     .mp-identity span { display: block; font-weight: 700; color: #6b7280; }
     .mp-identity strong { display: block; margin-top: 2px; font-weight: 600; white-space: pre-wrap; }
-    .mp-glance { margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }
+    .mp-glance { margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; page-break-before: always; break-before: page; }
+    .mp-period { margin: 10px 0 0; color: #4d6359; font-weight: 700; }
     .mp-glance h2, .mp-sec h2 { margin: 0 0 8px; padding: 7px 10px; background: #166534; color: #fff; border-radius: 8px; font-weight: 700; }
     .mp-lead { margin: 0 0 10px; color: #4d6359; }
     .mp-charts { display: flex; gap: 10px; }
@@ -1073,8 +1224,7 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     .mp-donut svg { width: 132px; flex: 0 0 132px; }
     .mp-slices { flex-direction: column; gap: 3px; }
     .mp-slice b { margin-left: auto; }
-    .mp-slice em { color: #6b7280; font-style: normal; min-width: 28px; text-align: right; }
-    .mp-sec { margin-top: 14px; }
+    .mp-sec { margin-top: 14px; page-break-before: always; break-before: page; }
     .mp-prose { margin: 0 0 8px; break-inside: avoid; page-break-inside: avoid; }
     .mp-prose h3, .mp-stream h3, .mp-sec h3 { margin: 8px 0 4px; font-weight: 700; color: #166534; }
     .mp-prose p, .mp-note { margin: 0 0 8px; white-space: pre-wrap; }
@@ -1086,24 +1236,48 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     .mp-table td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
     .mp-table td.nil, .mp-nil, .mp-muted { color: #6b7280; }
     .mp-stream { margin-bottom: 8px; }
+    .mp-inspect-chart { margin: 10px 0 12px; padding: 12px 14px 10px; border: 1px solid #d1fae5; border-radius: 12px; background: linear-gradient(180deg, #f7fbf8 0%, #fff 48%); break-inside: avoid; page-break-inside: avoid; }
+    .mp-inspect-chart-head { margin: 0 0 6px; }
+    .mp-inspect-chart-head strong { display: block; font-size: 13px; color: #0f241c; }
+    .mp-inspect-chart-head span { display: block; margin-top: 2px; font-size: 12px; color: #6b7280; }
+    .mp-inspect-chart svg { width: 100%; height: auto; display: block; }
+    .mp-inspect-chart .mp-legend { margin-top: 6px; justify-content: center; gap: 12px 18px; }
   </style>
   <div class="mp">
-    <div class="mp-kpis">
-      <div class="mp-kpi"><div class="mp-kpi-v">${pdfText(pdfNil(draft.jobs))}</div><div class="mp-kpi-l">Jobs completed</div></div>
-      <div class="mp-kpi"><div class="mp-kpi-v">${pdfText(pdfNil(draft.locations))}</div><div class="mp-kpi-l">Locations</div></div>
-      <div class="mp-kpi"><div class="mp-kpi-v">${faultTotal}</div><div class="mp-kpi-l">Faults</div></div>
-      <div class="mp-kpi"><div class="mp-kpi-v">${ticketTotal}</div><div class="mp-kpi-l">Tickets</div></div>
-      <div class="mp-kpi"><div class="mp-kpi-v">${serviceTotal || services.length}</div><div class="mp-kpi-l">Service jobs</div></div>
-    </div>
     <div class="mp-identity">
       <div><span>Client</span><strong>${pdfText(pdfNil(draft.clientName))}</strong></div>
       <div><span>Address</span><strong>${pdfText(pdfNil(draft.address))}</strong></div>
       <div><span>Contact</span><strong>${pdfText(pdfNil(draft.contact))}</strong></div>
       <div><span>Prepared by</span><strong>${pdfText(pdfNil(draft.preparedBy))}</strong></div>
     </div>
-    <div class="mp-glance">
+    <div class="mp-toc">
+      <h2>Table of contents</h2>
+      <div class="mp-toc-row"><a href="#mp-glance">This month at a glance</a><i></i><b>Page 2</b></div>
+      <div class="mp-toc-row"><a href="#mp-overview">1. Overview</a><i></i><b>Page 3</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-overview-delivery">1.1 Service delivery</a><i></i><b>Page 3</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-overview-disruption">1.2 Service disruption</a><i></i><b>Page 3</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-overview-minutes">1.3 Previous minutes</a><i></i><b>Page 3</b></div>
+      <div class="mp-toc-row"><a href="#mp-contract">2. Contract review</a><i></i><b>Page 4</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-contract-compliance">2.1 Contract compliance and KPI</a><i></i><b>Page 4</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-contract-whs">2.2 Work health and safety</a><i></i><b>Page 4</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-contract-env">2.3 Environmental issues</a><i></i><b>Page 4</b></div>
+      <div class="mp-toc-row"><a href="#mp-inspections">3. Inspections</a><i></i><b>Page 5</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-inspections-sites">3.1 Site inspections</a><i></i><b>Page 5</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-faults">3.2 Faults Reports</a><i></i><b>Page 5</b></div>
+      <div class="mp-toc-row"><a href="#mp-staffing">4. Staffing</a><i></i><b>Page 6</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-staffing-toolbox">4.1 Toolbox talk</a><i></i><b>Page 6</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-staffing-changes">4.2 Staff changes</a><i></i><b>Page 6</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-staffing-feedback">4.3 Staff feedback</a><i></i><b>Page 6</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-staffing-recognition">4.4 Staffing recognition award</a><i></i><b>Page 6</b></div>
+      <div class="mp-toc-row"><a href="#mp-financials">5. Financials</a><i></i><b>Page 7</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-financials-invoices">5.1 Overdue invoices</a><i></i><b>Page 7</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-financials-variations">5.2 Contract variations</a><i></i><b>Page 7</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-financials-adhoc">5.3 Adhoc work request</a><i></i><b>Page 7</b></div>
+      <div class="mp-toc-row sub"><a href="#mp-financials-quotes">5.4 Quotes</a><i></i><b>Page 7</b></div>
+    </div>
+    <div class="mp-glance" id="mp-glance">
       <h2>This month at a glance</h2>
-      <p class="mp-lead">${pdfText(pdfNil(draft.glanceNote))} ${pdfText(String(draft.serviceLine || ''))} · ${pdfText(String(draft.periodRange || draft.periodLabel || ''))}</p>
+      ${String(draft.glanceNote || '').trim() ? `<p class="mp-lead">${pdfText(pdfNil(draft.glanceNote))}</p>` : ''}
       <div class="mp-charts">
         <article class="mp-card">
           <h3>Weekly volume</h3>
@@ -1116,15 +1290,22 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
           ${serviceChartSvg(services)}
         </article>
       </div>
+      <p class="mp-period">${pdfText(String(draft.serviceLine || ''))} · ${pdfText(String(draft.periodRange || draft.periodLabel || ''))}</p>
+      <div class="mp-kpis">
+        <div class="mp-kpi"><div class="mp-kpi-v">${pdfText(pdfNil(draft.jobs))}</div><div class="mp-kpi-l">Jobs completed</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-v">${pdfText(pdfNil(draft.locations))}</div><div class="mp-kpi-l">Locations</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-v">${faultTotal}</div><div class="mp-kpi-l">Faults</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-v">${ticketTotal}</div><div class="mp-kpi-l">Tickets</div></div>
+        <div class="mp-kpi"><div class="mp-kpi-v">${serviceTotal || services.length}</div><div class="mp-kpi-l">Service jobs</div></div>
+      </div>
     </div>
     ${pdfSection('1. Overview', [
-      pdfProse('1.1 Service delivery', draft.serviceDelivery),
-      pdfProse('1.2 Service disruption', draft.disruptions),
-      pdfProse('1.3 General issues', draft.generalIssues),
-      pdfProse('1.4 Previous minutes', draft.previousMinutes),
-    ].join(''))}
+      `<div id="mp-overview-delivery">${pdfProse('1.1 Service delivery', draft.serviceDelivery)}</div>`,
+      `<div id="mp-overview-disruption">${pdfProse('1.2 Service disruption', draft.disruptions)}</div>`,
+      `<div id="mp-overview-minutes">${pdfProse('1.3 Previous minutes', draft.previousMinutes)}</div>`,
+    ].join(''), 'mp-overview')}
     ${pdfSection('2. Contract review', [
-      '<h3>2.1 Contract compliance and KPI</h3>',
+      '<h3 id="mp-contract-compliance">2.1 Contract compliance and KPI</h3>',
       pdfTable(
         ['Area', 'Yes', 'No', 'Comments'],
         compliance.map((row) => [
@@ -1134,48 +1315,59 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
           String(row.comments || ''),
         ]),
       ),
-      `<h3>2.2 Work health and safety</h3><p class="mp-note">${pdfText(pdfNil(draft.whsScope))}</p>`,
+      `<h3 id="mp-contract-whs">2.2 Work health and safety</h3><p class="mp-note">${pdfText(pdfNil(draft.whsScope))}</p>`,
       pdfTable(
         ['Measure', String(draft.whsMonth1 || 'Month 1'), String(draft.whsMonth2 || 'Month 2'), String(draft.whsMonth3 || 'Month 3'), 'Y.T.D.'],
         whs.map((row) => [String(row.label || ''), String(row.m1 || '0'), String(row.m2 || '0'), String(row.m3 || '0'), String(row.ytd || '0')]),
         [1, 2, 3, 4],
       ),
-      '<h3>2.3 Environmental issues</h3>',
+      '<h3 id="mp-contract-env">2.3 Environmental issues</h3>',
       pdfTable(
         ['Area', 'Comments'],
         environmental.map((row) => [String(row.area || ''), String(row.comments || '')]),
       ),
-    ].join(''))}
-    ${pdfSection('3. Inspections', `${streamHtml || '<p class="mp-nil">Nil</p>'}<h3>3.2 ${pdfText(String(draft.feedbackHeading || 'Customer feedback'))}</h3>${pdfTable(
-      ['Site', 'Feedback', 'Comment', 'Date rectified'],
-      feedback.map((row) => [String(row.site || ''), String(row.feedback || ''), String(row.comment || ''), String(row.rectified || '')]),
-    )}`)}
+    ].join(''), 'mp-contract')}
+    ${pdfSection('3. Inspections', `<div id="mp-inspections-sites">${streamHtml || '<p class="mp-nil">Nil</p>'}</div><h3 id="mp-faults">3.2 ${pdfText((() => {
+      const heading = String(draft.feedbackHeading || '').trim();
+      if (!heading) return 'Faults Reports';
+      if (/\bfeedback$/i.test(heading)) return heading.replace(/\s*feedback\s*$/i, ' Faults Reports').replace(/\s+/g, ' ').trim();
+      return heading;
+    })())}</h3>${pdfTable(
+      ['Site', 'Fault', 'Comment', 'Date reported'],
+      feedback.map((row) => {
+        const reported = String(row.rectified || row.date || '').trim();
+        const dateText = reported && !/^nil$/i.test(reported) ? reported : '';
+        return [
+          String(row.site || ''),
+          String(row.feedback || ''),
+          String(row.comment || ''),
+          { html: pdfText(dateText) },
+        ];
+      }),
+    )}`, 'mp-inspections')}
     ${pdfSection('4. Staffing', [
-      talks.length
+      `<div id="mp-staffing-toolbox">${talks.length
         ? pdfTable(['Toolbox talk', 'Date', 'Detail'], talks.map((talk) => [String(talk.title || ''), String(talk.date || ''), String(talk.detail || '')]))
-        : pdfProse('4.1 Toolbox talk', 'Nil'),
-      pdfProse('4.2 Staff changes', draft.staffChanges),
-      pdfProse('4.3 Staff feedback', draft.staffFeedback),
-      pdfProse('4.4 Staffing recognition award', draft.recognition),
-    ].join(''))}
+        : pdfProse('4.1 Toolbox talk', 'Nil')}</div>`,
+      `<div id="mp-staffing-changes">${pdfProse('4.2 Staff changes', draft.staffChanges)}</div>`,
+      `<div id="mp-staffing-feedback">${pdfProse('4.3 Staff feedback', draft.staffFeedback)}</div>`,
+      `<div id="mp-staffing-recognition">${pdfProse('4.4 Staffing recognition award', draft.recognition)}</div>`,
+    ].join(''), 'mp-staffing')}
     ${pdfSection('5. Financials', [
-      pdfProse('5.1 Overdue invoices', draft.invoiceIntro),
-      invoices.length ? pdfTable(['Invoice', 'Detail'], invoices.map((row) => [String(row.number || ''), String(row.detail || '')])) : '',
-      variations.length
+      `<div id="mp-financials-invoices">${pdfProse('5.1 Overdue invoices', draft.invoiceIntro)}${invoices.length ? pdfTable(['Invoice', 'Detail'], invoices.map((row) => [String(row.number || ''), String(row.detail || '')])) : ''}</div>`,
+      `<div id="mp-financials-variations">${variations.length
         ? pdfTable(
           ['Site', 'Date', 'Reason', 'Requested by', 'Amount'],
           variations.map((row) => [String(row.site || ''), String(row.date || ''), String(row.reason || ''), String(row.requestedBy || ''), String(row.amount || '')]),
         )
-        : pdfProse('5.2 Contract variations', draft.variationComments),
-      variations.length ? pdfProse('Variation comments', draft.variationComments) : '',
-      adhoc.length
+        : pdfProse('5.2 Contract variations', draft.variationComments)}${variations.length ? pdfProse('Variation comments', draft.variationComments) : ''}</div>`,
+      `<div id="mp-financials-adhoc">${adhoc.length
         ? pdfTable(
           ['Site', 'Description', 'Requested by', 'Date', 'Amount'],
           adhoc.map((row) => [String(row.site || ''), String(row.description || ''), String(row.requestedBy || ''), String(row.date || ''), String(row.amount || '')]),
         )
-        : pdfProse('5.3 Adhoc work request', draft.adhocComments),
-      adhoc.length ? pdfProse('Adhoc comments', draft.adhocComments) : '',
-      pdfProse('5.4 Quotes', draft.quotes),
-    ].join(''))}
+        : pdfProse('5.3 Adhoc work request', draft.adhocComments)}${adhoc.length ? pdfProse('Adhoc comments', draft.adhocComments) : ''}</div>`,
+      `<div id="mp-financials-quotes">${pdfProse('5.4 Quotes', draft.quotes)}</div>`,
+    ].join(''), 'mp-financials')}
   </div>`;
 }

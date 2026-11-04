@@ -13,6 +13,8 @@ const errorCode = {
     REGISTERED: <IErrorData>{ code: 10, message: "This account is already registered" },
     CODE_EXIST: <IErrorData>{ code: 11, message: 'Code already exists' },
     ACCOUNT_DOSE_NOT_EXIST: <IErrorData>{ code: 12, message: 'Unauthorized' },
+    /** Role / permission denied (not a delete conflict). */
+    FORBIDDEN: <IErrorData>{ code: 23, message: 'Forbidden' },
     MAINTENANCE: <IErrorData>{ code: 13, message: 'Under maintenance' },
     FIELD_DOES_NOT_EXIST: <IErrorData>{ code: 14, message: 'Field does not exist' },
     CAN_NOT_DELETED: <IErrorData>{ code: 15, message: 'Data in use cannot be deleted' },

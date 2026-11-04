@@ -1,6 +1,6 @@
 var path = require('path');
 const webpack = require('webpack');
-const { override, fixBabelImports, addWebpackAlias } = require('customize-cra');
+const { override, fixBabelImports, addWebpackAlias, disableEsLint } = require('customize-cra');
 
 // CRA strips `compilerOptions.paths` from tsconfig.json on start. ForkTsCheckerWebpackPlugin
 // reads that file, so point it at a config that keeps paths for typechecking only.
@@ -68,6 +68,9 @@ function addProcessBrowserPolyfill(config) {
 }
 
 module.exports = override(
+  // CRA eslint-loader + error overlay freezes the UI on false-positive hooks lint
+  // (and the overlay chunk itself throws `process is not defined`). Lint via CLI instead.
+  disableEsLint(),
   fixBabelImports('import', {
     libraryName: 'antd',
     libraryDirectory: 'es',

@@ -38,6 +38,7 @@ const crmEndPoint = {
     ADMIN_PERSONNEL: 'v1/admin-personnel',
     PERSONNEL_FAULT_ACCESS: 'v1/personnel-fault-access',
     INVOICES: 'v1/invoices',
+    CONSUMABLES: 'v1/consumables',
     ASSETS: 'v1/assets',
     TRAINING: 'v1/training',
     TOOLBOX: 'v1/toolbox',

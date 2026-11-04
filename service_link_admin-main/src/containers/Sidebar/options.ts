@@ -1,13 +1,149 @@
 export interface option {
 	key: string,
 	label: string,
-	leftIcon: any,
+	leftIcon?: any,
 	children?: any,
+	groupColor?: string,
 }
 export interface hashOption {
 	key: string,
 	label: string,
 }
+
+export type NavGroupDef = {
+	id: string;
+	label: string;
+	color: string;
+	keys: string[];
+};
+
+/** Same grouping as /nav-mock — unwrap these so the group title is the section, not a nested duplicate. */
+const UNWRAP_INTO_GROUP = new Set([
+	'report',
+	'directory',
+	'staff-management',
+	'admin',
+]);
+
+/** Icons for unwrapped leaves (match nav-mock). */
+const LEAF_ICONS: Record<string, string> = {
+	services: 'icon-service',
+	companies: 'icon-companies',
+	staff: 'icon-staff',
+	'admin-personnel': 'icon-admin',
+	customers: 'icon-contact',
+	sites: 'icon-site',
+	'new-reports': 'icon-report-new',
+	'safety-audits': 'icon-report-safety',
+	'report-faults': 'icon-report-fault',
+	'audit-report': 'icon-report-audit',
+	'monthly-report': 'icon-report-monthly',
+	'incident-report': 'icon-report-incident',
+	'ppe-report': 'icon-ppe',
+	'report-templates-menu': 'icon-report-templates',
+	'report-templates': 'icon-report-template',
+	'safety-audit-templates': 'icon-report-safety-template',
+	'staff-attendance': 'icon-staff',
+	training: 'icon-training',
+	'training-admin': 'icon-training',
+	'toolbox-admin': 'icon-toolbox',
+	induction: 'icon-ppe',
+	'users-roles': 'icon-admin',
+	admins: 'icon-admin',
+	roles: 'icon-master',
+	settings: 'icon-system',
+	'asset-register': 'icon-asset',
+};
+
+export const adminNavGroups: NavGroupDef[] = [
+	{ id: 'nav-home', label: 'sidebar.dashboard', color: '#A3F34F', keys: ['dashboard'] },
+	{ id: 'nav-messages', label: 'sidebar.navMessages', color: '#A3F34F', keys: ['messages', 'tickets'] },
+	{ id: 'nav-camera', label: 'sidebar.navCamera', color: '#FFAD32', keys: ['field-photos'] },
+	{ id: 'nav-field', label: 'sidebar.navFieldWork', color: '#FFE05B', keys: ['task-today'] },
+	{ id: 'nav-meeting', label: 'sidebar.navTeamMeeting', color: '#4FB8FF', keys: ['team-meeting', 'meeting-history'] },
+	{ id: 'nav-procurement', label: 'sidebar.navProcurement', color: '#FF5797', keys: ['invoices', 'consumables'] },
+	{ id: 'nav-directory', label: 'sidebar.navDirectory', color: '#BD70FF', keys: ['directory'] },
+	{ id: 'nav-reports', label: 'sidebar.navReports', color: '#67E8F9', keys: ['report'] },
+	{ id: 'nav-staff', label: 'sidebar.navStaffManagement', color: '#FFAD32', keys: ['staff-management'] },
+	{ id: 'nav-assets', label: 'sidebar.navAssetsPpe', color: '#A3F34F', keys: ['asset', 'manageme-PPE'] },
+	{ id: 'nav-admin', label: 'sidebar.navAdmin', color: '#CBD5E1', keys: ['admin'] },
+	{ id: 'nav-help', label: 'sidebar.navHelp', color: '#F9A8D4', keys: ['how-to'] },
+];
+
+/** Staff (type 2): field tools only — no Staff Management / Directory / Admin / Assets / Procurement / Meetings. */
+export const staffNavGroups: NavGroupDef[] = [
+	{ id: 'nav-home', label: 'sidebar.dashboard', color: '#A3F34F', keys: ['dashboard'] },
+	{ id: 'nav-messages', label: 'sidebar.navMessages', color: '#A3F34F', keys: ['messages'] },
+	{ id: 'nav-camera', label: 'sidebar.navCamera', color: '#FFAD32', keys: ['field-photos'] },
+	{
+		id: 'nav-field',
+		label: 'sidebar.navFieldWork',
+		color: '#FFE05B',
+		// Site check-in / job sites sit at Field Work level — not under Tasks
+		keys: ['site-check-in', 'my-tasks'],
+	},
+	{ id: 'nav-reports', label: 'sidebar.navReports', color: '#67E8F9', keys: ['report'] },
+	{
+		id: 'nav-training',
+		label: 'sidebar.training',
+		color: '#FFAD32',
+		keys: ['training-menu', 'toolbox', 'induction'],
+	},
+	{ id: 'nav-help', label: 'sidebar.navHelp', color: '#F9A8D4', keys: ['how-to'] },
+];
+
+/** Customer (type 1): messages/tickets, invoices, consumables (read), limited reports, own personnel — nothing admin. */
+export const customerNavGroups: NavGroupDef[] = [
+	{ id: 'nav-home', label: 'sidebar.dashboard', color: '#A3F34F', keys: ['dashboard'] },
+	{ id: 'nav-messages', label: 'sidebar.navMessages', color: '#A3F34F', keys: ['messages', 'tickets'] },
+	{ id: 'nav-procurement', label: 'sidebar.navProcurement', color: '#FF5797', keys: ['invoices', 'consumables'] },
+	{ id: 'nav-reports', label: 'sidebar.navReports', color: '#67E8F9', keys: ['report'] },
+	{ id: 'nav-directory', label: 'sidebar.navDirectory', color: '#BD70FF', keys: ['customer-personnel'] },
+	{ id: 'nav-help', label: 'sidebar.navHelp', color: '#F9A8D4', keys: ['how-to'] },
+];
+
+function withLeafIcon(item: option): option {
+	const icon = item.leftIcon || LEAF_ICONS[String(item.key)];
+	const children = item.children?.map((child: option) => withLeafIcon(child));
+	return {
+		...item,
+		...(icon ? { leftIcon: icon } : {}),
+		...(children ? { children } : {}),
+	};
+}
+
+/** Wrap flat menus into the same colored groups as /nav-mock. */
+export function applyNavGroups(items: option[], groups: NavGroupDef[]): option[] {
+	const byKey = new Map(items.map((item) => [String(item.key), item]));
+	const used = new Set<string>();
+	const result: option[] = [];
+
+	for (const group of groups) {
+		const children: option[] = [];
+		for (const key of group.keys) {
+			const item = byKey.get(key);
+			if (!item) continue;
+			used.add(key);
+			if (UNWRAP_INTO_GROUP.has(key) && item.children?.length) {
+				children.push(...item.children.map((child: option) => withLeafIcon(child)));
+			} else {
+				children.push(withLeafIcon(item));
+			}
+		}
+		if (!children.length) continue;
+		result.push({
+			key: group.id,
+			label: group.label,
+			leftIcon: children[0]?.leftIcon || 'svg-dashboard',
+			groupColor: group.color,
+			children,
+		});
+	}
+
+	// Do not append unused items — role menus must only show what the group map allows.
+	return result;
+}
+
 //permissions: all: T?t c? ch?c nang
 export const optionsStaff: option[] = [
 	{
@@ -18,51 +154,27 @@ export const optionsStaff: option[] = [
 	{
 		key: 'messages',
 		label: 'sidebar.messages',
-		leftIcon: 'icon-site',
-	},
-	{
-		key: 'my-tasks',
-		label: 'sidebar.myTasks',
-		leftIcon: 'icon-site',
-	},
-	{
-		key: 'site-check-in',
-		label: 'sidebar.siteCheckIn',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-messages',
 	},
 	{
 		key: 'field-photos',
 		label: 'sidebar.camera',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-camera',
 	},
 	{
-		key: 'user-sites',
-		label: 'sidebar.jobSites',
-		leftIcon: 'icon-site',
+		key: 'site-check-in',
+		label: 'sidebar.siteCheckIn',
+		leftIcon: 'icon-checkin',
 	},
 	{
-		key: 'task-today',
+		key: 'my-tasks',
 		label: 'sidebar.tasks',
-		leftIcon: 'icon-site',
-		children: [
-			{
-				key: 'task-today?status=p',
-				label: 'sidebar.pending',
-			},
-			{
-				key: 'task-today?status=i',
-				label: 'sidebar.in_progress',
-			},
-			{
-				key: 'task-today?status=s',
-				label: 'sidebar.completed',
-			}
-		]
+		leftIcon: 'icon-my-tasks',
 	},
 	{
 		key: 'report',
 		label: 'sidebar.report',
-		leftIcon: 'icon-package',
+		leftIcon: 'icon-reports',
 		children: [
 			{
 				key: 'new-reports',
@@ -85,10 +197,6 @@ export const optionsStaff: option[] = [
 				label: 'sidebar.incidentReport',
 			},
 			{
-				key: 'action-plans',
-				label: 'sidebar.actionPlans',
-			},
-			{
 				key: 'ppe-report',
 				label: 'sidebar.ppeReport',
 			},
@@ -97,7 +205,7 @@ export const optionsStaff: option[] = [
 	{
 		key: 'training-menu',
 		label: 'sidebar.training',
-		leftIcon: 'icon-staff',
+		leftIcon: 'icon-training',
 		children: [
 			{
 				key: 'training',
@@ -112,12 +220,17 @@ export const optionsStaff: option[] = [
 	{
 		key: 'toolbox',
 		label: 'sidebar.toolbox',
-		leftIcon: 'icon-staff',
+		leftIcon: 'icon-toolbox',
 	},
 	{
 		key: 'induction',
 		label: 'sidebar.induction',
-		leftIcon: 'icon-staff',
+		leftIcon: 'icon-ppe',
+	},
+	{
+		key: 'how-to',
+		label: 'sidebar.howTo',
+		leftIcon: 'icon-help',
 	},
 ]
 
@@ -130,12 +243,12 @@ export const optionsCustomer: option[] = [
 	{
 		key: 'messages',
 		label: 'sidebar.messages',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-messages',
 	},
 	{
 		key: 'tickets',
 		label: 'sidebar.tickets',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-tickets',
 		children: [
 			{
 				key: 'tickets?status=2',
@@ -152,19 +265,19 @@ export const optionsCustomer: option[] = [
 		]
 	},
 	{
-		key: 'customer-personnel',
-		label: 'sidebar.customerPersonnel',
-		leftIcon: 'icon-staff',
-	},
-	{
 		key: 'invoices',
 		label: 'sidebar.invoices',
-		leftIcon: 'icon-package',
+		leftIcon: 'icon-invoice',
+	},
+	{
+		key: 'consumables',
+		label: 'sidebar.consumables',
+		leftIcon: 'icon-consumables',
 	},
 	{
 		key: 'report',
 		label: 'sidebar.report',
-		leftIcon: 'icon-package',
+		leftIcon: 'icon-reports',
 		children: [
 			{
 				key: 'new-reports',
@@ -184,6 +297,16 @@ export const optionsCustomer: option[] = [
 			}
 		]
 	},
+	{
+		key: 'customer-personnel',
+		label: 'sidebar.customerPersonnel',
+		leftIcon: 'icon-staff',
+	},
+	{
+		key: 'how-to',
+		label: 'sidebar.howTo',
+		leftIcon: 'icon-help',
+	},
 ]
 const options: option[] = [
 	{
@@ -194,27 +317,75 @@ const options: option[] = [
 	{
 		key: 'messages',
 		label: 'sidebar.messages',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-messages',
+	},
+	{
+		key: 'tickets',
+		label: 'sidebar.tickets',
+		leftIcon: 'icon-tickets',
+		children: [
+			{
+				key: 'tickets?status=2',
+				label: 'sidebar.ticket-pending',
+			},
+			{
+				key: 'tickets?status=3',
+				label: 'sidebar.ticket-inprogress',
+			},
+			{
+				key: 'tickets?status=1',
+				label: 'sidebar.ticket-completed',
+			},
+		]
 	},
 	{
 		key: 'field-photos',
 		label: 'sidebar.camera',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-camera',
+	},
+	{
+		key: 'task-today',
+		label: 'sidebar.tasks',
+		leftIcon: 'icon-tasks',
+		children: [
+			{
+				key: 'task-today?status=p',
+				label: 'sidebar.pending',
+			},
+			{
+				key: 'task-today?status=i',
+				label: 'sidebar.in_progress',
+			},
+			{
+				key: 'task-today?status=s',
+				label: 'sidebar.completed',
+			},
+			{
+				key: 'schedule-tasks',
+				label: 'sidebar.scheduleTasks',
+				leftIcon: 'icon-site',
+			},
+		]
 	},
 	{
 		key: 'team-meeting',
 		label: 'sidebar.teamMeeting',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-meeting',
 	},
 	{
 		key: 'meeting-history',
 		label: 'sidebar.meetingHistory',
-		leftIcon: 'icon-site',
+		leftIcon: 'icon-history',
 	},
 	{
 		key: 'invoices',
 		label: 'sidebar.invoices',
-		leftIcon: 'icon-package',
+		leftIcon: 'icon-invoice',
+	},
+	{
+		key: 'consumables',
+		label: 'sidebar.consumables',
+		leftIcon: 'icon-consumables',
 	},
 	{
 		key: 'directory',
@@ -247,54 +418,10 @@ const options: option[] = [
 			},
 		],
 	},
-
-	{
-		key: 'task-today',
-		label: 'sidebar.tasks',
-		leftIcon: 'icon-site',
-		children: [
-			{
-				key: 'task-today?status=p',
-				label: 'sidebar.pending',
-			},
-			{
-				key: 'task-today?status=i',
-				label: 'sidebar.in_progress',
-			},
-			{
-				key: 'task-today?status=s',
-				label: 'sidebar.completed',
-			},
-			{
-				key: 'schedule-tasks',
-				label: 'sidebar.scheduleTasks',
-				leftIcon: 'icon-site',
-			},
-		]
-	},
-	{
-		key: 'tickets',
-		label: 'sidebar.tickets',
-		leftIcon: 'icon-site',
-		children: [
-			{
-				key: 'tickets?status=2',
-				label: 'sidebar.ticket-pending',
-			},
-			{
-				key: 'tickets?status=3',
-				label: 'sidebar.ticket-inprogress',
-			},
-			{
-				key: 'tickets?status=1',
-				label: 'sidebar.ticket-completed',
-			},
-		]
-	},
 	{
 		key: 'report',
 		label: 'sidebar.report',
-		leftIcon: 'icon-package',
+		leftIcon: 'icon-reports',
 		children: [
 			{
 				key: 'new-reports',
@@ -321,16 +448,25 @@ const options: option[] = [
 				label: 'sidebar.incidentReport',
 			},
 			{
-				key: 'action-plans',
-				label: 'sidebar.actionPlans',
-			},
-			{
 				key: 'ppe-report',
 				label: 'sidebar.ppeReport',
 			},
+			{
+				key: 'report-templates-menu',
+				label: 'sidebar.templates',
+				children: [
+					{
+						key: 'report-templates',
+						label: 'sidebar.reportTemplates',
+					},
+					{
+						key: 'safety-audit-templates',
+						label: 'sidebar.safetyAuditTemplates',
+					},
+				],
+			},
 		]
 	},
-
 	{
 		key: 'staff-management',
 		label: 'sidebar.staffManagement',
@@ -358,7 +494,6 @@ const options: option[] = [
 			},
 		]
 	},
-
 	{
 		key: 'asset',
 		label: 'sidebar.asset',
@@ -373,48 +508,30 @@ const options: option[] = [
 	{
 		key: 'manageme-PPE',
 		label: 'sidebar.managemePPE',
-		leftIcon: 'icon-asset',
+		leftIcon: 'icon-ppe',
 	},
-	{
-		key: 'master',
-		label: 'sidebar.Master',
-		leftIcon: 'icon-master',
-		children: [
-			// {
-			// 	key: 'companies',
-			// 	label: 'sidebar.companies',
-			// },
-			// {
-			// 	key: 'positions',
-			// 	label: 'sidebar.positions',
-			// },
-			{
-				key: 'roles',
-				label: 'sidebar.roles',
-			},
-			{
-				key: 'report-templates',
-				label: 'sidebar.reportTemplates',
-			},
-			{
-				key: 'safety-audit-templates',
-				label: 'sidebar.safetyAuditTemplates',
-			},
-		]
-	},
-
 	{
 		key: 'admin',
-		label: 'sidebar.System',
+		label: 'sidebar.admin',
 		leftIcon: 'icon-system',
 		children: [
 			{
-				key: 'admins',
-				label: 'sidebar.admins',
+				key: 'users-roles',
+				label: 'sidebar.usersRoles',
+				children: [
+					{
+						key: 'admins',
+						label: 'sidebar.admins',
+					},
+					{
+						key: 'roles',
+						label: 'sidebar.roles',
+					},
+				],
 			},
 			{
 				key: 'settings',
-				label: 'sidebar.settings',
+				label: 'sidebar.organisation',
 			},
 		],
 	},
@@ -473,12 +590,24 @@ const hashOptions: hashOption[] = [
 	},
 
 	{
-		key: 'admins',
+		key: 'admin',
 		label: 'sidebar.admin',
 	},
 	{
+		key: 'users-roles',
+		label: 'sidebar.usersRoles',
+	},
+	{
+		key: 'report-templates-menu',
+		label: 'sidebar.templates',
+	},
+	{
+		key: 'admins',
+		label: 'sidebar.admins',
+	},
+	{
 		key: 'settings',
-		label: 'sidebar.settings',
+		label: 'sidebar.organisation',
 	},
 	{
 		key: 'how-to',
@@ -582,7 +711,15 @@ const hashOptions: hashOption[] = [
 		label: 'sidebar.invoices',
 	},
 	{
+		key: 'consumables',
+		label: 'sidebar.consumables',
+	},
+	{
 		key: 'task-today',
+		label: 'sidebar.tasks',
+	},
+	{
+		key: 'my-tasks',
 		label: 'sidebar.tasks',
 	},
 	{

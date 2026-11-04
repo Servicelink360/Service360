@@ -259,6 +259,10 @@ const TopbarDropdownWrapper = styled.div`
           object-fit: cover;
           border-radius: 50%;
         }
+        h4 {
+          margin: 0;
+          color: inherit;
+        }
       }
       &:nth-child(2){
         border-top: 1px solid #c5c5c5;
@@ -266,6 +270,33 @@ const TopbarDropdownWrapper = styled.div`
       }
       &:hover {
         background-color: ${palette('secondary', 6)};
+      }
+    }
+
+    &.isoUserDropdown--dark {
+      background-color: #141414;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+
+      .isoDropdownLink {
+        color: #e5e7eb;
+
+        &.userWrapper h4 {
+          color: #f3f4f6;
+        }
+
+        &:nth-child(2) {
+          border-top-color: #333;
+          border-bottom-color: #333;
+          color: #93c5fd;
+        }
+
+        &:last-child {
+          color: #f87171;
+        }
+
+        &:hover {
+          background-color: #1f1f1f;
+        }
       }
     }
   }

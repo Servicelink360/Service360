@@ -11,6 +11,28 @@ import WithDirection from '@app/lib/helpers/rtl';
 const TableWrapper = styled(Table)`
   background-color: #ffffff;
 
+  html[data-color-mode='dark'] body.app-shell-dark &,
+  html[data-color-mode='dark'] #main-content.app-content--dark & {
+    background-color: #121212 !important;
+    color: #f0f0f0 !important;
+  }
+
+  html[data-color-mode='dark'] body.app-shell-dark & .ant-table,
+  html[data-color-mode='dark'] body.app-shell-dark & .ant-table-container,
+  html[data-color-mode='dark'] body.app-shell-dark & .ant-table-content,
+  html[data-color-mode='dark'] body.app-shell-dark & .ant-table-body,
+  html[data-color-mode='dark'] #main-content.app-content--dark & .ant-table,
+  html[data-color-mode='dark'] #main-content.app-content--dark & .ant-table-body {
+    background: #121212 !important;
+    background-color: #121212 !important;
+  }
+
+  html[data-color-mode='dark'] body.app-shell-dark & .ant-table-tbody > tr > td,
+  html[data-color-mode='dark'] #main-content.app-content--dark & .ant-table-tbody > tr > td {
+    background: #121212 !important;
+    color: #f0f0f0 !important;
+  }
+
   .ant-table-body {
     overflow-x: auto;
   }

@@ -85,7 +85,50 @@ function workDescription(service: string) {
 function streamHeading(service: string, period: string) {
   if (service === 'Roof and Gutter') return `Roof and Gutter – Scheduled work due for ${period}`;
   if (service === 'Ground Maintenance') return `Ground Maintenance – Scheduled work due for ${period}`;
+  if (service === 'Cleaning') return `Cleaning Site Inspections – Scheduled for ${period}`;
   return `${service} – Scheduled for ${period}`;
+}
+
+function detailHeading(service: string, period: string) {
+  if (service === 'Roof and Gutter') return `Roof and Gutter – Work completed for ${period}`;
+  if (service === 'Ground Maintenance') return `Gardening & Ground Maintenance – Work completed for ${period}`;
+  if (service === 'Cleaning') return 'Cleaning Site Inspections';
+  return `${service} – Work completed for ${period}`;
+}
+
+function detailNote(service: string) {
+  if (service === 'Cleaning') {
+    return 'Note: All Cleaning Inspection Reports are available on the Service360 platform with timestamped photos.';
+  }
+  if (service === 'Ground Maintenance') {
+    return 'Note: All Gardening & Ground Maintenance Reports are available on the Service360 platform with timestamped photos.';
+  }
+  if (service === 'Roof and Gutter') {
+    return 'Note: Roof & Gutter Reports are available on the Service360 platform with timestamped photos.';
+  }
+  return 'Note: Reports are available on the Service360 platform with timestamped photos.';
+}
+
+function siteVisits(rows: WorkRow[]) {
+  const bySite = new Map<string, { date: string; id: number }[]>();
+  rows.forEach((row) => {
+    const site = row.site || 'Unnamed site';
+    const date = formatWhen(row.date);
+    const id = Number(row.id);
+    if (!date || !Number.isFinite(id) || id <= 0) return;
+    const list = bySite.get(site) || [];
+    if (!list.some((item) => item.id === id)) list.push({ date, id });
+    bySite.set(site, list);
+  });
+  return [...bySite.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([site, dateLinks]) => ({
+      site,
+      dates: dateLinks.map((item) => item.date).join(' '),
+      dateLinks,
+      quality: '',
+      comments: '',
+    }));
 }
 
 const GROUP_ORDER = ['Early Learning Centers', 'Community Centers', 'Town Hall and Library', 'Aquatic Centers', 'Depot', 'Parks and amenities', 'Other sites'];
@@ -233,26 +276,40 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
       { area: 'Performance Target', comments: 'Zero Non-Compliance' },
       { area: 'Assessment Frequency', comments: 'Quarterly' },
     ],
-    streams: streams.map((stream) => ({
-      heading: streamHeading(stream.service, pack.period.label),
-      note: `${stream.jobs} completed visits across ${stream.siteCount} sites. Reports are available on the Service360 platform with timestamped photos.`,
-      summary: stream.summary.map((row) => ({
-        month: monthStamp,
-        group: row.group,
-        description: workDescription(stream.service),
-        schedule: String(row.completed),
-        completed: String(row.completed),
-        comments: stream.service === 'Ground Maintenance'
-          ? 'All work completed according to schedule. All rubbish removed off site. Yard clean after finish.'
-          : 'All reports are available on the Service360 platform with timestamped photos.',
-      })),
-    })),
-    feedbackHeading: `${pack.customer.name} feedback`,
+    streams: streams.map((stream) => {
+      const serviceRows = pack.work.filter((row) => {
+        if (/adhoc/i.test(`${row.service} ${row.title}`)) return false;
+        return serviceHeading(row.service) === stream.service;
+      });
+      return {
+        heading: streamHeading(stream.service, pack.period.label),
+        note: `${stream.jobs} completed visits across ${stream.siteCount} sites.`,
+        detailHeading: detailHeading(stream.service, pack.period.label),
+        detailNote: detailNote(stream.service),
+        showQuality: stream.service === 'Cleaning',
+        summary: stream.summary.map((row) => ({
+          month: monthStamp,
+          group: row.group,
+          description: workDescription(stream.service),
+          schedule: String(row.completed),
+          completed: String(row.completed),
+          comments: stream.service === 'Ground Maintenance' || stream.service === 'Roof and Gutter'
+            ? 'All work completed according to schedule. All rubbish removed off site. Yard clean after finish.'
+            : 'All reports are available on the Service360 platform with timestamped photos.',
+        })),
+        visits: siteVisits(serviceRows),
+      };
+    }),
+    feedbackHeading: `${pack.customer.name} Faults Reports`,
     feedback: pack.faults.map((fault) => ({
+      id: fault.id,
       site: fault.site,
       feedback: fault.title,
-      comment: fault.detail || `${fault.priority} – ${fault.status}`,
-      rectified: fault.status === 'Completed' ? formatWhen(fault.date) : '',
+      comment: fault.detail && fault.detail !== fault.title
+        ? fault.detail
+        : `${fault.priority} – ${fault.status}`,
+      // Fault created_at = date reported (always show, even if still open).
+      rectified: formatWhen(fault.date),
     })),
     toolbox: talks.map((talk) => ({
       title: talk.title,

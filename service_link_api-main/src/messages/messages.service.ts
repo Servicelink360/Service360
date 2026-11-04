@@ -14,8 +14,10 @@ import { Customer } from '../users/entities/customer.entity';
 import { errorCode } from '../constants/errorCode';
 import { ReportFault } from '../report-faults/entities/report-fault.entity';
 import { UserTask } from '../user-tasks/entities/user-task.entity';
+import { ConsumableDelivery } from '../consumables/entities/consumable-delivery.entity';
 import { User } from '../users/entities/user.entity';
 import { reportFaultStatus } from '../constants/status';
+import { SendMail, isMailConfigured } from '../helpers/sendEmail';
 
 @Injectable()
 export class MessagesService {
@@ -32,6 +34,8 @@ export class MessagesService {
     private readonly reportFaultRepo: Repository<ReportFault>,
     @InjectRepository(UserTask)
     private readonly userTaskRepo: Repository<UserTask>,
+    @InjectRepository(ConsumableDelivery)
+    private readonly consumableDeliveryRepo: Repository<ConsumableDelivery>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     private readonly customerNotifications: CustomerNotificationsService,
@@ -48,10 +52,119 @@ export class MessagesService {
     );
   }
 
-  /** Admin: open the staff (or customer) conversation for a linked report. */
+  /** Company Cc should list people (e.g. Patricia Habib), not role mailboxes (facilities). */
+  private isPersonColleagueName(fullName: string): boolean {
+    const n = String(fullName || '').trim();
+    if (!n || !/\s/.test(n)) return false;
+    if (
+      /^(facilities|info|admin|enquiry|enquiries|reception|office|support|helpdesk|noreply|no-reply)(\s|$)/i.test(
+        n,
+      )
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  /** Org name for service-provider threads — from email brand settings when set. */
+  private async resolveServiceProviderOrgName(): Promise<string | null> {
+    try {
+      const rows: Array<{ brand_name?: string | null }> = await this.threadRepo.query(
+        `SELECT NULLIF(TRIM(brand_name), '') AS brand_name
+         FROM consumable_email_settings
+         ORDER BY id ASC
+         LIMIT 1`,
+      );
+      const brand = rows?.[0]?.brand_name?.trim();
+      return brand || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Resolve a customer To: peer for a consumables delivery.
+   * Prefer linked customer, then emailed-to address, then a company contact —
+   * never hardcode ServiceLink.
+   */
+  private async resolveDeliveryCustomerPeer(delivery: ConsumableDelivery): Promise<{
+    peerType: 'customer';
+    peerId: number;
+    displayName: string;
+    customerId: number;
+  } | null> {
+    if (delivery.customerId != null && +delivery.customerId > 0) {
+      const id = +delivery.customerId;
+      return {
+        peerType: 'customer',
+        peerId: id,
+        displayName:
+          delivery.customerName?.trim() || (await this.displayNameForUser(id)),
+        customerId: id,
+      };
+    }
+
+    const toEmails = String(delivery.emailedTo || '')
+      .split(/[,;]/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    for (const email of toEmails) {
+      const rows: Array<{ id: number }> = await this.threadRepo.query(
+        `SELECT u.id
+         FROM users u
+         INNER JOIN customers c ON c.user_id = u.id
+         WHERE LOWER(TRIM(u.email)) = $1
+           AND u.status != $2
+         LIMIT 1`,
+        [email, userStatus.DELETE],
+      );
+      if (rows?.[0]?.id) {
+        const id = +rows[0].id;
+        return {
+          peerType: 'customer',
+          peerId: id,
+          displayName: await this.displayNameForUser(id),
+          customerId: id,
+        };
+      }
+    }
+
+    if (delivery.companyId != null && +delivery.companyId > 0) {
+      const rows: Array<{ id: number; fullName: string }> = await this.threadRepo.query(
+        `SELECT c.user_id AS id,
+          COALESCE(
+            NULLIF(TRIM(u.full_name), ''),
+            NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
+            u.username
+          ) AS "fullName"
+         FROM customers c
+         INNER JOIN users u ON u.id = c.user_id
+         WHERE c.company_id = $1
+           AND u.status != $2
+         ORDER BY "fullName"`,
+        [+delivery.companyId, userStatus.DELETE],
+      );
+      const people = rows.filter((r) => this.isPersonColleagueName(r.fullName || ''));
+      const pick = people[0] || rows[0];
+      if (pick?.id) {
+        const id = +pick.id;
+        return {
+          peerType: 'customer',
+          peerId: id,
+          displayName: pick.fullName?.trim() || (await this.displayNameForUser(id)),
+          customerId: id,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /** Admin: open the company (or staff) conversation for a linked report/task/delivery. */
   private async resolveReportConversationPeer(
     userTaskId?: number,
     reportFaultId?: number,
+    consumableDeliveryId?: number,
   ): Promise<{
     peerType: 'customer' | 'staff';
     peerId: number;
@@ -60,13 +173,27 @@ export class MessagesService {
   } | null> {
     if (userTaskId) {
       const task = await this.userTaskRepo.findOne({ where: { id: userTaskId } });
-      if (!task || task.type !== 'CUSTOM' || +task.staffId <= 0) return null;
-      return {
-        peerType: 'staff',
-        peerId: +task.staffId,
-        displayName: await this.displayNameForUser(+task.staffId),
-        customerId: +task.customerId,
-      };
+      if (!task) return null;
+      if (task.type !== 'CUSTOM' && task.type !== 'DYNAMIC') return null;
+      const customerId = +task.customerId || 0;
+      // Prefer the company contact person — do not hardcode To: staff.
+      if (customerId > 0) {
+        return {
+          peerType: 'customer',
+          peerId: customerId,
+          displayName: await this.displayNameForUser(customerId),
+          customerId,
+        };
+      }
+      if (+task.staffId > 0) {
+        return {
+          peerType: 'staff',
+          peerId: +task.staffId,
+          displayName: await this.displayNameForUser(+task.staffId),
+          customerId: 0,
+        };
+      }
+      return null;
     }
     if (reportFaultId) {
       const fault = await this.reportFaultRepo.findOne({ where: { id: reportFaultId } });
@@ -91,6 +218,13 @@ export class MessagesService {
         customerId: +fault.customerId,
       };
     }
+    if (consumableDeliveryId) {
+      const delivery = await this.consumableDeliveryRepo.findOne({
+        where: { id: consumableDeliveryId },
+      });
+      if (!delivery || delivery.deletedAt) return null;
+      return this.resolveDeliveryCustomerPeer(delivery);
+    }
     return null;
   }
 
@@ -98,15 +232,23 @@ export class MessagesService {
     userInfo: IUserInfo,
     userTaskId?: number,
     reportFaultId?: number,
+    consumableDeliveryId?: number,
   ) {
     try {
       if (+userInfo.type !== userType.ADMIN) {
         return { ...errorCode.CAN_NOT_DELETE, message: 'Admin only' };
       }
-      if (!userTaskId && !reportFaultId) {
-        return { ...errorCode.VALIDATION_ERROR, message: 'userTaskId or reportFaultId required' };
+      if (!userTaskId && !reportFaultId && !consumableDeliveryId) {
+        return {
+          ...errorCode.VALIDATION_ERROR,
+          message: 'userTaskId, reportFaultId, or consumableDeliveryId required',
+        };
       }
-      const peer = await this.resolveReportConversationPeer(userTaskId, reportFaultId);
+      const peer = await this.resolveReportConversationPeer(
+        userTaskId,
+        reportFaultId,
+        consumableDeliveryId,
+      );
       if (!peer) {
         return { ...errorCode.NOT_FOUND, message: 'Report not found' };
       }
@@ -147,24 +289,84 @@ export class MessagesService {
     return `/new-reports?reportId=${userTaskId}`;
   }
 
+  private scheduledTaskLink(): string {
+    return `/my-tasks`;
+  }
+
+  private userTaskLink(task: UserTask): string {
+    return task.type === 'CUSTOM' ? this.newReportLink(task.id) : this.scheduledTaskLink();
+  }
+
+  private consumableDeliveryLink(deliveryId: number): string {
+    return `/consumables?deliveryId=${deliveryId}`;
+  }
+
   private resolveMessageReportLink(
     reportFaultId?: number | null,
     userTaskId?: number | null,
     reportReference?: string | null,
     body?: string | null,
+    consumableDeliveryId?: number | null,
   ): string | null {
     if (reportFaultId) return this.reportFaultLink(+reportFaultId);
     if (userTaskId) return this.newReportLink(+userTaskId);
+    if (consumableDeliveryId) return this.consumableDeliveryLink(+consumableDeliveryId);
     const text = `${reportReference || ''}\n${body || ''}`;
     const faultPath = text.match(/\/report-faults\?faultId=(\d+)/i);
     if (faultPath?.[1]) return this.reportFaultLink(+faultPath[1]);
     const newReportPath = text.match(/\/new-reports\?reportId=(\d+)/i);
     if (newReportPath?.[1]) return this.newReportLink(+newReportPath[1]);
+    const consumablePath = text.match(/\/consumables\?deliveryId=(\d+)/i);
+    if (consumablePath?.[1]) return this.consumableDeliveryLink(+consumablePath[1]);
     const newReportRef = text.match(/New report #(\d+)/i);
     if (newReportRef?.[1]) return this.newReportLink(+newReportRef[1]);
     const faultRef = text.match(/Fault report #(\d+)/i);
     if (faultRef?.[1]) return this.reportFaultLink(+faultRef[1]);
+    const consumableRef = text.match(/Consumables delivery #(\d+)/i);
+    if (consumableRef?.[1]) return this.consumableDeliveryLink(+consumableRef[1]);
     return null;
+  }
+
+  private async customerCanAccessDelivery(
+    userId: number,
+    delivery: ConsumableDelivery,
+  ): Promise<boolean> {
+    if (delivery.deletedAt) return false;
+    if (delivery.customerId != null && +delivery.customerId === +userId) return true;
+    const rows: Array<{ companyId: number | null }> = await this.messageRepo.manager.query(
+      `SELECT company_id AS "companyId" FROM public.customers WHERE user_id = $1 LIMIT 1`,
+      [+userId],
+    );
+    const companyId =
+      rows?.[0]?.companyId != null && Number(rows[0].companyId) > 0
+        ? +rows[0].companyId
+        : null;
+    if (!companyId) return false;
+    if (delivery.companyId != null && +delivery.companyId === companyId && !delivery.supplierId) {
+      return true;
+    }
+    if (delivery.customerId != null) {
+      const peer: Array<{ ok: number }> = await this.messageRepo.manager.query(
+        `SELECT 1 AS ok FROM public.customers WHERE user_id = $1 AND company_id = $2 LIMIT 1`,
+        [+delivery.customerId, companyId],
+      );
+      return !!peer?.length;
+    }
+    return false;
+  }
+
+  private buildConsumableDeliveryReferenceBlock(
+    delivery: ConsumableDelivery,
+  ): { reference: string; fullBodyPrefix: string } {
+    const link = this.consumableDeliveryLink(delivery.id);
+    const title = String(delivery.subject || '').trim() || 'Consumables delivery';
+    const reference = `Consumables delivery #${delivery.id}: ${title}`;
+    const fullBodyPrefix =
+      `📋 ${reference}\n` +
+      `View delivery: ${link}\n` +
+      `Company: ${delivery.companyName || delivery.customerName || '—'} · Site: ${delivery.siteName || '—'}\n` +
+      `────────────────────\n\n`;
+    return { reference, fullBodyPrefix };
   }
 
   private buildReportFaultReferenceBlock(fault: ReportFault): { reference: string; fullBodyPrefix: string } {
@@ -203,12 +405,78 @@ export class MessagesService {
     }
   }
 
+  private escapeHtml(value: string): string {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private parseCcEmails(raw?: string | null | string[]): string[] {
+    const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+    if (Array.isArray(raw)) {
+      return [
+        ...new Set(
+          raw
+            .map((e) => String(e || '').trim().toLowerCase())
+            .filter((e) => emailOk(e)),
+        ),
+      ];
+    }
+    if (!raw?.trim()) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return [
+        ...new Set(
+          parsed
+            .map((e) => String(e || '').trim().toLowerCase())
+            .filter((e) => emailOk(e)),
+        ),
+      ];
+    } catch {
+      return String(raw)
+        .split(/[;,]+/)
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => emailOk(e));
+    }
+  }
+
+  /** Customers may only email their own company personnel contacts. */
+  private async filterCustomerOwnPersonnelEmails(
+    customerUserId: number,
+    emails: string[],
+  ): Promise<string[]> {
+    const wanted = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+    if (!wanted.length) return [];
+    const rows: Array<{ email: string }> = await this.threadRepo.query(
+      `
+      SELECT DISTINCT LOWER(TRIM(p.email)) AS email
+      FROM customers c
+      INNER JOIN customer_personnel p ON p.company_id = c.company_id
+      WHERE c.user_id = $1
+        AND c.company_id IS NOT NULL
+        AND p.is_active = true
+        AND LOWER(TRIM(p.email)) = ANY($2::text[])
+      `,
+      [+customerUserId, wanted],
+    );
+    const allowed = new Set((rows || []).map((r) => String(r.email || '').toLowerCase()));
+    return wanted.filter((e) => allowed.has(e));
+  }
+
   private async loadCcDisplayInfo(customerIds: number[]): Promise<Map<number, string>> {
     const ids = [...new Set(customerIds.map((id) => +id).filter((id) => id > 0))];
     if (!ids.length) return new Map();
-    const rows: { id: number; name: string; company_name: string | null }[] =
-      await this.threadRepo.query(
-        `SELECT u.id,
+    const rows: {
+      id: number;
+      name: string;
+      company_name: string | null;
+      user_type: number | null;
+    }[] = await this.threadRepo.query(
+      `SELECT u.id,
           COALESCE(
             NULLIF(TRIM(u.full_name), ''),
             NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''),
@@ -217,20 +485,47 @@ export class MessagesService {
           COALESCE(
             NULLIF(TRIM(org.name), ''),
             NULLIF(TRIM(c.company_name), '')
-          ) AS company_name
+          ) AS company_name,
+          u.type AS user_type
          FROM users u
-         INNER JOIN customers c ON c.user_id = u.id
+         LEFT JOIN customers c ON c.user_id = u.id
          LEFT JOIN customer_companies org ON org.id = c.company_id
          WHERE u.id = ANY($1::int[])`,
-        [ids],
-      );
+      [ids],
+    );
+    const serviceProviderOrgName = await this.resolveServiceProviderOrgName();
+    const adminLabel = serviceProviderOrgName?.trim() || 'ServiceLink';
     return new Map(
       rows.map((r) => {
+        if (+r.user_type === userType.ADMIN) {
+          return [+r.id, adminLabel];
+        }
         const org = r.company_name?.trim();
         const label = org ? `${r.name} — ${org}` : r.name;
         return [+r.id, label];
       }),
     );
+  }
+
+  /** Active admin user ids from a requested Cc list (for customer → ServiceLink Cc). */
+  private async filterActiveAdminIds(ids: number[]): Promise<number[]> {
+    const requested = [...new Set((ids || []).map((id) => +id).filter((id) => id > 0))];
+    if (!requested.length) return [];
+    const admins = await this.listActiveAdminUsers();
+    const allow = new Set(admins.map((a) => +a.id));
+    return requested.filter((id) => allow.has(+id));
+  }
+
+  /** Active staff user ids from a requested Cc list (admin → staff Cc). */
+  private async filterActiveStaffIds(ids: number[]): Promise<number[]> {
+    const requested = [...new Set((ids || []).map((id) => +id).filter((id) => id > 0))];
+    if (!requested.length) return [];
+    const rows: Array<{ id: number }> = await this.threadRepo.query(
+      `SELECT u.id FROM users u WHERE u.type = $1 AND u.status != $2 AND u.id = ANY($3::int[])`,
+      [userType.STAFF, userStatus.DELETE, requested],
+    );
+    const allow = new Set(rows.map((r) => +r.id));
+    return requested.filter((id) => allow.has(+id));
   }
 
   private async loadSenderDisplayInfo(
@@ -272,9 +567,13 @@ export class MessagesService {
   ) {
     const sender = senderInfo.get(+m.senderId);
     const ccIds = this.parseCcCustomerIds(m.ccCustomerIds);
-    const ccRecipients = ccIds
-      .map((id) => ccInfo.get(id))
-      .filter((name): name is string => Boolean(name?.trim()));
+    const ccEmails = this.parseCcEmails(m.ccEmails);
+    const ccRecipients = [
+      ...ccIds
+        .map((id) => ccInfo.get(id))
+        .filter((name): name is string => Boolean(name?.trim())),
+      ...ccEmails,
+    ];
     return {
       id: m.id,
       threadId: m.threadId,
@@ -285,15 +584,18 @@ export class MessagesService {
       body: m.body,
       reportFaultId: m.reportFaultId,
       userTaskId: m.userTaskId,
+      consumableDeliveryId: m.consumableDeliveryId,
       reportReference: m.reportReference,
       reportLink: this.resolveMessageReportLink(
         m.reportFaultId,
         m.userTaskId,
         m.reportReference,
         m.body,
+        m.consumableDeliveryId,
       ),
       attachFiles: this.parseAttachFiles(m.attachFiles),
       ccCustomerIds: ccIds,
+      ccEmails,
       ccRecipients,
       createdAt: m.createdAt,
       isMine: +m.senderId === +userInfo.userId,
@@ -454,6 +756,34 @@ export class MessagesService {
     return count > 0;
   }
 
+  /** Sent vs received visible counts for Inbox/Sent conversation folders. */
+  private async conversationFolderCounts(
+    threadId: number,
+    viewerId: number,
+    filterSenderId?: number,
+    filterSenderType?: number,
+  ): Promise<{ sentCount: number; receivedCount: number; deletedCount: number }> {
+    const activeBase = () => {
+      const qb = this.messageRepo
+        .createQueryBuilder('m')
+        .where('m.thread_id = :threadId', { threadId })
+        .andWhere(this.notDeletedForUserSql(), { viewerId });
+      this.applyConversationFilter(qb, viewerId, filterSenderId, filterSenderType);
+      return qb;
+    };
+    const deletedQb = this.messageRepo
+      .createQueryBuilder('m')
+      .where('m.thread_id = :threadId', { threadId })
+      .andWhere(this.deletedForUserSql(), { viewerId });
+    this.applyConversationFilter(deletedQb, viewerId, filterSenderId, filterSenderType);
+    const [sentCount, receivedCount, deletedCount] = await Promise.all([
+      activeBase().andWhere('m.sender_id = :viewerId', { viewerId }).getCount(),
+      activeBase().andWhere('m.sender_id != :viewerId', { viewerId }).getCount(),
+      deletedQb.getCount(),
+    ]);
+    return { sentCount, receivedCount, deletedCount };
+  }
+
   /** Customers and staff only message Servicelink (admin), never each other. */
   private blockCustomerStaffCrossMessaging(
     userInfo: IUserInfo,
@@ -540,11 +870,13 @@ export class MessagesService {
       `,
       [anchorCustomerId, exclude, userStatus.DELETE],
     );
-    return rows.map((r: any) => ({
-      id: +r.id,
-      fullName: r.fullName || `User #${r.id}`,
-      companyName: r.companyName?.trim() || null,
-    }));
+    return rows
+      .map((r: any) => ({
+        id: +r.id,
+        fullName: r.fullName || `User #${r.id}`,
+        companyName: r.companyName?.trim() || null,
+      }))
+      .filter((r) => this.isPersonColleagueName(r.fullName));
   }
 
   async listCompanyCcRecipients(
@@ -555,16 +887,16 @@ export class MessagesService {
     try {
       const type = await this.resolveUserType(+userInfo.userId, +userInfo.type);
       if (type === userType.STAFF) {
-        return { ...errorCode.SUCCESS, data: { rows: [] } };
+        return { ...errorCode.SUCCESS, data: { rows: [], companyName: null } };
       }
       let anchorId = customerId ? +customerId : 0;
       if (type === userType.CUSTOMER) {
         anchorId = +userInfo.userId;
       } else if (type === userType.ADMIN && !anchorId) {
         // Avoid 400 loops if client calls without customerId.
-        return { ...errorCode.SUCCESS, data: { rows: [] } };
+        return { ...errorCode.SUCCESS, data: { rows: [], companyName: null } };
       } else if (type !== userType.ADMIN || !anchorId) {
-        return { ...errorCode.SUCCESS, data: { rows: [] } };
+        return { ...errorCode.SUCCESS, data: { rows: [], companyName: null } };
       }
       if (type === userType.CUSTOMER) {
         if (anchorId !== +userInfo.userId) {
@@ -575,7 +907,7 @@ export class MessagesService {
           where: { userId: anchorId },
         });
         if (!anchor) {
-          return { ...errorCode.SUCCESS, data: { rows: [] } };
+          return { ...errorCode.SUCCESS, data: { rows: [], companyName: null } };
         }
       }
       // Admin → customer: omit the primary recipient from Cc list.
@@ -583,11 +915,32 @@ export class MessagesService {
       const excludeFromList =
         forStaffThread ? 0 : type === userType.CUSTOMER ? anchorId : anchorId;
       const rows = await this.sameCompanyPeerRows(anchorId, excludeFromList);
-      return { ...errorCode.SUCCESS, data: { rows } };
+      const companyName =
+        rows.map((r) => r.companyName?.trim()).find(Boolean) ||
+        (await this.resolveCustomerOrgName(anchorId));
+      return { ...errorCode.SUCCESS, data: { rows, companyName } };
     } catch (error) {
       this.logger.error(error);
       return { ...errorCode.EXCEPTION, message: (error as Error).message };
     }
+  }
+
+  /** Organisation display name for a customer user (company table or free-text). */
+  private async resolveCustomerOrgName(customerUserId: number): Promise<string | null> {
+    const rows: Array<{ companyName?: string | null }> = await this.threadRepo.query(
+      `
+      SELECT COALESCE(
+        NULLIF(TRIM(org.name), ''),
+        NULLIF(TRIM(c.company_name), '')
+      ) AS "companyName"
+      FROM customers c
+      LEFT JOIN customer_companies org ON org.id = c.company_id
+      WHERE c.user_id = $1
+      LIMIT 1
+      `,
+      [+customerUserId],
+    );
+    return rows?.[0]?.companyName?.trim() || null;
   }
 
   private async resolveCcCustomerIds(
@@ -620,9 +973,11 @@ export class MessagesService {
       body: string;
       reportFaultId?: number;
       userTaskId?: number;
+      consumableDeliveryId?: number;
       reportReference?: string;
       attachFiles: string | null;
       ccCustomerIds?: string | null;
+      ccEmails?: string | null;
     },
   ): Promise<CustomerAdminMessage> {
     const msg = this.messageRepo.create({
@@ -632,9 +987,11 @@ export class MessagesService {
       body: fields.body,
       reportFaultId: fields.reportFaultId,
       userTaskId: fields.userTaskId,
+      consumableDeliveryId: fields.consumableDeliveryId,
       reportReference: fields.reportReference,
       attachFiles: fields.attachFiles,
       ccCustomerIds: fields.ccCustomerIds ?? null,
+      ccEmails: fields.ccEmails ?? null,
     });
     await this.messageRepo.save(msg);
     thread.lastMessagePreview = this.preview(fields.body);
@@ -650,9 +1007,11 @@ export class MessagesService {
       body: string;
       reportFaultId?: number;
       userTaskId?: number;
+      consumableDeliveryId?: number;
       reportReference?: string;
       attachFiles: string | null;
       ccCustomerIds?: string | null;
+      ccEmails?: string | null;
     },
     alsoExcludeCustomerIds: number[] = [],
   ): Promise<void> {
@@ -678,6 +1037,7 @@ export class MessagesService {
     threadId: number,
     reportFaultId?: number,
     userTaskId?: number,
+    consumableDeliveryId?: number,
   ): Promise<boolean> {
     if (reportFaultId) {
       const n = await this.messageRepo.count({
@@ -691,16 +1051,28 @@ export class MessagesService {
       });
       return n > 0;
     }
+    if (consumableDeliveryId) {
+      const n = await this.messageRepo.count({
+        where: { threadId, consumableDeliveryId },
+      });
+      return n > 0;
+    }
     return false;
   }
 
   private buildNewReportReferenceBlock(task: UserTask): { reference: string; fullBodyPrefix: string } {
-    const link = this.newReportLink(task.id);
-    const title = task.taskName?.trim() || task.description?.trim() || 'New report';
-    const reference = `New report #${task.id}: ${title}`;
+    const link = this.userTaskLink(task);
+    const isCustom = task.type === 'CUSTOM';
+    const title =
+      task.taskName?.trim() ||
+      task.description?.trim() ||
+      (isCustom ? 'New report' : 'Scheduled task');
+    const reference = isCustom
+      ? `New report #${task.id}: ${title}`
+      : `Scheduled task #${task.id}: ${title}`;
     const fullBodyPrefix =
       `📋 ${reference}\n` +
-      `View report: ${link}\n` +
+      `${isCustom ? 'View report' : 'Open task'}: ${link}\n` +
       `Site: ${task.siteName || '—'} · ${task.serviceName || '—'}\n` +
       `────────────────────\n\n`;
     return { reference, fullBodyPrefix };
@@ -806,6 +1178,7 @@ export class MessagesService {
 
       const rows: any[] = [];
       const admins = await this.listActiveAdminUsers();
+      const serviceProviderOrgName = await this.resolveServiceProviderOrgName();
 
       for (const admin of admins) {
         const last = await this.getLastVisibleMessagePreview(
@@ -825,13 +1198,19 @@ export class MessagesService {
         }
         const unreadCount = await unreadQb.getCount();
 
-        const hasMessages = await this.conversationHasVisibleMessages(
+        const folderCounts = await this.conversationFolderCounts(
           supportThread.id,
           viewerId,
           admin.id,
           userType.ADMIN,
         );
-        if (!hasMessages) continue;
+        if (
+          !folderCounts.sentCount &&
+          !folderCounts.receivedCount &&
+          !folderCounts.deletedCount
+        ) {
+          continue;
+        }
 
         rows.push({
           threadId: supportThread.id,
@@ -840,10 +1219,14 @@ export class MessagesService {
           customerId: isStaff ? null : viewerId,
           staffId: isStaff ? viewerId : null,
           customerName: admin.fullName,
-          companyName: 'Servicelink',
+          companyName: serviceProviderOrgName,
+          roleLabel: 'Service provider',
           lastMessagePreview: last.preview,
           updatedAt: last.updatedAt,
           unreadCount,
+          sentCount: folderCounts.sentCount,
+          receivedCount: folderCounts.receivedCount,
+          deletedCount: folderCounts.deletedCount,
           conversationKind: 'admin',
           filterSenderId: admin.id,
           filterSenderType: userType.ADMIN,
@@ -869,13 +1252,19 @@ export class MessagesService {
           }
           const peerUnread = await peerUnreadQb.getCount();
 
-          const hasMessages = await this.conversationHasVisibleMessages(
+          const folderCounts = await this.conversationFolderCounts(
             supportThread.id,
             viewerId,
             peer.id,
             userType.CUSTOMER,
           );
-          if (!hasMessages) continue;
+          if (
+            !folderCounts.sentCount &&
+            !folderCounts.receivedCount &&
+            !folderCounts.deletedCount
+          ) {
+            continue;
+          }
 
           rows.push({
             threadId: supportThread.id,
@@ -885,9 +1274,13 @@ export class MessagesService {
             staffId: null,
             customerName: peer.fullName,
             companyName: peer.companyName,
+            roleLabel: 'My colleague',
             lastMessagePreview: last.preview,
             updatedAt: last.updatedAt,
             unreadCount: peerUnread,
+            sentCount: folderCounts.sentCount,
+            receivedCount: folderCounts.receivedCount,
+            deletedCount: folderCounts.deletedCount,
             conversationKind: 'colleague',
             filterSenderId: peer.id,
             filterSenderType: userType.CUSTOMER,
@@ -906,11 +1299,17 @@ export class MessagesService {
             .andWhere(this.notDeletedForUserSql(), { viewerId });
           const peerUnread = await peerUnreadQb.getCount();
 
-          const hasMessages = await this.conversationHasVisibleMessages(
+          const folderCounts = await this.conversationFolderCounts(
             peerThread.id,
             viewerId,
           );
-          if (!hasMessages) continue;
+          if (
+            !folderCounts.sentCount &&
+            !folderCounts.receivedCount &&
+            !folderCounts.deletedCount
+          ) {
+            continue;
+          }
 
           rows.push({
             threadId: peerThread.id,
@@ -921,9 +1320,13 @@ export class MessagesService {
             peerStaffId: peer.id,
             customerName: peer.fullName,
             companyName: peer.companyName,
+            roleLabel: 'My colleague',
             lastMessagePreview: last.preview,
             updatedAt: last.updatedAt,
             unreadCount: peerUnread,
+            sentCount: folderCounts.sentCount,
+            receivedCount: folderCounts.receivedCount,
+            deletedCount: folderCounts.deletedCount,
             conversationKind: 'colleague',
             filterSenderId: null,
             filterSenderType: null,
@@ -951,6 +1354,7 @@ export class MessagesService {
       }
       const viewerId = +userInfo.userId;
       const admins = await this.listActiveAdminUsers();
+      const serviceProviderOrgName = await this.resolveServiceProviderOrgName();
       const colleagues =
         type === userType.STAFF
           ? await this.sameCompanyStaffPeerRows(viewerId, viewerId)
@@ -958,7 +1362,11 @@ export class MessagesService {
       return {
         ...errorCode.SUCCESS,
         data: {
-          admins: admins.map((a) => ({ id: a.id, fullName: a.fullName })),
+          admins: admins.map((a) => ({
+            id: a.id,
+            fullName: a.fullName,
+            companyName: serviceProviderOrgName,
+          })),
           colleagues: colleagues.map((c) => ({
             id: c.id,
             fullName: c.fullName,
@@ -1022,11 +1430,14 @@ export class MessagesService {
       const mapped = await Promise.all(
         rawThreads.map(async (row: any) => {
           const threadId = +row.threadId;
-          const hasMessages = await this.conversationHasVisibleMessages(
-            threadId,
-            viewerId,
-          );
-          if (!hasMessages) return null;
+          const folderCounts = await this.conversationFolderCounts(threadId, viewerId);
+          if (
+            !folderCounts.sentCount &&
+            !folderCounts.receivedCount &&
+            !folderCounts.deletedCount
+          ) {
+            return null;
+          }
 
           const peerSenderType =
             row.peerType === 'staff' ? userType.STAFF : userType.CUSTOMER;
@@ -1059,6 +1470,9 @@ export class MessagesService {
             lastMessagePreview: last.preview,
             updatedAt: last.updatedAt,
             unreadCount: actualUnread,
+            sentCount: folderCounts.sentCount,
+            receivedCount: folderCounts.receivedCount,
+            deletedCount: folderCounts.deletedCount,
           };
         }),
       );
@@ -1148,6 +1562,7 @@ export class MessagesService {
             OR COALESCE(m.report_reference, '') ILIKE :kw
             OR CAST(COALESCE(m.report_fault_id, 0) AS TEXT) ILIKE :kw
             OR CAST(COALESCE(m.user_task_id, 0) AS TEXT) ILIKE :kw
+            OR CAST(COALESCE(m.consumable_delivery_id, 0) AS TEXT) ILIKE :kw
             OR COALESCE(m.attach_files, '') ILIKE :kw
           )`,
           { kw },
@@ -1161,6 +1576,17 @@ export class MessagesService {
         .getMany();
 
       const senderInfo = await this.loadSenderDisplayInfo(messages.map((m) => m.senderId));
+      const serviceProviderOrgName = await this.resolveServiceProviderOrgName();
+      if (serviceProviderOrgName) {
+        for (const m of messages) {
+          if (+m.senderType === userType.ADMIN) {
+            const info = senderInfo.get(+m.senderId);
+            if (info && !info.companyName) {
+              info.companyName = serviceProviderOrgName;
+            }
+          }
+        }
+      }
       const allCcIds = messages.flatMap((m) => this.parseCcCustomerIds(m.ccCustomerIds));
       const ccInfo = await this.loadCcDisplayInfo(allCcIds);
 
@@ -1230,7 +1656,10 @@ export class MessagesService {
       });
       if (crossRole) return crossRole;
 
-      if (type === userType.STAFF && (body.reportFaultId || body.userTaskId)) {
+      if (
+        type === userType.STAFF &&
+        (body.reportFaultId || body.consumableDeliveryId)
+      ) {
         return {
           ...errorCode.VALIDATION_ERROR,
           message: 'Report links are only available in customer conversations',
@@ -1255,15 +1684,20 @@ export class MessagesService {
         thread = await this.getOrCreateStaffThread(+body.staffId);
       } else if (body.customerId) {
         thread = await this.getOrCreateCustomerThread(+body.customerId);
-      } else if (body.userTaskId || body.reportFaultId) {
+      } else if (body.userTaskId || body.reportFaultId || body.consumableDeliveryId) {
         const peer = await this.resolveReportConversationPeer(
           body.userTaskId ? +body.userTaskId : undefined,
           body.reportFaultId ? +body.reportFaultId : undefined,
+          body.consumableDeliveryId ? +body.consumableDeliveryId : undefined,
         );
         if (!peer) {
           return {
             ...errorCode.NOT_FOUND,
-            message: body.userTaskId ? 'New report not found' : 'Report fault not found',
+            message: body.userTaskId
+              ? 'Task not found'
+              : body.reportFaultId
+                ? 'Report fault not found'
+                : 'Consumables delivery not found',
           };
         }
         thread =
@@ -1320,6 +1754,7 @@ export class MessagesService {
       let reportReference: string | undefined;
       let reportFaultId: number | undefined;
       let userTaskId: number | undefined;
+      let consumableDeliveryId: number | undefined;
       let reportCustomerIdForCc = 0;
 
       if (body.reportFaultId) {
@@ -1360,26 +1795,47 @@ export class MessagesService {
         const task = await this.userTaskRepo.findOne({
           where: { id: body.userTaskId },
         });
-        if (!task || task.type !== 'CUSTOM') {
-          return { ...errorCode.NOT_FOUND, message: 'New report not found' };
+        if (!task || (task.type !== 'CUSTOM' && task.type !== 'DYNAMIC')) {
+          return { ...errorCode.NOT_FOUND, message: 'Task not found' };
         }
         if (+task.staffId <= 0) {
           return {
             ...errorCode.VALIDATION_ERROR,
-            message: 'Only staff-submitted new reports can be referenced',
+            message: 'Only staff-assigned tasks can be referenced',
           };
         }
-        if (type === userType.CUSTOMER && +task.customerId !== +userInfo.userId) {
+        if (type === userType.STAFF && +task.staffId !== +userInfo.userId) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'Not allowed to reference this task' };
+        }
+        if (type === userType.CUSTOMER) {
+          if (task.type !== 'CUSTOM' || +task.customerId !== +userInfo.userId) {
+            return errorCode.NOT_FOUND;
+          }
+        }
+        if (
+          type === userType.ADMIN &&
+          thread.customerId &&
+          +task.customerId > 0 &&
+          +task.customerId !== customerId
+        ) {
           return errorCode.NOT_FOUND;
         }
-        if (type === userType.ADMIN && thread.customerId && +task.customerId !== customerId) {
-          return errorCode.NOT_FOUND;
+        if (
+          type === userType.ADMIN &&
+          thread.staffId &&
+          +task.staffId > 0 &&
+          +task.staffId !== +thread.staffId
+        ) {
+          return {
+            ...errorCode.VALIDATION_ERROR,
+            message: 'Task staff does not match this conversation',
+          };
         }
         const ref = this.buildNewReportReferenceBlock(task);
         reportReference = ref.reference;
         userTaskId = task.id;
-        reportCustomerIdForCc = +task.customerId;
-        const taskLink = this.newReportLink(task.id);
+        reportCustomerIdForCc = +task.customerId || 0;
+        const taskLink = this.userTaskLink(task);
         const taskAlreadyInThread = await this.threadAlreadyReferencesReport(
           thread.id,
           undefined,
@@ -1388,10 +1844,52 @@ export class MessagesService {
         if (!messageBody.includes(taskLink) && !taskAlreadyInThread) {
           messageBody = ref.fullBodyPrefix + messageBody;
         }
-        if (type === userType.CUSTOMER) {
+        if (type === userType.CUSTOMER && task.type === 'CUSTOM') {
           task.adminOpenedAt = null;
           task.updatedAt = new Date();
           await this.userTaskRepo.save(task);
+        }
+      } else if (body.consumableDeliveryId) {
+        const delivery = await this.consumableDeliveryRepo.findOne({
+          where: { id: body.consumableDeliveryId },
+        });
+        if (!delivery || delivery.deletedAt) {
+          return { ...errorCode.NOT_FOUND, message: 'Consumables delivery not found' };
+        }
+        if (type === userType.CUSTOMER) {
+          const canAccess = await this.customerCanAccessDelivery(+userInfo.userId, delivery);
+          if (!canAccess) {
+            return errorCode.NOT_FOUND;
+          }
+          thread = await this.getOrCreateCustomerThread(+userInfo.userId);
+          reportCustomerIdForCc = +userInfo.userId;
+        } else if (type === userType.ADMIN) {
+          // Prefer delivery contact / company peer — not ServiceLink.
+          const deliveryPeer = await this.resolveDeliveryCustomerPeer(delivery);
+          if (deliveryPeer) {
+            reportCustomerIdForCc = deliveryPeer.customerId;
+            if (!thread.customerId || +thread.customerId !== deliveryPeer.customerId) {
+              // Keep explicit To: from the request when already set to a customer.
+              if (!(body.customerId != null && +body.customerId > 0)) {
+                thread = await this.getOrCreateCustomerThread(deliveryPeer.customerId);
+              }
+            }
+          } else if (thread.customerId) {
+            reportCustomerIdForCc = +thread.customerId;
+          }
+        }
+        const ref = this.buildConsumableDeliveryReferenceBlock(delivery);
+        reportReference = ref.reference;
+        consumableDeliveryId = delivery.id;
+        const deliveryLink = this.consumableDeliveryLink(delivery.id);
+        const alreadyInThread = await this.threadAlreadyReferencesReport(
+          thread.id,
+          undefined,
+          undefined,
+          delivery.id,
+        );
+        if (!messageBody.includes(deliveryLink) && !alreadyInThread) {
+          messageBody = ref.fullBodyPrefix + messageBody;
         }
       }
 
@@ -1399,11 +1897,11 @@ export class MessagesService {
 
       const adminToStaff =
         type === userType.ADMIN && body.staffId != null && +body.staffId > 0;
-      const ccAnchorId = adminToStaff
-        ? 0
-        : reportFaultOwnerId ||
-          reportCustomerIdForCc ||
-          (thread.customerId ? +thread.customerId : 0);
+      // Task/report messages still Cc company colleagues even when To: is staff.
+      const ccAnchorId =
+        reportFaultOwnerId ||
+        reportCustomerIdForCc ||
+        (adminToStaff ? 0 : thread.customerId ? +thread.customerId : 0);
       const senderCustomerId = type === userType.CUSTOMER ? +userInfo.userId : 0;
       const ccExclude: number[] = senderCustomerId ? [senderCustomerId] : [];
       const adminDirectCustomer =
@@ -1412,11 +1910,21 @@ export class MessagesService {
         +body.customerId > 0 &&
         !body.staffId;
       let resolvedCcIds: number[] = [];
-      const isReportReply = Boolean(reportFaultId || userTaskId);
+      const requestedCcIds = [...new Set((body.ccCustomerIds || []).map((id) => +id).filter((id) => id > 0))];
+      const adminCcIds =
+        type === userType.CUSTOMER ? await this.filterActiveAdminIds(requestedCcIds) : [];
+      const staffCcIds =
+        type === userType.ADMIN ? await this.filterActiveStaffIds(requestedCcIds) : [];
+      const adminCcSet = new Set(adminCcIds);
+      const staffCcSet = new Set(staffCcIds);
+      const requestedCustomerCcIds = requestedCcIds.filter(
+        (id) => !adminCcSet.has(+id) && !staffCcSet.has(+id),
+      );
+      const isReportReply = Boolean(reportFaultId || userTaskId || consumableDeliveryId);
       if (ccAnchorId) {
         resolvedCcIds = await this.resolveCcCustomerIds(
           ccAnchorId,
-          body.ccCustomerIds,
+          requestedCustomerCcIds,
           ccExclude,
         );
         const exclude = new Set(
@@ -1434,16 +1942,34 @@ export class MessagesService {
             .filter((id) => !exclude.has(id));
         }
       }
+      const storedCcIds = [...new Set([...resolvedCcIds, ...adminCcIds, ...staffCcIds])];
       const ccCustomerIdsJson =
-        resolvedCcIds.length > 0 ? JSON.stringify(resolvedCcIds) : null;
+        storedCcIds.length > 0 ? JSON.stringify(storedCcIds) : null;
+      let externalCcEmails = this.parseCcEmails(body.ccEmails);
+      if (type === userType.CUSTOMER && externalCcEmails.length) {
+        externalCcEmails = await this.filterCustomerOwnPersonnelEmails(
+          +userInfo.userId,
+          externalCcEmails,
+        );
+        if (!externalCcEmails.length && this.parseCcEmails(body.ccEmails).length) {
+          return {
+            ...errorCode.VALIDATION_ERROR,
+            message: 'You can only email your own personnel contacts',
+          };
+        }
+      }
+      const ccEmailsJson =
+        externalCcEmails.length > 0 ? JSON.stringify(externalCcEmails) : null;
 
       const messageFields = {
         body: messageBody,
         reportFaultId,
         userTaskId,
+        consumableDeliveryId,
         reportReference,
         attachFiles: attachJson,
         ccCustomerIds: ccCustomerIdsJson,
+        ccEmails: ccEmailsJson,
       };
 
       const msg = await this.saveMessageToThread(thread, userInfo, messageFields);
@@ -1462,6 +1988,37 @@ export class MessagesService {
         );
       }
 
+      if (staffCcIds.length > 0) {
+        const primaryStaff =
+          adminToStaff && body.staffId != null ? +body.staffId : 0;
+        for (const sid of staffCcIds) {
+          if (primaryStaff && +sid === primaryStaff) continue;
+          const staffThread = await this.getOrCreateStaffThread(+sid);
+          await this.saveMessageToThread(staffThread, userInfo, messageFields);
+        }
+      }
+
+      if (externalCcEmails.length && isMailConfigured()) {
+        const senderName =
+          (await this.displayNameForUser(+userInfo.userId)) || 'Service360 user';
+        const preview = messageBody.replace(/<[^>]+>/g, ' ').trim().slice(0, 2000);
+        const subject = reportReference
+          ? `Service360 message — ${reportReference}`
+          : 'Service360 message';
+        const footer =
+          type === userType.CUSTOMER
+            ? 'This message was sent to you from Service360 by your organisation contact.'
+            : 'You were Cc\'d on this Service360 conversation.';
+        const html = `<p><strong>${this.escapeHtml(senderName)}</strong> shared a message with you:</p>
+<p style="white-space:pre-wrap;">${this.escapeHtml(preview)}</p>
+<p style="color:#6b7280;font-size:12px;">${this.escapeHtml(footer)}</p>`;
+        for (const email of externalCcEmails) {
+          void SendMail(email, subject, html).catch((err) =>
+            this.logger.warn(`Cc email failed for ${email}: ${(err as Error)?.message || err}`),
+          );
+        }
+      }
+
       if (
         (type === userType.ADMIN || type === userType.STAFF) &&
         thread.customerId
@@ -1471,6 +2028,8 @@ export class MessagesService {
           linkPath = `/messages?reportFaultId=${reportFaultId}`;
         } else if (userTaskId) {
           linkPath = `/messages?userTaskId=${userTaskId}`;
+        } else if (consumableDeliveryId) {
+          linkPath = `/messages?consumableDeliveryId=${consumableDeliveryId}`;
         }
         const recipientIds = new Set<number>();
         recipientIds.add(+thread.customerId);
@@ -1555,6 +2114,64 @@ export class MessagesService {
           return errorCode.NOT_FOUND;
         }
         thread.adminLastReadAt = new Date();
+      } else {
+        return errorCode.CAN_NOT_DELETE;
+      }
+
+      await this.threadRepo.save(thread);
+      return errorCode.SUCCESS;
+    } catch (error) {
+      this.logger.error(error);
+      return { ...errorCode.EXCEPTION, message: (error as Error).message };
+    }
+  }
+
+  async markUnread(
+    userInfo: IUserInfo,
+    threadId?: number,
+    customerId?: number,
+    staffId?: number,
+  ) {
+    try {
+      const type = +userInfo.type;
+      const crossRole = this.blockCustomerStaffCrossMessaging(userInfo, {
+        customerId,
+        staffId,
+      });
+      if (crossRole) return crossRole;
+
+      let thread: CustomerAdminThread | null = null;
+
+      if (type === userType.CUSTOMER) {
+        thread = await this.getOrCreateCustomerThread(+userInfo.userId);
+      } else if (type === userType.STAFF) {
+        thread = await this.getOrCreateStaffThread(+userInfo.userId);
+      } else if (threadId) {
+        thread = await this.threadRepo.findOne({ where: { id: threadId } });
+      } else if (customerId) {
+        thread = await this.threadRepo.findOne({ where: { customerId } });
+      } else if (staffId) {
+        thread = await this.threadRepo.findOne({ where: { staffId } });
+      } else {
+        thread = await this.resolveThreadForUser(userInfo, customerId, staffId);
+      }
+
+      if (!thread) return errorCode.NOT_FOUND;
+
+      if (type === userType.CUSTOMER) {
+        if (+thread.customerId !== +userInfo.userId) return errorCode.NOT_FOUND;
+        thread.customerLastReadAt = null;
+      } else if (type === userType.STAFF) {
+        if (+thread.staffId !== +userInfo.userId) return errorCode.NOT_FOUND;
+        thread.staffLastReadAt = null;
+      } else if (type === userType.ADMIN) {
+        if (customerId && thread.customerId && +thread.customerId !== +customerId) {
+          return errorCode.NOT_FOUND;
+        }
+        if (staffId && thread.staffId && +thread.staffId !== +staffId) {
+          return errorCode.NOT_FOUND;
+        }
+        thread.adminLastReadAt = null;
       } else {
         return errorCode.CAN_NOT_DELETE;
       }

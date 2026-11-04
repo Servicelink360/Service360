@@ -35,7 +35,8 @@ export default function Dashboard() {
   const { width, height } = useWindowSize();
   const isMobilePortrait = useMobilePortrait();
   const { isDark } = useColorModeOptional();
-  const dashboardDark = isDark && isMobilePortrait;
+  // Mobile dark shell for every role (admin / staff / customer) and every in-app page.
+  const shellDark = isDark && isMobilePortrait;
 
   React.useEffect(() => {
     dispatch(toggleAll(width, height));
@@ -47,6 +48,21 @@ export default function Dashboard() {
       dispatch(profileActions.fetchProfileDataStart())
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  React.useLayoutEffect(() => {
+    const cls = 'app-shell-dark';
+    if (shellDark) {
+      document.body.classList.add(cls);
+      document.documentElement.setAttribute('data-app-shell', 'dark');
+    } else {
+      document.body.classList.remove(cls);
+      document.documentElement.removeAttribute('data-app-shell');
+    }
+    return () => {
+      document.body.classList.remove(cls);
+      document.documentElement.removeAttribute('data-app-shell');
+    };
+  }, [shellDark]);
 
   return (
     <DashboardContainer>
@@ -62,8 +78,8 @@ export default function Dashboard() {
             }}
           >
             <Content
-              className={`isomorphicContent${dashboardDark ? ' dashboard-content--dark' : ''}`}
-              style={dashboardDark ? { ...styles.content, background: '#000000' } : styles.content}
+              className={`isomorphicContent${shellDark ? ' dashboard-content--dark app-content--dark' : ''}`}
+              style={shellDark ? { ...styles.content, background: '#000000' } : styles.content}
               id="main-content"
               role="main"
               aria-label="Page content"
@@ -72,7 +88,7 @@ export default function Dashboard() {
             </Content>
             <Footer
               style={
-                dashboardDark
+                shellDark
                   ? {
                       ...styles.footer,
                       background: '#000000',

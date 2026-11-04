@@ -1,6 +1,7 @@
 import Layout from '@app/components/layout/Layout';
 import { dateFormat, dateTimeFormat } from '@app/config/data.config';
 import urlConfig from '@app/config/site.config';
+import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -17,9 +18,11 @@ import {
   Col,
   DatePicker,
   Descriptions,
+  Empty,
   Form,
   Input,
   Modal,
+  Pagination,
   Popconfirm,
   Row,
   Select,
@@ -312,6 +315,7 @@ const renderInvoiceActions = (
 
 const InvoicesPage: React.FC = () => {
   const dispatch = useDispatch();
+  const isMobilePortrait = useMobilePortrait();
   const profileRaw = localStorage.getItem('profile');
   const profile = profileRaw ? JSON.parse(profileRaw) : null;
   const profileType = profile ? +profile.type : 0;
@@ -412,10 +416,12 @@ const InvoicesPage: React.FC = () => {
   const handleSearch = () => {
     const values = filterForm.getFieldsValue();
     const range = values.dateRange;
+    const start = isMobilePortrait ? values.startDate : range?.[0];
+    const end = isMobilePortrait ? values.endDate : range?.[1];
     setFilters({
       keyword: String(values.keyword || '').trim(),
-      startDate: range?.[0] ? moment(range[0]).format('YYYY-MM-DD') : '',
-      endDate: range?.[1] ? moment(range[1]).format('YYYY-MM-DD') : '',
+      startDate: start ? moment(start).format('YYYY-MM-DD') : '',
+      endDate: end ? moment(end).format('YYYY-MM-DD') : '',
     });
     setPage(1);
   };
@@ -684,7 +690,7 @@ const InvoicesPage: React.FC = () => {
       title: 'Date',
       key: 'createdAt',
       dataIndex: 'createdAt',
-      width: 160,
+      width: 168,
       sorter: true,
       sortOrder: invoiceColumnSortOrder(listSort, 'createdAt'),
       render: (v: string) =>
@@ -693,7 +699,7 @@ const InvoicesPage: React.FC = () => {
     {
       title: 'Sender',
       key: 'sender',
-      width: 160,
+      width: 140,
       ellipsis: true,
       sorter: true,
       sortOrder: invoiceColumnSortOrder(listSort, 'sender'),
@@ -705,6 +711,8 @@ const InvoicesPage: React.FC = () => {
             title: 'Company',
             key: 'companyName',
             dataIndex: 'companyName',
+            width: 160,
+            ellipsis: true,
             sorter: true,
             sortOrder: invoiceColumnSortOrder(listSort, 'companyName'),
             render: (_: unknown, r: InvoiceRow) =>
@@ -716,6 +724,7 @@ const InvoicesPage: React.FC = () => {
       title: 'Title',
       key: 'title',
       dataIndex: 'title',
+      width: 180,
       ellipsis: true,
       sorter: true,
       sortOrder: invoiceColumnSortOrder(listSort, 'title'),
@@ -723,6 +732,7 @@ const InvoicesPage: React.FC = () => {
     {
       title: 'Files',
       key: 'files',
+      width: 200,
       sorter: true,
       sortOrder: invoiceColumnSortOrder(listSort, 'files'),
       render: (_: unknown, r: InvoiceRow) => {
@@ -751,6 +761,7 @@ const InvoicesPage: React.FC = () => {
             title: 'Action',
             key: 'action',
             width: isDeletedTab ? 150 : isAdmin ? 160 : 120,
+            fixed: 'right' as const,
             render: (_: unknown, r: InvoiceRow) =>
               renderInvoiceActions(r, {
                 onView: () => setViewRow(r),
@@ -764,6 +775,11 @@ const InvoicesPage: React.FC = () => {
         ]
       : []),
   ];
+
+  const tableScrollX = columns.reduce(
+    (sum, col) => sum + (typeof col.width === 'number' ? col.width : 140),
+    0,
+  );
 
   return (
     <Layout title="Invoices">
@@ -785,11 +801,42 @@ const InvoicesPage: React.FC = () => {
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} sm={12} md={10} lg={8}>
-              <Form.Item name="dateRange" label="Date" style={{ marginBottom: 0 }}>
-                <RangePicker style={{ width: '100%' }} format={dateFormat} />
-              </Form.Item>
-            </Col>
+            {isMobilePortrait ? (
+              <>
+                <Col xs={12}>
+                  <Form.Item name="startDate" label="Start date" style={{ marginBottom: 0 }}>
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format={dateFormat}
+                      inputReadOnly
+                      allowClear
+                      dropdownClassName="nr-mobile-range-calendar"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={12}>
+                  <Form.Item name="endDate" label="End date" style={{ marginBottom: 0 }}>
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format={dateFormat}
+                      inputReadOnly
+                      allowClear
+                      dropdownClassName="nr-mobile-range-calendar"
+                    />
+                  </Form.Item>
+                </Col>
+              </>
+            ) : (
+              <Col xs={24} sm={12} md={10} lg={8}>
+                <Form.Item name="dateRange" label="Date" style={{ marginBottom: 0 }}>
+                  <RangePicker
+                    style={{ width: '100%' }}
+                    format={dateFormat}
+                    dropdownClassName="nr-mobile-range-calendar"
+                  />
+                </Form.Item>
+              </Col>
+            )}
             <Col xs={24} sm={24} md={6} lg={isAdmin ? 10 : 4}>
               <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -825,19 +872,105 @@ const InvoicesPage: React.FC = () => {
         />
       ) : null}
 
-      <Table
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={rows}
-        onChange={onTableChange}
-        pagination={{
-          current: page,
-          pageSize: limit,
-          total: count,
-          showSizeChanger: true,
-        }}
-      />
+      {isMobilePortrait ? (
+        <div className="invoices-mobile-list">
+          {loading ? (
+            <div style={{ padding: 24, textAlign: 'center', color: '#8c8c8c' }}>Loading…</div>
+          ) : !rows.length ? (
+            <Empty description="No data" style={{ margin: '32px 0' }} />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {rows.map((r) => {
+                const urls = parseFileUrls(r.attachFiles);
+                return (
+                  <div
+                    key={r.id}
+                    className="invoices-mobile-card"
+                    style={{
+                      border: '1px solid #e8e8e8',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      background: '#fff',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: 6, wordBreak: 'break-word' }}>
+                      {r.title || '—'}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#595959', lineHeight: 1.5 }}>
+                      <div>
+                        <strong>Date:</strong>{' '}
+                        {r.createdAt
+                          ? moment(r.createdAt).utcOffset(600).format(dateTimeFormat)
+                          : '—'}
+                      </div>
+                      <div>
+                        <strong>Sender:</strong> {invoiceSenderLabel(r)}
+                      </div>
+                      {isAdmin ? (
+                        <div>
+                          <strong>Company:</strong> {r.companyName || r.customerName || '—'}
+                        </div>
+                      ) : null}
+                      <div>
+                        <strong>Files:</strong>{' '}
+                        {urls.length
+                          ? urls.map((url) => (
+                              <div key={url} style={{ marginTop: 2 }}>
+                                <a href={url} target="_blank" rel="noopener noreferrer">
+                                  <FileOutlined /> {fileLabel(url)}
+                                </a>
+                              </div>
+                            ))
+                          : '—'}
+                      </div>
+                    </div>
+                    {isAdmin || isCustomer ? (
+                      <div style={{ marginTop: 8, borderTop: '1px solid #f0f0f0', paddingTop: 4 }}>
+                        {renderInvoiceActions(r, {
+                          onView: () => setViewRow(r),
+                          onEdit: isAdmin ? () => openEdit(r) : undefined,
+                          onDelete: () => onDelete(r.id),
+                          onRestore: () => onRestore(r.id),
+                          isDeletedTab,
+                          isAdmin,
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ marginTop: 16, textAlign: 'center' }}>
+            <Pagination
+              size="small"
+              current={page}
+              pageSize={limit}
+              total={count}
+              showSizeChanger
+              onChange={(p, ps) => {
+                setPage(p);
+                setLimit(ps);
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={rows}
+          onChange={onTableChange}
+          scroll={{ x: tableScrollX }}
+          pagination={{
+            current: page,
+            pageSize: limit,
+            total: count,
+            showSizeChanger: true,
+          }}
+        />
+      )}
 
       <Modal
         title="Invoice details"

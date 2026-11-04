@@ -74,6 +74,7 @@ export class MessagesController {
     @Res() res,
     @Query('userTaskId') userTaskId: string,
     @Query('reportFaultId') reportFaultId: string,
+    @Query('consumableDeliveryId') consumableDeliveryId: string,
     @Request() req,
   ) {
     const user: IUserInfo = req.user;
@@ -83,6 +84,7 @@ export class MessagesController {
         user,
         userTaskId ? +userTaskId : undefined,
         reportFaultId ? +reportFaultId : undefined,
+        consumableDeliveryId ? +consumableDeliveryId : undefined,
       ),
     );
   }
@@ -117,6 +119,28 @@ export class MessagesController {
     return customHttpCode(
       res,
       await this.messagesService.markRead(
+        user,
+        threadId ? +threadId : undefined,
+        customerId ? +customerId : undefined,
+        staffId ? +staffId : undefined,
+      ),
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Patch('markUnread')
+  async markUnread(
+    @Res() res,
+    @Query('threadId') threadId: string,
+    @Query('customerId') customerId: string,
+    @Query('staffId') staffId: string,
+    @Request() req,
+  ) {
+    const user: IUserInfo = req.user;
+    return customHttpCode(
+      res,
+      await this.messagesService.markUnread(
         user,
         threadId ? +threadId : undefined,
         customerId ? +customerId : undefined,

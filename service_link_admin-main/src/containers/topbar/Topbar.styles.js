@@ -106,27 +106,6 @@ const TopbarWrapper = styled.div`
         }
       }
 
-      .topbarDashboardBtn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        width: 32px;
-        height: 32px;
-        margin-left: 6px;
-        margin-right: 0;
-        padding: 0;
-        border: 0;
-        background: transparent;
-        cursor: pointer;
-        font-size: 20px;
-        color: inherit;
-
-        &:hover,
-        &:focus-visible {
-          opacity: 0.85;
-        }
-      }
     }
 
     &.mobile-portrait-topbar--dark {
@@ -156,8 +135,11 @@ const TopbarWrapper = styled.div`
       }
 
       .triggerBtn {
-        width: 24px;
-        height: 100%;
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        min-height: 36px;
         display: -webkit-inline-flex;
         display: -ms-inline-flex;
         display: inline-flex;
@@ -168,14 +150,17 @@ const TopbarWrapper = styled.div`
         outline: 0;
         position: relative;
         cursor: pointer;
+        padding: 0;
+        color: inherit;
 
+        /* Prefer Ant icon; keep Ionicons fallback if CSS still injects it elsewhere */
         &:before {
-          content: '\f20e';
-          font-family: 'Ionicons';
-          font-size: 26px;
-          color: inherit;
-          line-height: 0;
-          position: absolute;
+          display: none;
+        }
+
+        .triggerBtnIcon {
+          font-size: 22px;
+          line-height: 1;
         }
       }
     }

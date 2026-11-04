@@ -14,9 +14,11 @@ const SidebarWrapper = styled.div`
   .isomorphicSidebar {
     position: relative;
     z-index: 1000;
-    background: #397d36;
-    width: 280px;
-    flex: 0 0 280px;
+    background:
+      radial-gradient(120% 55% at 0% 0%, rgba(120, 220, 80, 0.28) 0%, transparent 55%),
+      linear-gradient(165deg, #06452b 0%, #00351f 48%, #002b1b 100%);
+    width: 250px;
+    flex: 0 0 250px;
     height: 100%;
     max-height: 936px;
     overflow: hidden;
@@ -50,24 +52,166 @@ const SidebarWrapper = styled.div`
         max-height: 42px !important;
       }
 
+      button.mobile-sidebar-close,
       .mobile-sidebar-close {
         flex: 0 0 auto;
         margin-left: auto;
-        width: 44px;
-        height: 44px;
-        min-width: 44px;
-        min-height: 44px;
-        border-radius: 50%;
-        border: none;
-        background: #fff;
-        color: #333;
-        font-size: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        width: 44px !important;
+        height: 44px !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        border-radius: 50% !important;
+        border: 1px solid #e5e7eb !important;
+        background: #ffffff !important;
+        color: #111111 !important;
+        font-size: 18px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35) !important;
+        padding: 0 !important;
       }
+
+      .mobile-sidebar-close .anticon {
+        color: #111111 !important;
+      }
+
+      html[data-color-mode='dark'] & button.mobile-sidebar-close,
+      html[data-color-mode='dark'] & .mobile-sidebar-close,
+      body.app-shell-dark & button.mobile-sidebar-close {
+        background: rgba(0, 0, 0, 0.45) !important;
+        border: 2px solid rgba(255, 255, 255, 0.85) !important;
+        color: #ffffff !important;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+      }
+
+      html[data-color-mode='dark'] & .mobile-sidebar-close .anticon,
+      body.app-shell-dark & .mobile-sidebar-close .anticon {
+        color: #ffffff !important;
+      }
+    }
+
+    /* Colored groups — match /nav-mock */
+    .isoNavGroup {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .isoNavGroup-bar {
+      width: 3px;
+      height: 14px;
+      border-radius: 2px;
+      background: var(--g, #7CFFB2);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--g, #7CFFB2) 28%, transparent);
+      flex-shrink: 0;
+    }
+
+    .isoNavGroup-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 10px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--g, #7CFFB2) !important;
+      line-height: 1.2;
+    }
+
+    .ant-menu-dark .isoNavGroup-submenu > .ant-menu-submenu-title {
+      height: auto !important;
+      line-height: 1.2 !important;
+      margin: 2px 8px 0 !important;
+      padding: 7px 8px !important;
+      border-radius: 8px !important;
+      background: transparent !important;
+    }
+
+    .ant-menu-dark .isoNavGroup-submenu > .ant-menu-submenu-title:hover {
+      background: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .ant-menu-dark .isoNavGroup-submenu.ant-menu-submenu-open > .ant-menu-submenu-title {
+      background: color-mix(in srgb, var(--g, #7CFFB2) 14%, transparent) !important;
+    }
+
+    .ant-menu-dark .isoNavGroup-submenu > .ant-menu-submenu-title .ant-menu-submenu-arrow {
+      color: rgba(255, 255, 255, 0.65) !important;
+    }
+
+    /*
+      Match /nav-mock for EVERY group:
+      - Level 1 under a group (Messages, Tickets, Tasks, Templates, …) = same indent
+      - Level 2 (Pending, Asset register, Admins, …) = one step deeper
+    */
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub {
+      background: transparent !important;
+    }
+
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-item,
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-submenu {
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+      margin: 0 !important;
+      background: transparent !important;
+    }
+
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-item,
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-submenu-title {
+      padding-left: 28px !important;
+      padding-right: 36px !important;
+      height: 36px !important;
+      line-height: 36px !important;
+      margin: 0 !important;
+      background: transparent !important;
+    }
+
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-sub {
+      background: transparent !important;
+    }
+
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-sub > .ant-menu-submenu {
+      padding-left: 0 !important;
+      margin: 0 !important;
+      background: transparent !important;
+    }
+
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > .ant-menu-submenu > .ant-menu-sub > .ant-menu-item,
+    .isomorphicSidebar
+      .isoNavGroup-submenu
+      > .ant-menu-sub
+      > .ant-menu-submenu
+      > .ant-menu-sub
+      > .ant-menu-submenu
+      > .ant-menu-submenu-title {
+      padding-left: 44px !important;
+      padding-right: 36px !important;
+      height: 34px !important;
+      line-height: 34px !important;
+    }
+
+    /* Beat legacy 40px li padding inside every colored group */
+    .isomorphicSidebar.ant-layout-sider .isoNavGroup-submenu > .ant-menu-sub > li,
+    .isomorphicSidebar .isoNavGroup-submenu > .ant-menu-sub > li {
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
+
+    .isoMenuHolder--child {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .isoMenuHolder--child .anticon,
+    .isoMenuHolder--child svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
     }
 
     /* Override ant-menu-dark defaults (navy #001529, blue #1890ff) — green only */
@@ -126,8 +270,8 @@ const SidebarWrapper = styled.div`
     }
 
     @media only screen and (max-width: 767px) {
-      width: 240px !important;
-      flex: 0 0 240px !important;
+      width: 250px !important;
+      flex: 0 0 250px !important;
 
       &.isomorphicSidebar--drawer {
         width: 100% !important;
@@ -177,13 +321,13 @@ const SidebarWrapper = styled.div`
     .logo {
       width: 100%;
       display: flex;
-      padding: 0.75rem 1rem;
+      padding: 1.5rem 1rem 0.75rem;
       @media only screen and (max-width: ${breakPoint.XLDesktop}px) {
-        padding: 0.65rem 0.85rem;
+        padding: 1.15rem 0.85rem 0.55rem;
       }
       align-items: center;
       flex-direction: column;
-      background-color: #ffffff;
+      background-color: transparent;
       justify-content: center;
       &__icon {
         display: flex;
@@ -512,11 +656,6 @@ const SidebarWrapper = styled.div`
               color: #f0f0f0 !important;
             }
           }
-          // .ant-menu-item-selected{
-          //   a {
-          //     color: #f0f0f0 !important;
-          //   }
-          // }
         }
 
         .ant-menu-item-group {

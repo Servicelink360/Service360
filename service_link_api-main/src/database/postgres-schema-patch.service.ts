@@ -103,6 +103,7 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     await this.ensureCustomerPersonnelAndFaultDelegation();
     await this.ensureAdminPersonnelAndStaffDelegation();
     await this.ensureInvoicesTable();
+    await this.ensureConsumablesTables();
     await this.ensureAssetsTable();
     await this.ensureTrainingTables();
     await this.ensureToolboxTables();
@@ -587,11 +588,19 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       `);
       await this.dataSource.query(`
         ALTER TABLE public.customer_admin_messages
+        ADD COLUMN IF NOT EXISTS consumable_delivery_id INT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customer_admin_messages
         ADD COLUMN IF NOT EXISTS attach_files TEXT NULL;
       `);
       await this.dataSource.query(`
         ALTER TABLE public.customer_admin_messages
         ADD COLUMN IF NOT EXISTS cc_customer_ids TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.customer_admin_messages
+        ADD COLUMN IF NOT EXISTS cc_emails TEXT NULL;
       `);
       await this.dataSource.query(`
         ALTER TABLE public.customer_admin_threads
@@ -2095,6 +2104,290 @@ export class PostgresSchemaPatchService implements OnModuleInit {
       `);
     } catch (e) {
       this.logger.warn(`invoices table patch: ${(e as Error).message}`);
+    }
+  }
+
+  private async ensureConsumablesTables(): Promise<void> {
+    try {
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumables (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          unit VARCHAR(64) NOT NULL DEFAULT 'each',
+          description TEXT NULL,
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          deleted_at TIMESTAMP NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_by INTEGER NULL,
+          updated_by INTEGER NULL
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumables_name ON public.consumables(name);
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumables
+        ADD COLUMN IF NOT EXISTS stock_code VARCHAR(64) NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumables
+        ADD COLUMN IF NOT EXISTS category VARCHAR(64) NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumables_stock_code ON public.consumables(stock_code);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumables_category ON public.consumables(category);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumable_deliveries (
+          id SERIAL PRIMARY KEY,
+          customer_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+          customer_name VARCHAR(255) NOT NULL DEFAULT '',
+          company_name VARCHAR(255) NOT NULL DEFAULT '',
+          site_name VARCHAR(255) NOT NULL DEFAULT '',
+          subject VARCHAR(500) NOT NULL,
+          notes TEXT NULL,
+          items_json TEXT NOT NULL DEFAULT '[]',
+          emailed_to VARCHAR(255) NULL,
+          emailed_at TIMESTAMP NULL,
+          email_status VARCHAR(32) NOT NULL DEFAULT 'pending',
+          deleted_at TIMESTAMP NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_by INTEGER NULL,
+          updated_by INTEGER NULL
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_deliveries_customer
+        ON public.consumable_deliveries(customer_id);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_deliveries_created
+        ON public.consumable_deliveries(created_at DESC);
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_deliveries
+        ALTER COLUMN emailed_to TYPE TEXT USING emailed_to::text;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_delivery_events
+        ALTER COLUMN emailed_to TYPE TEXT USING emailed_to::text;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_deliveries
+        ADD COLUMN IF NOT EXISTS emailed_cc TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_deliveries
+        ADD COLUMN IF NOT EXISTS email_error TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_deliveries
+        ADD COLUMN IF NOT EXISTS supplier_id INTEGER NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_deliveries
+        ADD COLUMN IF NOT EXISTS company_id INTEGER NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_deliveries
+        ALTER COLUMN customer_id DROP NOT NULL;
+      `);
+      await this.dataSource.query(`
+        DO $$ BEGIN
+          ALTER TABLE public.consumable_deliveries
+          DROP CONSTRAINT IF EXISTS consumable_deliveries_customer_id_fkey;
+        EXCEPTION WHEN undefined_object THEN NULL;
+        END $$;
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_deliveries_supplier
+        ON public.consumable_deliveries(supplier_id);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumable_delivery_items (
+          id SERIAL PRIMARY KEY,
+          delivery_id INTEGER NOT NULL REFERENCES public.consumable_deliveries(id) ON DELETE CASCADE,
+          consumable_id INTEGER NULL,
+          name VARCHAR(255) NOT NULL,
+          unit VARCHAR(64) NOT NULL DEFAULT 'each',
+          quantity NUMERIC(12, 2) NOT NULL DEFAULT 1,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_delivery_items_delivery
+        ON public.consumable_delivery_items(delivery_id);
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_delivery_items
+        ADD COLUMN IF NOT EXISTS stock_code VARCHAR(64) NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumable_delivery_events (
+          id SERIAL PRIMARY KEY,
+          delivery_id INTEGER NOT NULL REFERENCES public.consumable_deliveries(id) ON DELETE CASCADE,
+          action VARCHAR(40) NOT NULL,
+          actor_id INTEGER NULL REFERENCES public.users(id) ON DELETE SET NULL,
+          emailed_to VARCHAR(255) NULL,
+          emailed_cc TEXT NULL,
+          detail TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_delivery_events_delivery
+        ON public.consumable_delivery_events(delivery_id, created_at DESC);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumable_email_settings (
+          id SERIAL PRIMARY KEY,
+          logo_url TEXT NULL,
+          brand_name VARCHAR(255) NOT NULL DEFAULT 'SERVICELINK',
+          slogan VARCHAR(255) NOT NULL DEFAULT 'YOUR PARTNER IN FACILITIES',
+          contact_name VARCHAR(255) NOT NULL DEFAULT 'Brendan Godfrey',
+          contact_title VARCHAR(255) NOT NULL DEFAULT 'Facilities Helpdesk',
+          address TEXT NULL,
+          mobile VARCHAR(64) NULL,
+          email VARCHAR(255) NULL,
+          website VARCHAR(255) NULL,
+          footer_text TEXT NULL,
+          intro_text TEXT NULL,
+          closing_text TEXT NULL,
+          updated_by INTEGER NULL,
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_email_settings
+        ADD COLUMN IF NOT EXISTS signature_html TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_email_settings
+        ADD COLUMN IF NOT EXISTS body_html TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_email_settings
+        ADD COLUMN IF NOT EXISTS logo_width INTEGER NULL DEFAULT 140;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_email_settings
+        ADD COLUMN IF NOT EXISTS logo_height INTEGER NULL DEFAULT 72;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_email_settings
+        ADD COLUMN IF NOT EXISTS heading_text TEXT NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_email_settings
+        ALTER COLUMN heading_text TYPE TEXT USING heading_text::text;
+      `);
+      await this.dataSource.query(`
+        INSERT INTO public.consumable_email_settings (
+          id, brand_name, slogan, contact_name, contact_title, address, mobile, email, website,
+          footer_text, intro_text, closing_text, signature_html
+        )
+        SELECT
+          1,
+          'SERVICELINK',
+          'YOUR PARTNER IN FACILITIES',
+          'Brendan Godfrey',
+          'Facilities Helpdesk',
+          '309/49-51, Queens Rd Five Dock NSW 2046',
+          '0424 166 776',
+          'helpdesk@servicelink.net.au',
+          'www.servicelink.net.au',
+          'Servicelink provides comprehensive facilities and support services, committed to maintaining safe, compliant, and well-managed environments that support daily operations and community use.',
+          '<p>Please find the consumables list below.</p>',
+          '<p>If you have any questions, reply to this email or contact us using the details below.</p>',
+          NULL
+        WHERE NOT EXISTS (SELECT 1 FROM public.consumable_email_settings WHERE id = 1);
+      `);
+      // Backfill line items from legacy items_json once (only when no rows exist yet).
+      await this.dataSource.query(`
+        INSERT INTO public.consumable_delivery_items
+          (delivery_id, consumable_id, name, unit, quantity, sort_order)
+        SELECT d.id,
+          NULLIF((elem->>'consumableId')::text, '')::int,
+          COALESCE(NULLIF(elem->>'name', ''), 'Item'),
+          COALESCE(NULLIF(elem->>'unit', ''), 'each'),
+          GREATEST(COALESCE(NULLIF(elem->>'quantity', '')::numeric, 1), 0.01),
+          (ord.ord - 1)
+        FROM public.consumable_deliveries d
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE
+            WHEN d.items_json IS NULL OR btrim(d.items_json) = '' THEN '[]'::jsonb
+            ELSE d.items_json::jsonb
+          END
+        ) WITH ORDINALITY AS ord(elem, ord)
+        WHERE NOT EXISTS (
+          SELECT 1 FROM public.consumable_delivery_items i WHERE i.delivery_id = d.id
+        )
+        AND jsonb_typeof(
+          CASE
+            WHEN d.items_json IS NULL OR btrim(d.items_json) = '' THEN '[]'::jsonb
+            ELSE d.items_json::jsonb
+          END
+        ) = 'array';
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumable_suppliers (
+          id SERIAL PRIMARY KEY,
+          company_id INTEGER NULL REFERENCES public.customer_companies(id) ON DELETE SET NULL,
+          name VARCHAR(255) NOT NULL,
+          contact_name VARCHAR(255) NULL,
+          email VARCHAR(255) NULL,
+          phone VARCHAR(64) NULL,
+          address TEXT NULL,
+          website VARCHAR(255) NULL,
+          notes TEXT NULL,
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          deleted_at TIMESTAMP NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          created_by INTEGER NULL,
+          updated_by INTEGER NULL
+        );
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_suppliers
+        ADD COLUMN IF NOT EXISTS company_id INTEGER NULL;
+      `);
+      await this.dataSource.query(`
+        ALTER TABLE public.consumable_suppliers
+        ADD COLUMN IF NOT EXISTS category VARCHAR(64) NULL;
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_suppliers_name
+        ON public.consumable_suppliers(name);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_suppliers_category
+        ON public.consumable_suppliers(category);
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_suppliers_company
+        ON public.consumable_suppliers(company_id);
+      `);
+      await this.dataSource.query(`
+        CREATE TABLE IF NOT EXISTS public.consumable_delivery_customer_visibility (
+          delivery_id INTEGER NOT NULL REFERENCES public.consumable_deliveries(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+          hidden_at TIMESTAMP NULL,
+          cleared_at TIMESTAMP NULL,
+          PRIMARY KEY (delivery_id, user_id)
+        );
+      `);
+      await this.dataSource.query(`
+        CREATE INDEX IF NOT EXISTS idx_consumable_delivery_customer_visibility_user
+        ON public.consumable_delivery_customer_visibility(user_id);
+      `);
+      this.logger.log('consumables tables ensured');
+    } catch (e) {
+      this.logger.warn(`consumables table patch: ${(e as Error).message}`);
     }
   }
 

@@ -1,5 +1,5 @@
 import Layout from '@app/components/layout/Layout';
-import { CameraOutlined, CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, FolderOpenOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { CameraOutlined, CustomerServiceOutlined, FileAddOutlined, FileTextOutlined, LoginOutlined, MailOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import BrokenGlassIcon from '@app/components/icons/BrokenGlassIcon';
 import React, { useCallback, useEffect, useRef } from 'react';
 import { DashboardWarp } from '../../components/common/Common.styles';
@@ -85,10 +85,10 @@ const Dashboard: React.FC = () => {
 
   const reportFaultsCount = data?.reportFaultsCount ?? 0;
   const newReportsCount = data?.newReportsCount ?? 0;
+  const adhocReportsCount = data?.adhocReportsCount ?? 0;
   const newTicketsCount = data?.newTicketsCount ?? 0;
   const messagesUnreadCount = data?.messagesUnreadCount ?? 0;
   const myTasksCount = data?.myTasksCount ?? 0;
-  const invoicesCount = data?.invoicesCount ?? 0;
   const canShowMessages =
     profile &&
     (+profile.type === userType.ADMIN ||
@@ -201,12 +201,23 @@ const Dashboard: React.FC = () => {
   const invitedMeeting = meetingInvites[0];
   const incoming = !!((isStaff || isCustomer) && invitedMeeting && !invitedMeeting.mine && callHidden !== invitedMeeting.id);
 
-  const adhocReportBadge = (isStaff || isAdmin) ? (
-    <Link to="/new-reports?create=adhoc" className="dashboard-report-badge">
+  const adhocReportBadge = (isStaff || isAdmin || isCustomer) ? (
+    <Link
+      to={isStaff ? '/new-reports?create=adhoc' : '/new-reports'}
+      className="dashboard-report-badge"
+    >
       <span className="dashboard-report-badge__icon-wrap">
         <div className="dashboard-report-badge__circle dashboard-report-badge__circle--adhoc dashboard-report-badge__circle--action">
           <FileAddOutlined />
         </div>
+        {(isAdmin || isCustomer) && adhocReportsCount > 0 ? (
+          <span
+            className="dashboard-messages-badge__count"
+            aria-label={`${adhocReportsCount} new adhoc reports`}
+          >
+            {adhocReportsCount > 99 ? '99+' : adhocReportsCount}
+          </span>
+        ) : null}
       </span>
       <div className="dashboard-report-badge__label" style={darkLabelStyle}>Adhoc Report</div>
     </Link>
@@ -252,7 +263,7 @@ const Dashboard: React.FC = () => {
         ) : null}
       </span>
       <div className="dashboard-report-badge__label" style={darkLabelStyle}>
-        {intl.formatMessage({ id: 'sidebar.myTasks' })}
+        {intl.formatMessage({ id: 'sidebar.tasks' })}
       </div>
     </Link>
   ) : null;
@@ -266,27 +277,6 @@ const Dashboard: React.FC = () => {
         ) : null}
       </span>
       <span className="dashboard-messages-badge__label" style={darkLabelStyle}>Messages</span>
-    </Link>
-  ) : null;
-
-  const invoicesBadge = (isAdmin || isCustomer) ? (
-    <Link to="/invoices" className="dashboard-report-badge">
-      <span className="dashboard-report-badge__icon-wrap">
-        <div className="dashboard-report-badge__circle dashboard-report-badge__circle--reports dashboard-report-badge__circle--action">
-          <FolderOpenOutlined />
-        </div>
-        {isCustomer && invoicesCount > 0 ? (
-          <span
-            className="dashboard-messages-badge__count"
-            aria-label={`${invoicesCount} new invoices`}
-          >
-            {invoicesCount > 99 ? '99+' : invoicesCount}
-          </span>
-        ) : null}
-      </span>
-      <div className="dashboard-report-badge__label" style={darkLabelStyle}>
-        {intl.formatMessage({ id: 'sidebar.invoices' })}
-      </div>
     </Link>
   ) : null;
 
@@ -391,12 +381,6 @@ const Dashboard: React.FC = () => {
           <div className="dashboard-item dashboard-item--flush">
             <h1 className="dashboard-section-heading" style={darkHeadingStyle}>Reports</h1>
             {dashboardReportBadges}
-          </div>
-        ) : null}
-        {(isAdmin || isCustomer) ? (
-          <div className="dashboard-item dashboard-item--flush" style={{ marginTop: 24 }}>
-            <h1 className="dashboard-section-heading" style={darkHeadingStyle}>Invoices</h1>
-            <div className="dashboard-report-badges">{invoicesBadge}</div>
           </div>
         ) : null}
       </DashboardWarp>

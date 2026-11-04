@@ -37,6 +37,7 @@ import { FaultIssuesModule } from './fault-issues/fault-issues.module';
 import { CustomerPersonnelModule } from './customer-personnel/customer-personnel.module';
 import { AdminPersonnelModule } from './admin-personnel/admin-personnel.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { ConsumablesModule } from './consumables/consumables.module';
 import { AssetsModule } from './assets/assets.module';
 import { TrainingModule } from './training/training.module';
 import { ToolboxModule } from './toolbox/toolbox.module';
@@ -111,6 +112,7 @@ import { MeetingsModule } from './meetings/meetings.module';
     CustomerPersonnelModule,
     AdminPersonnelModule,
     InvoicesModule,
+    ConsumablesModule,
     AssetsModule,
     TrainingModule,
     ToolboxModule,

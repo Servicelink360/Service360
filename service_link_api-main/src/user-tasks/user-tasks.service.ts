@@ -388,56 +388,140 @@ export class UserTasksService {
     }
   }
 
+  private pickId(value: unknown): number {
+    if (value == null || value === '') return 0;
+    if (typeof value === 'object' && value !== null && 'id' in (value as object)) {
+      return +((value as { id?: unknown }).id ?? 0);
+    }
+    return +value;
+  }
+
+  private parseRecurDays(raw: unknown): number[] {
+    if (raw == null || raw === '') return [];
+    const parts = Array.isArray(raw)
+      ? raw
+      : String(raw)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+    const days = parts
+      .map((d) => +d)
+      .filter((d) => Number.isFinite(d) && d >= 0 && d <= 6);
+    return [...new Set(days)];
+  }
+
+  private buildRecurringWindows(
+    startTime: Date | string,
+    endTime: Date | string,
+    recurDays: number[],
+  ): { startTime: Date; endTime: Date }[] {
+    const start = moment(startTime);
+    const end = moment(endTime);
+    if (!start.isValid() || !end.isValid() || end.isBefore(start)) {
+      return [{ startTime: start.toDate(), endTime: end.toDate() }];
+    }
+    const startTod = start.format('HH:mm:ss');
+    const endTod = end.format('HH:mm:ss');
+    const overnight = endTod < startTod;
+    const windows: { startTime: Date; endTime: Date }[] = [];
+    const cursor = start.clone().startOf('day');
+    const last = end.clone().startOf('day');
+    const daySet = new Set(recurDays);
+    while (cursor.isSameOrBefore(last, 'day') && windows.length < 90) {
+      if (daySet.has(cursor.day())) {
+        const dayStart = moment(`${cursor.format('YYYY-MM-DD')} ${startTod}`, 'YYYY-MM-DD HH:mm:ss');
+        let dayEnd = moment(`${cursor.format('YYYY-MM-DD')} ${endTod}`, 'YYYY-MM-DD HH:mm:ss');
+        if (overnight) dayEnd = dayEnd.add(1, 'day');
+        windows.push({ startTime: dayStart.toDate(), endTime: dayEnd.toDate() });
+      }
+      cursor.add(1, 'day');
+    }
+    return windows.length ? windows : [{ startTime: start.toDate(), endTime: end.toDate() }];
+  }
+
   async create(userInfo: IUserInfo, body: CreateUserTaskDto) {
     try {
-      const data = new UserTask();
-      data.taskName = body.taskName;
-      data.companyName = body.companyName;
-      data.serviceId = body.serviceId;
-      data.customerId = body.customerId;
-      data.siteId = body.siteId;
-      data.siteName = body.siteName;
-      data.siteLocation = body.siteLocation;
-      data.siteAddress = body.siteAddress;
-      data.serviceName = body.serviceName;
-      data.customerName = body.customerName;
-      data.staffId = body.staffId;
-      data.notifiesStaff = body.notifiesStaff;
-      data.startTime = body.startTime;
-      data.endTime = body.endTime;
-      data.reportTemplateId = body.reportTemplateId;
-      if (body.description !== undefined)
-        data.description = body.description;
-      data.createdAt = new Date();
-      data.updatedAt = new Date();
-      data.createdBy = userInfo.userId;
-      data.updatedBy = userInfo.userId;
-      data.status = dJobStatus.PENDING;
-      data.type = "DYNAMIC"
-      if (data.notifiesStaff) {
-        const staffInfoRes = await this.uersService.profile(body.staffId);
-        if (staffInfoRes.data) {
-          const html = emailTaskAssignedHtml({
-            fullName: staffInfoRes.data.fullName,
-            taskName: data.taskName,
-            description: data.description,
-            siteName: data.siteName,
-            serviceName: data.serviceName,
-            startAt: moment(data.startTime).format('YYYY-MM-DD HH:mm:ss'),
-            endAt: moment(data.endTime).format('YYYY-MM-DD HH:mm:ss'),
-            linkPath: 'user-task-today',
-          });
-          SendMail(staffInfoRes.data.email, `New task assigned`, html)
+      const staffId = this.pickId((body as any).staffId);
+      const siteId = this.pickId((body as any).siteId);
+      const customerId = this.pickId((body as any).customerId);
+      const serviceId = this.pickId((body as any).serviceId);
+      if (!staffId) {
+        return { ...errorCode.EXCEPTION, message: 'Staff is required' };
+      }
+
+      const recurring = +((body as any).recurring ?? 2) === 1;
+      const recurDays = this.parseRecurDays((body as any).recurDays);
+      if (recurring && !recurDays.length) {
+        return { ...errorCode.EXCEPTION, message: 'Select at least one day to recur' };
+      }
+
+      const windows =
+        recurring && recurDays.length
+          ? this.buildRecurringWindows(body.startTime, body.endTime, recurDays)
+          : [{ startTime: body.startTime as any, endTime: body.endTime as any }];
+
+      let notified = false;
+      for (const window of windows) {
+        const data = new UserTask();
+        data.taskName = body.taskName || body.serviceName || 'Task';
+        data.companyName = body.companyName;
+        data.serviceId = serviceId || null;
+        data.customerId = customerId;
+        data.siteId = siteId;
+        data.siteName = body.siteName;
+        data.siteLocation = body.siteLocation;
+        data.siteAddress = body.siteAddress;
+        data.serviceName = body.serviceName;
+        data.customerName = body.customerName;
+        data.staffId = staffId;
+        data.taskId = 0;
+        data.taskShiftId = 0;
+        data.notifiesStaff = +body.notifiesStaff || 2;
+        data.mediaRequired = +((body as any).mediaRequired ?? 2) === 1 ? 1 : 2;
+        data.startTime = window.startTime as any;
+        data.endTime = window.endTime as any;
+        if (body.reportTemplateId != null && +body.reportTemplateId > 0) {
+          data.reportTemplateId = body.reportTemplateId;
+        }
+        if (body.description !== undefined) data.description = body.description;
+        data.createdAt = new Date();
+        data.updatedAt = new Date();
+        data.createdBy = userInfo.userId;
+        data.updatedBy = userInfo.userId;
+        data.status = dJobStatus.PENDING;
+        data.type = 'DYNAMIC';
+
+        const newItem = await this.userTasksRepository.save(data);
+        if (!newItem) {
+          return errorCode.EXCEPTION;
+        }
+
+        if (!notified && +data.notifiesStaff === 1) {
+          notified = true;
+          const staffInfoRes = await this.uersService.profile(staffId);
+          if (staffInfoRes.data) {
+            const html = emailTaskAssignedHtml({
+              fullName: staffInfoRes.data.fullName,
+              taskName: data.taskName,
+              description: data.description,
+              siteName: data.siteName,
+              serviceName: data.serviceName,
+              startAt: moment(data.startTime).format('YYYY-MM-DD HH:mm:ss'),
+              endAt: moment(data.endTime).format('YYYY-MM-DD HH:mm:ss'),
+              linkPath: 'my-tasks',
+            });
+            SendMail(
+              staffInfoRes.data.email,
+              windows.length > 1 ? `New recurring tasks assigned (${windows.length})` : `New task assigned`,
+              html,
+            );
+          }
         }
       }
 
-      const newItem = await this.userTasksRepository.save(data);
-      if (!newItem) {
-        return errorCode.EXCEPTION;
-      }
       return errorCode.SUCCESS;
     } catch (error) {
-      console.log("error", error);
+      console.log('error', error);
       this.logger.debug(error);
       return errorCode.EXCEPTION;
     }
@@ -482,7 +566,14 @@ export class UserTasksService {
       return errorCode.SUCCESS
     } else {
       if (+body.id) {
-        const ut = await this.userTasksRepository.findOne({ where: { id: body.id } })
+        const ut = await this.userTasksRepository.findOne({ where: { id: body.id } });
+        if (!ut) return errorCode.NOT_FOUND;
+        if (+ut.staffId !== +userInfo.userId && +userInfo.type !== userType.ADMIN) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'Not allowed to check in this task' };
+        }
+        if (+ut.status === dJobStatus.COMPLETED || +ut.status === dJobStatus.DELETED) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'This task cannot be checked in' };
+        }
         ut.status = dJobStatus.INPROGRESS;
         ut.checkIn = new Date();
         ut.updatedAt = new Date();
@@ -492,7 +583,7 @@ export class UserTasksService {
           return errorCode.EXCEPTION;
         return errorCode.SUCCESS
       }
-
+      return { ...errorCode.VALIDATION_ERROR, message: 'Task id is required' };
     }
 
   }
@@ -574,6 +665,73 @@ export class UserTasksService {
     }
   }
 
+  /**
+   * Build PDF from current DB rows (task + report fields). Streams to client —
+   * does not upload to AWS or persist pdf_file.
+   */
+  async generatePdfFromDatabase(userInfo: IUserInfo, id: number) {
+    try {
+      const query = this.userTasksRepository
+        .createQueryBuilder('usertasks')
+        .leftJoinAndSelect('usertasks.reports', 'reports')
+        .leftJoinAndSelect('usertasks.reportTemplate', 'reportTemplate')
+        .leftJoin('usertasks.staff', 'staff')
+        .addSelect(['staff.fullName', 'staff.username'])
+        .leftJoin('usertasks.createdUser', 'createdUser')
+        .addSelect(['createdUser.fullName', 'createdUser.username'])
+        .where('usertasks.id = :id', { id: +id });
+
+      if (+userInfo.type === userType.STAFF) {
+        query.andWhere('usertasks.staffId = :staffId', { staffId: +userInfo.userId });
+      } else if (+userInfo.type === userType.CUSTOMER) {
+        applyCustomerScopeToQuery(query, userInfo, 'usertasks.customerId');
+      }
+
+      const task = await query.getOne();
+      if (!task) {
+        return { ...errorCode.NOT_FOUND, message: 'Task not found' };
+      }
+
+      this.mergeChunkedReportsOnTask(task);
+      const resultRownumber = await this.userTasksRepository.query(
+        `select * from 
+            ( SELECT id, ROW_NUMBER() OVER(PARTITION BY 'id' ) AS row_num  
+                FROM user_tasks
+                ) as t
+                WHERE t.id=${+id}`,
+      );
+      const rowNum = resultRownumber?.[0]?.row_num ?? 1;
+      const reportsSorted = [...(task.reports || [])].sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0),
+      );
+      const pdfBuffer = await convertHtmlToPdf(task, reportsSorted, rowNum, {
+        asBuffer: true,
+      });
+      const buf = !pdfBuffer
+        ? null
+        : Buffer.isBuffer(pdfBuffer)
+          ? pdfBuffer
+          : Buffer.from(pdfBuffer as any);
+      if (!buf?.length) {
+        return { ...errorCode.EXCEPTION, message: 'Could not generate PDF' };
+      }
+      const safeName = String(task.taskName || task.serviceName || `task-${id}`)
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .slice(0, 80);
+      return {
+        ...errorCode.SUCCESS,
+        data: {
+          buffer: buf,
+          fileName: `${safeName || 'task'}-${id}.pdf`,
+        },
+      };
+    } catch (error) {
+      console.log('generatePdfFromDatabase', error);
+      this.logger.debug(error?.message || error);
+      return { ...errorCode.EXCEPTION, message: error?.message || 'PDF failed' };
+    }
+  }
+
   async updateReport(id: number, userInfo: IUserInfo, body: ReportUserTaskDto) {
     const query = this.userTasksRepository.createQueryBuilder('userTasks')
       .leftJoinAndSelect('userTasks.reportTemplate', 'reportTemplate')
@@ -633,12 +791,41 @@ export class UserTasksService {
     return errorCode.SUCCESS
   }
 
-  async checkOut(userInfo: IUserInfo, id: number) {
+  async checkOut(userInfo: IUserInfo, id: number, body?: { images?: string; isCompleted?: number }) {
     const ut = await this.userTasksRepository.createQueryBuilder('userTasks')
       .where(`userTasks.id= :id  and userTasks.staffId=:staffId`, { id, staffId: userInfo.userId })
       .getOne();
     if (!ut)
       return errorCode.NOT_FOUND;
+    if (+ut.status === dJobStatus.COMPLETED) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'This task is already completed' };
+    }
+    if (+ut.status === dJobStatus.DELETED) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'This task cannot be completed' };
+    }
+    if (body?.images != null && String(body.images).trim()) {
+      ut.images = String(body.images).trim();
+    }
+    const hasMedia = (() => {
+      const raw = String(ut.images || '').trim();
+      if (!raw) return false;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.some((u) => String(u || '').trim());
+      } catch {
+        /* plain url / csv */
+      }
+      return raw.length > 0;
+    })();
+    if (+ut.mediaRequired === 1 && !hasMedia) {
+      return {
+        ...errorCode.EXCEPTION,
+        message: 'This task requires media images before it can be completed',
+      };
+    }
+    if (!ut.checkIn) {
+      ut.checkIn = new Date();
+    }
     ut.checkOut = new Date();
     ut.updatedAt = new Date();
     ut.status = dJobStatus.COMPLETED;
@@ -654,10 +841,42 @@ export class UserTasksService {
 
   async taskSuccess(userInfo: IUserInfo, id: number) {
     const ut = await this.userTasksRepository.findOne({ where: { id } });
-    await this.userTasksRepository.update(id, { status: dJobStatus.COMPLETED, updatedAt: new Date() })
-    if (ut) {
-      this.maybeNotifyNewReportEmail(userInfo, ut);
+    if (!ut) return errorCode.NOT_FOUND;
+    const isAdmin = +userInfo.type === userType.ADMIN;
+    const isOwner = +ut.staffId === +userInfo.userId;
+    if (!isAdmin && !isOwner) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'Not allowed to complete this task' };
     }
+    if (+ut.status === dJobStatus.COMPLETED) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'This task is already completed' };
+    }
+    if (+ut.status === dJobStatus.DELETED) {
+      return { ...errorCode.VALIDATION_ERROR, message: 'This task cannot be completed' };
+    }
+    const hasMedia = (() => {
+      const raw = String(ut.images || '').trim();
+      if (!raw) return false;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.some((u) => String(u || '').trim());
+      } catch {
+        /* plain url / csv */
+      }
+      return raw.length > 0;
+    })();
+    if (+ut.mediaRequired === 1 && !hasMedia) {
+      return {
+        ...errorCode.EXCEPTION,
+        message: 'This task requires media images before it can be completed',
+      };
+    }
+    await this.userTasksRepository.update(id, {
+      status: dJobStatus.COMPLETED,
+      checkOut: new Date(),
+      updatedAt: new Date(),
+      updatedBy: userInfo.userId,
+    });
+    this.maybeNotifyNewReportEmail(userInfo, ut);
     return errorCode.SUCCESS
   }
 
@@ -750,7 +969,8 @@ export class UserTasksService {
       if (status && status === 'p') {
         const query2 = this.userTasksRepository.createQueryBuilder('usertasks')
           .where(`(usertasks.status=0 or usertasks.status=2)`)
-          .innerJoin('usertasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
+          // leftJoin so DYNAMIC assignments still list if staff row is missing relation quirks
+          .leftJoin('usertasks.staff', 'staff').addSelect(['staff.fullName', 'staff.username'])
           .leftJoin('usertasks.customer', 'customer').addSelect(['customer.fullName', 'customer.username'])
           .leftJoin('customer.customerInfo', 'customerInfo').addSelect([
           'customerInfo.companyName',
@@ -763,20 +983,20 @@ export class UserTasksService {
         if (serviceId) {
           query2.andWhere(' usertasks.serviceId =:serviceId ', { serviceId })
         }
-        if (userInfo.type == userType.ADMIN && +staffId) {
-          console.log("chay vao day iko")
+        if (+userInfo.type === userType.ADMIN && +staffId) {
           query2.andWhere("( usertasks.staffId= :staffId )", { staffId: +staffId })
         }
-        else if (+userInfo.type == userType.STAFF) {
-          query2.andWhere("( usertasks.staffId= :staffId )", { staffId: userInfo.userId })
+        else if (+userInfo.type === userType.STAFF) {
+          query2.andWhere("( usertasks.staffId= :staffId )", { staffId: +userInfo.userId })
         }
-        else if (+userInfo.type == userType.CUSTOMER) {
+        else if (+userInfo.type === userType.CUSTOMER) {
           applyCustomerScopeToQuery(query2, userInfo, 'usertasks.customerId');
         }
 
         rows2 = await query2.getMany();
       }
-      return { ...errorCode.SUCCESS, data: { rows: newRows.concat(rows2), count: newRows.length } }
+      const allRows = newRows.concat(rows2);
+      return { ...errorCode.SUCCESS, data: { rows: allRows, count: allRows.length } }
     } catch (error) {
       console.log('error', error)
       this.logger.debug(error.message);
@@ -816,7 +1036,22 @@ export class UserTasksService {
         query.andWhere(`usertasks.startTime > :startDate AND usertasks.startTime <= :endDate`, { startDate: moment(body.startDate).format("YYYY-MM-DD 00:00:00"), endDate: moment(body.endDate).format("YYYY-MM-DD 23:59:59") })
       }
       if (body.status) {
-        query.andWhere(' usertasks.status =:status ', { status: body.status === 's' ? 1 : body.status === 'p' ? 0 : body.status === 'i' ? 3 : 0 })
+        // Pending includes NEW (0) and PENDING (2) — assigned DYNAMIC tasks use PENDING
+        if (body.status === 'p') {
+          query.andWhere('(usertasks.status = :statusNew OR usertasks.status = :statusPending)', {
+            statusNew: dJobStatus.NEW,
+            statusPending: dJobStatus.PENDING,
+          });
+        } else {
+          query.andWhere(' usertasks.status =:status ', {
+            status:
+              body.status === 's'
+                ? dJobStatus.COMPLETED
+                : body.status === 'i'
+                  ? dJobStatus.INPROGRESS
+                  : body.status,
+          });
+        }
       }
       if (body.serviceId) {
         query.andWhere(' usertasks.serviceId =:serviceId ', { serviceId: body.serviceId })
@@ -929,7 +1164,7 @@ export class UserTasksService {
           'customerInfo.companyId',
         ])
 
-      const isAdmin = userInfo.type === userType.ADMIN;
+      const isAdmin = +userInfo.type === userType.ADMIN;
       const listDeleted = body.status === 'deleted';
       if (isAdmin) {
         if (listDeleted) {
@@ -937,7 +1172,8 @@ export class UserTasksService {
             deletedStatus: dJobStatus.DELETED,
           });
           query.andWhere('usertasks.cleared_at IS NULL');
-        } else if (body.status === 's' || body.status === '1' || +body.status === 1) {
+        } else {
+          // Always hide soft-deleted schedule/report rows on active admin lists
           query.andWhere('usertasks.status != :deletedStatus', {
             deletedStatus: dJobStatus.DELETED,
           });
@@ -1146,6 +1382,28 @@ export class UserTasksService {
       if (!data) {
         return errorCode.NOT_FOUND;
       }
+      const isAdmin = +userInfo.type === userType.ADMIN;
+      const isOwnerStaff =
+        +userInfo.type === userType.STAFF && +data.staffId === +userInfo.userId;
+
+      // Staff may only attach/replace media on their own incomplete tasks
+      if (!isAdmin) {
+        if (!isOwnerStaff) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'Not allowed to update this task' };
+        }
+        if (body.images === undefined) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'Only media can be updated by staff' };
+        }
+        if (+data.status === dJobStatus.COMPLETED || +data.status === dJobStatus.DELETED) {
+          return { ...errorCode.VALIDATION_ERROR, message: 'Completed tasks cannot be edited' };
+        }
+        data.images = String(body.images ?? '');
+        data.updatedAt = new Date();
+        data.updatedBy = userInfo.userId;
+        await this.userTasksRepository.save(data);
+        return errorCode.SUCCESS;
+      }
+
       if (body.customerName !== undefined)
         data.customerName = body.customerName;
       if (body.taskName !== undefined)
@@ -1170,10 +1428,36 @@ export class UserTasksService {
         data.siteLocation = body.siteLocation;
       if (body.serviceName !== undefined)
         data.serviceName = body.serviceName;
-      data.staffId = body.staffId;
 
-      if (body.notifiesStaff && !data.notifiesStaff) {
-        const staffInfoRes = await this.uersService.profile(body.staffId);
+      const wantNotify = body.notifiesStaff !== undefined && +body.notifiesStaff === 1;
+      const wasNotify = +data.notifiesStaff === 1;
+      const staffChanged =
+        body.staffId !== undefined && +body.staffId > 0 && +body.staffId !== +data.staffId;
+      const notifyStaffId = body.staffId !== undefined ? +body.staffId : +data.staffId;
+
+      if (body.staffId !== undefined)
+        data.staffId = body.staffId;
+      if (body.images !== undefined)
+        data.images = String(body.images ?? '');
+      if (body.startTime !== undefined)
+        data.startTime = body.startTime as any;
+      if (body.endTime !== undefined)
+        data.endTime = body.endTime as any;
+
+      // Admin reopen / status correction (scheduled UserTasks)
+      if (body.status !== undefined) {
+        const nextStatus = +body.status;
+        if (
+          nextStatus === dJobStatus.PENDING ||
+          nextStatus === dJobStatus.INPROGRESS ||
+          nextStatus === dJobStatus.COMPLETED
+        ) {
+          data.status = nextStatus;
+        }
+      }
+
+      if (wantNotify && (!wasNotify || staffChanged) && notifyStaffId > 0) {
+        const staffInfoRes = await this.uersService.profile(notifyStaffId);
         if (staffInfoRes.data) {
           const html = emailTaskAssignedHtml({
             fullName: staffInfoRes.data.fullName,
@@ -1183,14 +1467,19 @@ export class UserTasksService {
             serviceName: data.serviceName,
             startAt: moment(data.startTime).format('YYYY-MM-DD HH:mm:ss'),
             endAt: moment(data.endTime).format('YYYY-MM-DD HH:mm:ss'),
-            linkPath: 'user-task-today',
+            linkPath: 'my-tasks',
           });
           SendMail(staffInfoRes.data.email, `New task assigned`, html)
         }
       }
-      data.notifiesStaff = body.notifiesStaff;
+      if (body.notifiesStaff !== undefined)
+        data.notifiesStaff = +body.notifiesStaff === 1 ? 1 : 2;
+      if (body.mediaRequired !== undefined) {
+        data.mediaRequired = +body.mediaRequired === 1 ? 1 : 2;
+      }
       data.updatedAt = new Date();
-      const newItem = await this.userTasksRepository.update(+id, data);
+      data.updatedBy = userInfo.userId;
+      const newItem = await this.userTasksRepository.save(data);
       if (!newItem) {
         return errorCode.EXCEPTION;
       }
@@ -1215,6 +1504,39 @@ export class UserTasksService {
         .andWhere('usertasks.status = :status', { status: dJobStatus.COMPLETED })
         .andWhere('usertasks.staff_id > 0')
         .andWhere('usertasks.staff_id != usertasks.customer_id')
+      this.applyAdminBadgeNotDismissedFilter(countQuery, userInfo);
+      const count = await countQuery.getCount();
+      return { ...errorCode.SUCCESS, data: count };
+    } catch (error) {
+      this.logger.debug((error as Error).message);
+      return { ...errorCode.EXCEPTION, message: (error as Error).message };
+    }
+  }
+
+  private applyAdhocTemplateFilter(query: import('typeorm').SelectQueryBuilder<UserTask>) {
+    query
+      .leftJoin('usertasks.reportTemplate', 'adhocTpl')
+      .andWhere(
+        `(LOWER(COALESCE(adhocTpl.name, '')) LIKE :adhocKw
+          OR LOWER(COALESCE(adhocTpl.category, '')) LIKE :adhocKw
+          OR LOWER(COALESCE(usertasks.task_name, '')) LIKE :adhocKw)`,
+        { adhocKw: '%adhoc%' },
+      );
+  }
+
+  /** Unopened Adhoc custom reports for admin dashboard badge. */
+  async countUnopenedStaffAdhocReports(userInfo: IUserInfo) {
+    try {
+      if (+userInfo.type !== userType.ADMIN) {
+        return { ...errorCode.SUCCESS, data: 0 };
+      }
+      const countQuery = this.userTasksRepository
+        .createQueryBuilder('usertasks')
+        .where('usertasks.type = :type', { type: 'CUSTOM' })
+        .andWhere('usertasks.status = :status', { status: dJobStatus.COMPLETED })
+        .andWhere('usertasks.staff_id > 0')
+        .andWhere('usertasks.staff_id != usertasks.customer_id');
+      this.applyAdhocTemplateFilter(countQuery);
       this.applyAdminBadgeNotDismissedFilter(countQuery, userInfo);
       const count = await countQuery.getCount();
       return { ...errorCode.SUCCESS, data: count };
@@ -1374,6 +1696,30 @@ export class UserTasksService {
         .andWhere('usertasks.staff_id > 0')
         .andWhere('usertasks.staff_id != usertasks.customer_id')
         .andWhere(customerScopeSql('usertasks.customer_id'), customerScopeParams(userInfo));
+      this.applyCustomerPerUserHiddenFilter(countQuery, userInfo);
+      this.applyCustomerBadgeCountFilter(countQuery, userInfo);
+      const count = await countQuery.getCount();
+      return { ...errorCode.SUCCESS, data: count };
+    } catch (error) {
+      this.logger.debug((error as Error).message);
+      return { ...errorCode.EXCEPTION, message: (error as Error).message };
+    }
+  }
+
+  /** Unopened Adhoc custom reports for customer dashboard badge. */
+  async countUnopenedCustomerAdhocReports(userInfo: IUserInfo) {
+    try {
+      if (+userInfo.type !== userType.CUSTOMER) {
+        return { ...errorCode.SUCCESS, data: 0 };
+      }
+      const countQuery = this.userTasksRepository
+        .createQueryBuilder('usertasks')
+        .where('usertasks.type = :type', { type: 'CUSTOM' })
+        .andWhere('usertasks.status = :status', { status: dJobStatus.COMPLETED })
+        .andWhere('usertasks.staff_id > 0')
+        .andWhere('usertasks.staff_id != usertasks.customer_id')
+        .andWhere(customerScopeSql('usertasks.customer_id'), customerScopeParams(userInfo));
+      this.applyAdhocTemplateFilter(countQuery);
       this.applyCustomerPerUserHiddenFilter(countQuery, userInfo);
       this.applyCustomerBadgeCountFilter(countQuery, userInfo);
       const count = await countQuery.getCount();

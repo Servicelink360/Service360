@@ -82,14 +82,14 @@ const CLIENT_FEATURES: ClientFeature[] = [
     icon: <FaClipboardList />,
     text: 'Raise and track service requests for your sites. Support moves each ticket through status; you reply when it’s your turn.',
     bullets: [
-      'Create from Ticket New: site, service, subject, message, optional Urgent, and required media',
+      'Create from New Ticket: site, service, subject, message, optional Urgent, and required media',
       'Edit, delete, or restore your own tickets',
     ],
     image: '/images/marketing/client-tickets.png',
     imageAlt: 'Client tickets list with New, In progress, and Completed views',
     children: [
       {
-        title: 'Ticket New',
+        title: 'New Ticket',
         text: 'Newly submitted requests waiting for support. This is where clients create a ticket.',
       },
       {

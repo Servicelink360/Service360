@@ -1,4 +1,4 @@
-import { CheckCircleOutlined, CloseOutlined, UserSwitchOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseOutlined, UserSwitchOutlined } from "@ant-design/icons";
 import { dateTimeFormat } from "@app/config/data.config";
 import { Button, Image, Modal, Popconfirm, Tag, Typography, message } from "antd";
 import moment from "moment";
@@ -68,6 +68,8 @@ type Props = {
   readStatusNode?: React.ReactNode;
   onDelegationSaved?: (delegation?: Record<string, unknown>) => void;
   onFaultCompleted?: (payload?: Record<string, unknown>) => void;
+  /** When opened from Messages, show a return control in the footer. */
+  onBackToMessages?: () => void;
 };
 
 const parseAttachFiles = (attachFiles: unknown): string[] => {
@@ -173,6 +175,7 @@ const FaultReportViewModal: React.FC<Props> = ({
   readStatusNode,
   onDelegationSaved,
   onFaultCompleted,
+  onBackToMessages,
 }) => {
   const [delegationOpen, setDelegationOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -368,6 +371,30 @@ const FaultReportViewModal: React.FC<Props> = ({
       }
       bodyStyle={{ maxHeight: "75vh", overflow: "auto", padding: "12px 24px 16px" }}
     >
+      {onBackToMessages ? (
+        <button
+          type="button"
+          onClick={onBackToMessages}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            margin: "0 0 14px",
+            padding: "8px 12px",
+            border: "1px solid #d9e8d4",
+            borderRadius: 8,
+            background: "#e8f5e3",
+            color: "#2f6b22",
+            fontSize: 13,
+            fontWeight: 600,
+            lineHeight: 1.2,
+            cursor: "pointer",
+          }}
+        >
+          <ArrowLeftOutlined style={{ fontSize: 12 }} />
+          <span>Back to messages</span>
+        </button>
+      ) : null}
       <div
         style={{
           display: "flex",

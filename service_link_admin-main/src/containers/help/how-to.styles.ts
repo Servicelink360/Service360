@@ -102,4 +102,57 @@ export const HelpPageWrap = styled.div`
       color: #397d36;
     }
   }
+
+  body.app-shell-dark & {
+    color: #e5e7eb;
+
+    h1 {
+      color: #f3f4f6;
+    }
+
+    h2 {
+      color: #86efac;
+    }
+
+    .help-intro {
+      color: #9ca3af;
+    }
+
+    .help-phase {
+      background: #1f2937;
+      border-color: #374151;
+    }
+
+    .help-phase-title {
+      color: #bbf7d0;
+    }
+
+    .help-table th,
+    .help-table td {
+      border-color: #374151;
+    }
+
+    .help-table th {
+      background: #111827;
+      color: #e5e7eb;
+    }
+
+    .help-nav-link {
+      color: #86efac;
+    }
+
+    .help-warning {
+      background: #422006;
+      border-color: #a16207;
+      color: #fef3c7;
+    }
+
+    .help-toc {
+      background: #111827;
+
+      a {
+        color: #86efac;
+      }
+    }
+  }
 `;

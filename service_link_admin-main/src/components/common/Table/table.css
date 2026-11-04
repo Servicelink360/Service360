@@ -2,3 +2,26 @@
         text-align: right !important;
 }
 
+/* Dark shell — tickets / list tables use this Table component */
+body.app-shell-dark .ant-table-wrapper,
+body.app-shell-dark .ant-table,
+body.app-shell-dark .ant-table-container,
+body.app-shell-dark .ant-table-content,
+body.app-shell-dark .ant-table-body,
+body.app-shell-dark .ant-spin-container {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .ant-table-tbody > tr > td,
+body.app-shell-dark .ant-table-cell {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  color: #f0f0f0 !important;
+  border-bottom-color: #2a2a2a !important;
+}
+
+body.app-shell-dark .ant-table-tbody > tr:hover > td {
+  background: #1c1c1c !important;
+}

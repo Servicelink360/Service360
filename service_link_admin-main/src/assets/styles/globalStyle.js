@@ -1281,7 +1281,8 @@ html[data-color-mode="dark"] .ant-select-item-option-selected:not(.ant-select-it
   object-fit: contain;
 }
 
-.mobile-left-nav-drawer .mobile-sidebar-close.ant-btn {
+.mobile-left-nav-drawer button.mobile-sidebar-close,
+.mobile-left-nav-drawer .mobile-sidebar-close {
   position: fixed !important;
   top: 12px !important;
   right: 12px !important;
@@ -1290,21 +1291,65 @@ html[data-color-mode="dark"] .ant-select-item-option-selected:not(.ant-select-it
   width: 44px !important;
   height: 44px !important;
   min-width: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
   padding: 0 !important;
-  border: none !important;
+  border: 1px solid #e5e7eb !important;
   border-radius: 50% !important;
-  background: #fff !important;
-  color: #333 !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  color: #111111 !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  line-height: 1 !important;
 }
 
-.mobile-left-nav-drawer .mobile-sidebar-close.ant-btn .anticon {
-  font-size: 18px;
-  line-height: 1;
+.mobile-left-nav-drawer button.mobile-sidebar-close .anticon,
+.mobile-left-nav-drawer .mobile-sidebar-close .anticon {
+  font-size: 18px !important;
+  line-height: 1 !important;
+  color: #111111 !important;
+}
+
+html[data-color-mode='dark'] .mobile-left-nav-drawer button.mobile-sidebar-close,
+html[data-color-mode='dark'] .mobile-left-nav-drawer .mobile-sidebar-close,
+body.app-shell-dark .mobile-left-nav-drawer button.mobile-sidebar-close,
+body.app-shell-dark .mobile-left-nav-drawer .mobile-sidebar-close {
+  background: rgba(0, 0, 0, 0.45) !important;
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  border: 2px solid rgba(255, 255, 255, 0.85) !important;
+  border-radius: 50% !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45) !important;
+}
+
+html[data-color-mode='dark'] .mobile-left-nav-drawer .mobile-sidebar-close .anticon,
+body.app-shell-dark .mobile-left-nav-drawer .mobile-sidebar-close .anticon {
+  color: #ffffff !important;
+}
+
+html[data-color-mode='dark'] .mobile-left-nav-drawer .mobile-sidebar-close:hover,
+html[data-color-mode='dark'] .mobile-left-nav-drawer .mobile-sidebar-close:focus,
+body.app-shell-dark .mobile-left-nav-drawer .mobile-sidebar-close:hover,
+body.app-shell-dark .mobile-left-nav-drawer .mobile-sidebar-close:focus {
+  background: rgba(0, 0, 0, 0.65) !important;
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+}
+
+.mobile-left-nav-drawer .mobile-sidebar-close:hover,
+.mobile-left-nav-drawer .mobile-sidebar-close:focus {
+  background: #f5f5f5 !important;
+  color: #000000 !important;
 }
 
 .mobile-left-nav-drawer .mobile-sidebar-close:active {
-  background: #f0f0f0;
+  background: #ebebeb !important;
   transform: scale(0.96);
 }
 
@@ -1536,8 +1581,42 @@ html[data-color-mode="dark"] .ant-select-item-option-selected:not(.ant-select-it
   background: rgba(255, 255, 255, 0.18) !important;
 }
 
-.mobile-portrait-topbar--dark .triggerBtn::before {
+.mobile-portrait-topbar--dark .triggerBtn,
+.mobile-portrait-topbar--dark .triggerBtn .triggerBtnIcon,
+.mobile-portrait-topbar--dark .triggerBtn .anticon {
   color: #ffffff !important;
+}
+
+/* Invoices mobile cards (portrait) */
+body.app-shell-dark .invoices-mobile-card {
+  background: #141414 !important;
+  border-color: #333 !important;
+  color: #e5e7eb;
+}
+
+body.app-shell-dark .invoices-mobile-card a {
+  color: #93c5fd;
+}
+
+/* Mobile dark — profile popover matches black topbar */
+.topbar-user-popover--dark.ant-popover .ant-popover-inner,
+.topbar-user-popover--dark .ant-popover-inner {
+  background: #141414 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55) !important;
+}
+
+.topbar-user-popover--dark.ant-popover .ant-popover-inner-content,
+.topbar-user-popover--dark .ant-popover-inner-content {
+  background: #141414 !important;
+  padding: 0 !important;
+  color: #e5e7eb !important;
+}
+
+.topbar-user-popover--dark.ant-popover .ant-popover-arrow::before,
+.topbar-user-popover--dark.ant-popover .ant-popover-arrow::after,
+.topbar-user-popover--dark .ant-popover-arrow::before,
+.topbar-user-popover--dark .ant-popover-arrow::after {
+  background: #141414 !important;
 }
 
 .isoLayoutContentWrapper:has(.new-reports-page-dark),
@@ -1846,31 +1925,55 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
   color: #b7eb8f !important;
 }
 
-/* Mobile range calendar: one month wide (fits portrait), never overflow viewport */
-.nr-mobile-range-calendar.ant-picker-dropdown {
-  max-width: calc(100vw - 16px) !important;
-  left: 8px !important;
-  right: 8px !important;
-}
+/* Mobile range calendar: one month wide, never overflow viewport */
+@media (max-width: 768px) {
+  .nr-mobile-range-calendar.ant-picker-dropdown {
+    position: fixed !important;
+    top: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(300px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    z-index: 1100 !important;
+  }
 
-.nr-mobile-range-calendar .ant-picker-panel-container {
-  max-width: 100% !important;
-  overflow-x: hidden !important;
-}
+  .nr-mobile-range-calendar .ant-picker-panel-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
 
-.nr-mobile-range-calendar .ant-picker-panels {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  max-width: 100% !important;
-}
+  .nr-mobile-range-calendar .ant-picker-panels {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 
-@media (orientation: portrait) and (max-width: 768px) {
-  .nr-mobile-range-calendar .ant-picker-panels .ant-picker-panel:nth-child(2) {
+  /* Hide second month — dual panels overflow phones */
+  .nr-mobile-range-calendar .ant-picker-panels > *:last-child {
     display: none !important;
   }
 
+  /* First panel normally hides next arrows when a second panel exists — restore them */
+  .nr-mobile-range-calendar .ant-picker-panels > *:first-child .ant-picker-header-next-btn,
+  .nr-mobile-range-calendar .ant-picker-panels > *:first-child .ant-picker-header-super-next-btn {
+    visibility: visible !important;
+  }
+
+  .nr-mobile-range-calendar .ant-picker-panel-container,
+  .nr-mobile-range-calendar .ant-picker-footer {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
   .nr-mobile-range-calendar .ant-picker-panel,
-  .nr-mobile-range-calendar .ant-picker-date-panel {
+  .nr-mobile-range-calendar .ant-picker-date-panel,
+  .nr-mobile-range-calendar .ant-picker-month-panel,
+  .nr-mobile-range-calendar .ant-picker-year-panel,
+  .nr-mobile-range-calendar .ant-picker-decade-panel {
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
@@ -1880,8 +1983,26 @@ html[data-color-mode="dark"] .new-reports-theme-dark .new-reports-mobile-tabs--d
     width: 100% !important;
   }
 
+  .nr-mobile-range-calendar .ant-picker-content th,
+  .nr-mobile-range-calendar .ant-picker-content td {
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 0 !important;
+  }
+
+  .nr-mobile-range-calendar .ant-picker-cell-inner {
+    min-width: 28px !important;
+    height: 28px !important;
+    line-height: 28px !important;
+    font-size: 13px !important;
+  }
+
   .nr-mobile-range-calendar .ant-picker-body {
-    padding: 8px !important;
+    padding: 6px 8px !important;
+  }
+
+  .nr-mobile-range-calendar .ant-picker-header {
+    padding: 0 4px !important;
   }
 }
 
@@ -3180,6 +3301,174 @@ body.messages-page-body-dark .isoBoxWrapper {
   .report-fault-view-modal__aside .report-fault-view-modal__field {
     text-align: left;
   }
+}
+
+/* App-wide mobile dark shell — tickets / invoices / consumables / personnel / etc.
+   Hooked to body.app-shell-dark + #main-content.app-content--dark (JS already
+   gates these to mobile portrait + dark toggle). No extra media query so styles
+   always match when the shell class is present. */
+html[data-color-mode='dark'] body.app-shell-dark {
+  --ant-color-bg-container: #121212;
+  --ant-color-bg-elevated: #1a1a1a;
+  --ant-color-bg-layout: #000000;
+  --ant-color-text: #f0f0f0;
+  --ant-color-text-secondary: #bfbfbf;
+  --ant-color-border: #444444;
+  --ant-color-fill-secondary: #1a1a1a;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark #main-content,
+html[data-color-mode='dark'] body.app-shell-dark .isomorphicContent,
+html[data-color-mode='dark'] body.app-shell-dark .isoContentMainLayout,
+html[data-color-mode='dark'] #main-content.app-content--dark,
+html[data-color-mode='dark'] #main-content.dashboard-content--dark {
+  background: #000000 !important;
+  background-color: #000000 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoLayoutContentWrapper,
+html[data-color-mode='dark'] body.app-shell-dark .isoExampleWrapper {
+  background: transparent !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper,
+html[data-color-mode='dark'] #main-content.app-content--dark .isoBoxWrapper {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  border: 1px solid #333333 !important;
+  color: #f0f0f0 !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 20px 60px rgba(0, 0, 0, 0.95) !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper h1,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper h2,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper h3,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper h4,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper h5,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper p,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper span,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper label,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-form-item-label > label,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-form label,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-tabs-tab,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-tabs-tab-btn,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-empty-description,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-cell {
+  color: #f0f0f0 !important;
+}
+
+/* Tables — kill AntTables.styles white wrapper + empty body glare */
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-wrapper,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-container,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-content,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-body,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-header,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-spin-nested-loading,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-spin-container,
+html[data-color-mode='dark'] #main-content.app-content--dark .ant-table-wrapper,
+html[data-color-mode='dark'] #main-content.app-content--dark .ant-table {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  color: #f0f0f0 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-thead > tr > th,
+html[data-color-mode='dark'] #main-content.app-content--dark .ant-table-thead > tr > th {
+  background: #397d36 !important;
+  color: #ffffff !important;
+  border-bottom-color: #2f5f2c !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-tbody > tr > td,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-tbody > tr > th,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-placeholder > td,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-cell,
+html[data-color-mode='dark'] #main-content.app-content--dark .ant-table-tbody > tr > td {
+  background: #121212 !important;
+  background-color: #121212 !important;
+  border-bottom-color: #2a2a2a !important;
+  color: #f0f0f0 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-tbody > tr:hover > td,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: #1c1c1c !important;
+  background-color: #1c1c1c !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-table-footer {
+  background: #1a1a1a !important;
+  color: #f0f0f0 !important;
+}
+
+/* Forms / keyword search */
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper input.ant-input,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input-affix-wrapper,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input-affix-wrapper > input.ant-input,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input-group,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input-group-addon,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-select-selector,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-picker,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper textarea.ant-input,
+html[data-color-mode='dark'] #main-content.app-content--dark .ant-input,
+html[data-color-mode='dark'] #main-content.app-content--dark .ant-input-affix-wrapper {
+  background: #1a1a1a !important;
+  background-color: #1a1a1a !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
+  box-shadow: none !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input::placeholder,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper input::placeholder,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper textarea.ant-input::placeholder {
+  color: #8c8c8c !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-input-clear-icon,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-select-arrow,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .anticon {
+  color: #bfbfbf !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-tabs-nav::before {
+  border-bottom-color: #333333 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #85c179 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-btn-default {
+  background: #1a1a1a !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper a:not(.ant-btn) {
+  color: #85c179 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-pagination-item a,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-pagination-prev .ant-pagination-item-link,
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-pagination-next .ant-pagination-item-link {
+  color: #f0f0f0 !important;
+  background: transparent !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-pagination-item {
+  background: #1a1a1a !important;
+  border-color: #444444 !important;
+}
+
+html[data-color-mode='dark'] body.app-shell-dark .isoBoxWrapper .ant-pagination-item-active {
+  background: #1a1a1a !important;
+  border-color: #4a7c59 !important;
 }
 
 `;

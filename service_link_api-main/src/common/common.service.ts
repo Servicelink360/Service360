@@ -112,12 +112,17 @@ export class CommonService {
     const submittedReportCount = resSubmittedReports.data;
 
     let newReportsCount = 0;
+    let adhocReportsCount = 0;
     if (+userInfo.type === 3) {
       const resNewReports = await this.userTasksService.countUnopenedStaffCustomReports(userInfo);
       newReportsCount = resNewReports?.data ?? 0;
+      const resAdhoc = await this.userTasksService.countUnopenedStaffAdhocReports(userInfo);
+      adhocReportsCount = resAdhoc?.data ?? 0;
     } else if (+userInfo.type === 1) {
       const resNewReports = await this.userTasksService.countUnopenedCustomerCustomReports(userInfo);
       newReportsCount = resNewReports?.data ?? 0;
+      const resAdhoc = await this.userTasksService.countUnopenedCustomerAdhocReports(userInfo);
+      adhocReportsCount = resAdhoc?.data ?? 0;
     }
 
     const resReportFaults = await this.reportFaultsService.dashboard(userInfo)
@@ -162,7 +167,7 @@ export class CommonService {
 
     return {
       ...errorCode.SUCCESS, data: {
-        siteCount, taskCount, pendingTaskCount, inprogressTaskCount, successTaskCount, currentTask, ticketData: ticketData.data, submittedReportCount, newReportsCount, reportFaultsCount
+        siteCount, taskCount, pendingTaskCount, inprogressTaskCount, successTaskCount, currentTask, ticketData: ticketData.data, submittedReportCount, newReportsCount, adhocReportsCount, reportFaultsCount
         , auditReportCount, newTicketCount, newTicketsCount, inprogressTicketCount, completedTicketCount, messagesUnreadCount, myTasksCount, invoicesCount
       }
     };

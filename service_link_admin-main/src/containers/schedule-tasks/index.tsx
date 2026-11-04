@@ -1,11 +1,14 @@
-import { FilePdfOutlined, SearchOutlined, FileAddOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import { EyeOutlined, FilePdfOutlined, SearchOutlined, FileAddOutlined, DeleteOutlined, EditOutlined, MailOutlined, UndoOutlined } from "@ant-design/icons";
 import { ActionBtn, Fieldset } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
 import { dateFormat, dateTimeFormat, pageData } from "@app/config/data.config";
-import { Col, Form, Tag, Row, Popconfirm } from "antd";
+import urlConfig from "@app/config/site.config";
+import { FaultMedia, isFaultVideoUrl } from "@app/components/report-faults/fault-media";
+import { Button, Col, Form, Image, Modal, Tag, Row, Popconfirm, Tooltip, message } from "antd";
 import moment from "moment";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { Link } from "react-router-dom";
 import { ColDef } from "ag-grid-community";
 import actions from "@app/redux/tasks/actions";
 import TableComponent from "@app/components/common/Table/index";
@@ -22,6 +25,75 @@ import { notification } from "../../components";
 import UserTaskModal from "@app/components/schedule-tasks/user-job-create-report";
 import TaskModal from "@app/components/schedule-tasks";
 import { checkRole } from "../../library/helpers/utility";
+import "../staff-my-tasks/staff-my-tasks.css";
+
+const closeTaskModal = { modalType: null, row: null };
+
+const cleanText = (value?: string | null) => String(value || "").trim();
+
+const parseMediaUrls = (task: any): string[] => {
+    const urls: string[] = [];
+    const push = (value: unknown) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+            value.forEach((item) => {
+                if (typeof item === "string" && item.trim()) urls.push(item.trim());
+                else if (item && typeof item === "object" && (item as any).url) {
+                    urls.push(String((item as any).url).trim());
+                }
+            });
+            return;
+        }
+        if (typeof value === "string") {
+            const raw = value.trim();
+            if (!raw) return;
+            try {
+                push(JSON.parse(raw));
+            } catch {
+                if (/^https?:\/\//i.test(raw) || raw.startsWith("/")) urls.push(raw);
+            }
+        }
+    };
+    push(task?.images);
+    push(task?.attachFiles);
+    if (Array.isArray(task?.items)) {
+        for (const item of task.items) {
+            const type = String(item?.type || "").toUpperCase();
+            if (type === "IMAGE" || type === "IMAGES" || type === "PHOTO" || type === "MEDIA") {
+                push(item?.value);
+            }
+        }
+    }
+    return [...new Set(urls.filter(Boolean))];
+};
+
+const scheduleWhen = (task: any) => {
+    if (!task?.startTime) return "—";
+    const day = moment(task.startTime).utcOffset("+10:00").format(dateFormat);
+    const from = moment(task.startTime).utcOffset("+10:00").format("HH:mm");
+    const to = task.endTime ? moment(task.endTime).utcOffset("+10:00").format("HH:mm") : "";
+    return to ? `${day} · ${from}–${to}` : `${day} · ${from}`;
+};
+
+const scheduleStatusTag = (status: number) => {
+    if (status === dJobStatus.NEW || status === dJobStatus.PENDING) {
+        return <Tag color="#ffc107">Pending</Tag>;
+    }
+    if (status === dJobStatus.INPROGRESS) return <Tag color="#F44336">In progress</Tag>;
+    if (status === dJobStatus.COMPLETED) return <Tag color="#4caf50">Completed</Tag>;
+    return <Tag>—</Tag>;
+};
+
+const taskStaffName = (task: any) =>
+    cleanText(task?.staff?.fullName) ||
+    cleanText(task?.updatedUser?.fullName) ||
+    '—';
+
+const completedAtLabel = (task: any) => {
+    const at = task?.checkOut || task?.updatedAt;
+    return at ? moment(at).utcOffset('+10:00').format(dateTimeFormat) : '';
+};
+
 const TaskToday: React.FC = () => {
     const [form] = Form.useForm();
     const { loading, count, modalType, row, loadingAction, reportTemplates, success, customers, rows } = useSelector((state: any) => state?.tasks);
@@ -31,6 +103,44 @@ const TaskToday: React.FC = () => {
     const [limit, setLimit] = useState(100);
     const [page, setPage] = useState(pageData);
     const [date, setDate] = useState(new Date());
+    const [pdfBusyId, setPdfBusyId] = useState<number | null>(null);
+
+    const openTaskPdfFromDb = useCallback(async (taskId: number) => {
+        if (!taskId) return;
+        setPdfBusyId(taskId);
+        const hide = message.loading('Generating PDF from database…', 0);
+        try {
+            const token = localStorage.getItem('id_token') || '';
+            const res = await fetch(
+                `${urlConfig.orderApiURL}${endPoint.USER_TASKS}/${taskId}/pdf`,
+                {
+                    method: 'GET',
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            if (!res.ok) {
+                let msg = 'Could not generate PDF';
+                try {
+                    const body = await res.json();
+                    if (body?.message) msg = body.message;
+                } catch {
+                    /* ignore */
+                }
+                notification('error', msg, '');
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank', 'noopener,noreferrer');
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } catch (e) {
+            notification('error', (e as Error)?.message || 'Could not generate PDF', '');
+        } finally {
+            hide();
+            setPdfBusyId(null);
+        }
+    }, []);
+
     const getFilter = async () => {
         const res = await callAPIAsync(serviceType.COMMON, endPoint.JOB_SITES + "/getSites", 'GET');
         if (res && res.data) {
@@ -143,22 +253,74 @@ const TaskToday: React.FC = () => {
     };
     const actionColumn = profile && profile.type !== userType.ADMIN ? [] : [{
         title: intl.formatMessage({ id: "table.column.action" }),
-        width: 120,
+        width: 160,
         fixed: "right",
         align: 'center',
         dataIndex: "action",
         render: (text: string, record: any) => {
             if (record.type !== 'DYNAMIC')
                 return "";
-            return <div>
-                {
-                    checkRole('ADMIN') || checkRole('EDIT') ? <ButtonMR
-                        onClick={() => { handleOnClick(actionType.UPDATE, record); }}
+            return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                <Tooltip title="View">
+                    <ButtonMR
                         className="btnLink"
+                        onClick={() => handleOnClick(actionType.VIEW, record)}
                     >
-                        <EditOutlined />
-                    </ButtonMR> : ""
+                        <EyeOutlined />
+                    </ButtonMR>
+                </Tooltip>
+                <Tooltip title="Generate PDF from database">
+                    <Button
+                        type="link"
+                        icon={<FilePdfOutlined />}
+                        loading={pdfBusyId === +record.id}
+                        disabled={!record?.id || pdfBusyId === +record.id}
+                        onClick={() => void openTaskPdfFromDb(+record.id)}
+                    />
+                </Tooltip>
+                <Tooltip title="Message about this task">
+                    <Link to={`/messages?userTaskId=${record.id}`}>
+                        <Button
+                            type="link"
+                            icon={<MailOutlined />}
+                            aria-label="Message about this task"
+                        />
+                    </Link>
+                </Tooltip>
+                {
+                    checkRole('ADMIN') || checkRole('EDIT') ? (
+                        <Tooltip title="Edit assignment">
+                            <ButtonMR
+                                onClick={() => { handleOnClick(actionType.UPDATE, record); }}
+                                className="btnLink"
+                            >
+                                <EditOutlined />
+                            </ButtonMR>
+                        </Tooltip>
+                    ) : ""
                 }
+                {+record.status === dJobStatus.COMPLETED &&
+                (checkRole('ADMIN') || checkRole('EDIT')) ? (
+                    <Tooltip title="Reopen task">
+                        <Popconfirm
+                            title="Reopen this completed task?"
+                            okText={intl.formatMessage({ id: "button.Yes" })}
+                            cancelText={intl.formatMessage({ id: "button.No" })}
+                            placement="topRight"
+                            onConfirm={() => {
+                                dispatch(
+                                    actions.saveInto(
+                                        { id: record?.id, status: dJobStatus.PENDING },
+                                        actionType.UPDATE,
+                                        false,
+                                    ),
+                                );
+                            }}
+                        >
+                            <Button type="link" icon={<UndoOutlined />} aria-label="Reopen task" />
+                        </Popconfirm>
+                    </Tooltip>
+                ) : null}
                 <Popconfirm
                     title={intl.formatMessage({ id: "notification.confirm_delete", })}
                     okText={intl.formatMessage({ id: "button.Yes" })}
@@ -225,15 +387,6 @@ const TaskToday: React.FC = () => {
             width: 180,
         },
         {
-            title: "Report file",
-            dataIndex: "taskName",
-            className: 'noWrapCell',
-            render: (text: string, row: any) => {
-                return row.pdfFile ? <a target="_blank" rel="noopener noreferrer" href={row.pdfFile}><FilePdfOutlined size={30} /></a> : ""
-            },
-            width: 80,
-        },
-        {
             title: 'Status',
             dataIndex: "status",
             width: 100,
@@ -290,9 +443,9 @@ const TaskToday: React.FC = () => {
         );
     }
 
-    const getDataInit = async (payload) => {
+    const getDataInit = useCallback(async (payload?: string) => {
         dispatch(actions.getDataInit(payload));
-    };
+    }, [dispatch]);
 
     return (
         <Layout title="sidebar.Categories">
@@ -404,17 +557,96 @@ const TaskToday: React.FC = () => {
                     getDataInit={getDataInit} services={services} sites={sites} customers={customers} />
                 : ""}
 
-            {modalType && (modalType === actionType.CREATE_REPORT || modalType === actionType.VIEW) && row ?
-                (
-                    <UserTaskModal
-                        title={"Report"}
-                        loadingAction={loadingAction}
-                        data={row}
-                        modalType={modalType}
-                        getDataInit={getDataInit}
-                        reportTemplate={reportTemplates.find(c => c.id === row?.reportTemplateId)}
-                        isSuccess={success} />
-                ) : ""}
+            {modalType === actionType.VIEW && row ? (
+                <Modal
+                    open
+                    title={row.taskName || row.serviceName || "Task"}
+                    onCancel={() => dispatch({ type: actions.MODAL, payload: closeTaskModal })}
+                    footer={
+                        <Button type="primary" onClick={() => dispatch({ type: actions.MODAL, payload: closeTaskModal })}>
+                            Close
+                        </Button>
+                    }
+                    width={640}
+                >
+                    <dl className="staff-my-tasks-view">
+                        <div>
+                            <dt>Site</dt>
+                            <dd>{row.siteName || "—"}</dd>
+                        </div>
+                        <div>
+                            <dt>Service</dt>
+                            <dd>{row.serviceName || "—"}</dd>
+                        </div>
+                        <div>
+                            <dt>Description</dt>
+                            <dd>{cleanText(row.description) || "—"}</dd>
+                        </div>
+                        <div>
+                            <dt>When</dt>
+                            <dd>{scheduleWhen(row)}</dd>
+                        </div>
+                        <div>
+                            <dt>Status</dt>
+                            <dd>{scheduleStatusTag(+row.status)}</dd>
+                        </div>
+                        {+row.status === dJobStatus.COMPLETED ? (
+                            <div>
+                                <dt>Completed by</dt>
+                                <dd>
+                                    {taskStaffName(row)}
+                                    {completedAtLabel(row) ? ` · ${completedAtLabel(row)}` : ''}
+                                </dd>
+                            </div>
+                        ) : null}
+                        {+row.mediaRequired === 1 ? (
+                            <div>
+                                <dt>Media</dt>
+                                <dd><Tag color="orange">Media required</Tag></dd>
+                            </div>
+                        ) : null}
+                    </dl>
+                    <div className="staff-my-tasks-media">
+                        <div className="staff-my-tasks-media__label">Media files</div>
+                        {(() => {
+                            const mediaUrls = parseMediaUrls(row);
+                            if (!mediaUrls.length) {
+                                return <p className="staff-my-tasks-media__empty">No media files</p>;
+                            }
+                            return (
+                                <Image.PreviewGroup>
+                                    <div className="staff-my-tasks-media__grid">
+                                        {mediaUrls.map((url) =>
+                                            isFaultVideoUrl(url) ? (
+                                                <FaultMedia key={url} url={url} width={120} height={120} />
+                                            ) : (
+                                                <Image
+                                                    key={url}
+                                                    src={url}
+                                                    width={88}
+                                                    height={88}
+                                                    style={{ objectFit: "cover", borderRadius: 4 }}
+                                                />
+                                            ),
+                                        )}
+                                    </div>
+                                </Image.PreviewGroup>
+                            );
+                        })()}
+                    </div>
+                </Modal>
+            ) : null}
+
+            {modalType === actionType.CREATE_REPORT && row ? (
+                <UserTaskModal
+                    title={"Completed task report"}
+                    loadingAction={loadingAction}
+                    data={row}
+                    modalType={modalType}
+                    getDataInit={getDataInit}
+                    reportTemplate={reportTemplates.find(c => c.id === row?.reportTemplateId)}
+                    isSuccess={success} />
+            ) : null}
 
         </Layout>
     );

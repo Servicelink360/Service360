@@ -40,7 +40,9 @@ const Index = (props: IProps) => {
 
     useEffect(() => {
         getDataInit()
-    }, [getDataInit])
+    // Mount only — getDataInit identity changes every parent render and would freeze the modal
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     useEffect(() => {
         if (isSuccess) {
@@ -65,7 +67,6 @@ const Index = (props: IProps) => {
                     }
                 }
             
-            console.log(items);
             form.setFieldsValue({ ...data, ...items })
         }
     }, [data, form])
@@ -120,7 +121,6 @@ const Index = (props: IProps) => {
 
     const onChangeItem = (value: string, name: string, type: string) => {
         const nItems = items ? [...items] : [];
-        console.log('nItems[itemIndex]', items, name, type);
         const itemIndex = items.findIndex(c => c.name === name && c.type === type);
         if (itemIndex > -1) {
 
@@ -152,7 +152,7 @@ const Index = (props: IProps) => {
 
     return (
         <Modal
-            visible={modalType ? true : false}
+            open={Boolean(modalType)}
             onCancel={() => dispatch({ type: actions.MODAL, payload: null })}
             title={title}
             closable={false}
@@ -320,14 +320,14 @@ const Index = (props: IProps) => {
                                     {data?.createdUser &&
                                         sprintf(intl.formatMessage({ id: 'modal.createdInformation' }), {
                                             name: data?.createdUser?.fullName,
-                                            datetime: moment(data?.createdAt).zone("+10:00").format(dateTimeFormat),
+                                            datetime: moment(data?.createdAt).utcOffset("+10:00").format(dateTimeFormat),
                                         })}
                                 </p>
                                 <p style={{ fontSize: 12 }}>
                                     {data?.updatedUser
                                         ? sprintf(intl.formatMessage({ id: 'modal.updatedInformation' }), {
                                             name: data?.createdUser?.fullName,
-                                            datetime: moment(data?.updatedAt).zone("+10:00").format(dateTimeFormat),
+                                            datetime: moment(data?.updatedAt).utcOffset("+10:00").format(dateTimeFormat),
                                         })
                                         : null}
                                 </p>

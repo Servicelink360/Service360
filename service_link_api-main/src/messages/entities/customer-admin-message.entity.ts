@@ -35,6 +35,9 @@ export class CustomerAdminMessage {
   @Column({ name: 'user_task_id', nullable: true })
   userTaskId?: number;
 
+  @Column({ name: 'consumable_delivery_id', nullable: true })
+  consumableDeliveryId?: number;
+
   @Column({ name: 'report_reference', type: 'text', nullable: true })
   reportReference?: string;
 
@@ -44,6 +47,10 @@ export class CustomerAdminMessage {
   /** JSON array of customer user ids Cc'd on this message (same company peers). */
   @Column({ name: 'cc_customer_ids', type: 'text', nullable: true })
   ccCustomerIds?: string | null;
+
+  /** JSON array of external email addresses Cc'd on this message. */
+  @Column({ name: 'cc_emails', type: 'text', nullable: true })
+  ccEmails?: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

@@ -24,13 +24,13 @@ export class CustomerAdminThread {
   peerStaffId?: number;
 
   @Column({ name: 'customer_last_read_at', type: 'timestamp', nullable: true })
-  customerLastReadAt?: Date;
+  customerLastReadAt?: Date | null;
 
   @Column({ name: 'staff_last_read_at', type: 'timestamp', nullable: true })
-  staffLastReadAt?: Date;
+  staffLastReadAt?: Date | null;
 
   @Column({ name: 'admin_last_read_at', type: 'timestamp', nullable: true })
-  adminLastReadAt?: Date;
+  adminLastReadAt?: Date | null;
 
   @Column({ name: 'last_message_preview', type: 'text', nullable: true })
   lastMessagePreview?: string;

@@ -5,6 +5,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Pie,
   PieChart,
@@ -46,9 +47,21 @@ export type MonthlyDraft = {
     heading: string;
     note: string;
     summary: { month: string; group: string; description: string; schedule: string; completed: string; comments: string }[];
+    /** Site-by-site visit list (Innerwest pages 6–11 style). */
+    detailHeading?: string;
+    detailNote?: string;
+    showQuality?: boolean;
+    visits?: {
+      site: string;
+      dates: string;
+      quality: string;
+      comments: string;
+      /** Links each displayed date to the underlying user-task / report. */
+      dateLinks?: { date: string; id: number }[];
+    }[];
   }[];
   feedbackHeading: string;
-  feedback: { site: string; feedback: string; comment: string; rectified: string }[];
+  feedback: { site: string; feedback: string; comment: string; rectified: string; id?: number }[];
   toolbox: { title: string; date: string; detail: string }[];
   staffChanges: string;
   staffFeedback: string;
@@ -64,6 +77,57 @@ export type MonthlyDraft = {
 
 function textOf(value: unknown, fallback: string) {
   return typeof value === 'string' ? value : fallback;
+}
+
+/** Word-wrap chart axis labels (avoids "Parks and ameniti…" truncation). */
+function wrapChartLabel(text: string, maxChars = 14): string[] {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return [''];
+  const lines: string[] = [];
+  let current = '';
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length <= maxChars) {
+      current = next;
+      return;
+    }
+    if (current) lines.push(current);
+    current = word.length > maxChars ? `${word.slice(0, maxChars - 1)}…` : word;
+  });
+  if (current) lines.push(current);
+  return lines.slice(0, 3);
+}
+
+function InspectGroupTick({
+  x = 0,
+  y = 0,
+  payload,
+  maxChars = 16,
+}: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string };
+  maxChars?: number;
+}) {
+  const lines = wrapChartLabel(String(payload?.value || ''), maxChars);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {lines.map((line, index) => (
+        <text
+          key={`${line}-${index}`}
+          x={0}
+          y={0}
+          dy={14 + index * 13}
+          textAnchor="middle"
+          fill="#374151"
+          fontSize={12}
+          fontWeight={600}
+        >
+          {line}
+        </text>
+      ))}
+    </g>
+  );
 }
 
 export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDraft> | null): MonthlyDraft {
@@ -101,7 +165,15 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
     whsMonth1: textOf(raw.whsMonth1, textOf(raw.whsPriorLabel, base.whsMonth1)),
     whsMonth2: textOf(raw.whsMonth2, base.whsMonth2),
     whsMonth3: textOf(raw.whsMonth3, textOf(raw.whsCurrentLabel, base.whsMonth3)),
-    feedbackHeading: textOf(raw.feedbackHeading, base.feedbackHeading),
+    feedbackHeading: (() => {
+      const saved = textOf(raw.feedbackHeading, '');
+      // Upgrade old "... feedback" titles to Faults Reports.
+      if (!saved) return base.feedbackHeading;
+      if (/\bfeedback$/i.test(saved.trim())) {
+        return saved.replace(/\s*feedback\s*$/i, ' Faults Reports').replace(/\s+/g, ' ').trim();
+      }
+      return saved;
+    })(),
     staffChanges: textOf(raw.staffChanges, base.staffChanges),
     staffFeedback: textOf(raw.staffFeedback, base.staffFeedback),
     recognition: textOf(raw.recognition, base.recognition),
@@ -135,6 +207,9 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
     streams: list(raw.streams, (row) => ({
       heading: String(row.heading || ''),
       note: String(row.note || ''),
+      detailHeading: String(row.detailHeading || ''),
+      detailNote: String(row.detailNote || ''),
+      showQuality: row.showQuality === true || row.showQuality === 'true',
       summary: Array.isArray(row.summary)
         ? row.summary.map((item) => {
           const summary = (item || {}) as Record<string, unknown>;
@@ -148,13 +223,64 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
           };
         })
         : [],
-    }), base.streams),
-    feedback: list(raw.feedback, (row) => ({
-      site: String(row.site || ''),
-      feedback: String(row.feedback || ''),
-      comment: String(row.comment || row.status || ''),
-      rectified: String(row.rectified || row.date || ''),
-    }), base.feedback),
+      visits: Array.isArray(row.visits)
+        ? row.visits.map((item) => {
+          const visit = (item || {}) as Record<string, unknown>;
+          const site = String(visit.site || '');
+          const dates = String(visit.dates || visit.date || '');
+          const rawLinks = Array.isArray(visit.dateLinks) ? visit.dateLinks : [];
+          const dateLinks = rawLinks
+            .map((link) => {
+              const entry = (link || {}) as Record<string, unknown>;
+              const id = Number(entry.id);
+              const date = String(entry.date || '').trim();
+              if (!date || !Number.isFinite(id) || id <= 0) return null;
+              return { date, id };
+            })
+            .filter(Boolean) as { date: string; id: number }[];
+          return {
+            site,
+            dates,
+            quality: String(visit.quality || ''),
+            comments: String(visit.comments || ''),
+            ...(dateLinks.length ? { dateLinks } : {}),
+          };
+        })
+        : [],
+    }), base.streams).map((stream, streamIndex) => {
+      // Backfill dateLinks from live seed when saved draft only has plain date text.
+      const baseStream =
+        base.streams[streamIndex]
+        || base.streams.find((item) => item.heading === stream.heading);
+      if (!baseStream?.visits?.length || !stream.visits?.length) return stream;
+      return {
+        ...stream,
+        visits: stream.visits.map((visit) => {
+          if (visit.dateLinks?.length) return visit;
+          const match =
+            baseStream.visits!.find((item) => item.site === visit.site && !!item.dateLinks?.length)
+            || baseStream.visits!.find((item) => item.site === visit.site);
+          return match?.dateLinks?.length ? { ...visit, dateLinks: match.dateLinks } : visit;
+        }),
+      };
+    }),
+    feedback: list(raw.feedback, (row) => {
+      const site = String(row.site || '');
+      const feedback = String(row.feedback || '');
+      const comment = String(row.comment || row.status || '');
+      let reported = String(row.rectified || row.date || '').trim();
+      const savedId = Number(row.id);
+      const match =
+        base.feedback.find((item) => item.site === site && item.feedback === feedback)
+        || base.feedback.find((item) => item.feedback === feedback && !!item.rectified)
+        || base.feedback.find((item) => item.site === site && !!item.rectified);
+      // Old drafts stored blank/"Nil" under Date rectified — pull the real fault date.
+      if (!reported || /^nil$/i.test(reported) || /^n\/?a$/i.test(reported)) {
+        if (match?.rectified) reported = match.rectified;
+      }
+      const id = Number.isFinite(savedId) && savedId > 0 ? savedId : match?.id;
+      return { site, feedback, comment, rectified: reported, ...(id ? { id } : {}) };
+    }, base.feedback),
     toolbox: list(raw.toolbox, (row) => ({
       title: String(row.title || ''),
       date: String(row.date || ''),
@@ -362,6 +488,19 @@ function ReportBody({
   onDraft: React.Dispatch<React.SetStateAction<MonthlyDraft>>;
 }) {
   const colors = ['#0f5c3f', '#147a54', '#3b82f6', '#6366f1', '#f59e0b', '#dc2626'];
+  const faultTotal = chartWeekly.reduce((sum, row) => sum + row.faults, 0);
+  const ticketTotal = chartWeekly.reduce((sum, row) => sum + row.tickets, 0);
+  const serviceTotal = chartServices.reduce((sum, row) => sum + row.value, 0);
+  const jumpToSection = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    event.preventDefault();
+    const id = href.replace(/^#/, '');
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof window !== 'undefined' && window.history?.replaceState) {
+      window.history.replaceState(null, '', href);
+    }
+  };
 
   return (
     <div className="marketing-site mr-app">
@@ -398,23 +537,28 @@ function ReportBody({
                 <TextField editing={editing} chars={6} value={draft.locations} onChange={(value) => onText('locations', value)} />
               </span>
             </div>
+          </div>
+        </section>
+
+        <section className="mr-section mr-section--surface" id="mr-identity">
+          <div className="mr-section-inner">
             <div className="mr-cover-grid">
               <div>
                 <h4>Client</h4>
                 <p>
                   <TextField editing={editing} value={draft.clientName} onChange={(value) => onText('clientName', value)} />
-                  <br />
-                  <TextField editing={editing} value={draft.address} onChange={(value) => onText('address', value)} />
-                  <br />
-                  <TextField editing={editing} value={draft.contact} onChange={(value) => onText('contact', value)} />
                 </p>
               </div>
               <div>
-                <h4>This month</h4>
+                <h4>Address</h4>
                 <p>
-                  <TextField editing={editing} value={draft.serviceLine} onChange={(value) => onText('serviceLine', value)} />
-                  <br />
-                  <TextField editing={editing} value={draft.periodRange} onChange={(value) => onText('periodRange', value)} />
+                  <TextField editing={editing} value={draft.address} onChange={(value) => onText('address', value)} />
+                </p>
+              </div>
+              <div>
+                <h4>Contact</h4>
+                <p>
+                  <TextField editing={editing} value={draft.contact} onChange={(value) => onText('contact', value)} />
                 </p>
               </div>
               <div>
@@ -424,40 +568,46 @@ function ReportBody({
                 </p>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="mr-section mr-section--surface" id="mr-toc">
+          <div className="mr-section-inner">
+            <header className="mr-section-header">
+              <h2>Table of contents</h2>
+              <p>Jump to a section of this monthly report.</p>
+            </header>
             <div className="mr-toc">
-              <h4>Table of content</h4>
-              <div>
-                <p><a href="#mr-overview">Section One � Overview</a></p>
-                <p>1.1 Service Delivery</p>
-                <p>1.2 Service Disruption</p>
-                <p>1.3 General Issues</p>
-                <p>1.4 Previous Minutes</p>
-              </div>
-              <div>
-                <p><a href="#mr-contract">Section Two � Contract Review</a></p>
-                <p>2.1 Contract Compliance and KPI</p>
-                <p>2.2 Work Health and Safety</p>
-                <p>2.3 Environmental Issues</p>
-              </div>
-              <div>
-                <p><a href="#mr-inspections">Section Three � Inspections</a></p>
-                <p>3.1 Site Inspections</p>
-                <p>3.2 Customer feedback</p>
-              </div>
-              <div>
-                <p><a href="#mr-staffing">Section Four � Staffing</a></p>
-                <p>4.1 Toolbox talk</p>
-                <p>4.2 Staff changes</p>
-                <p>4.3 Staff feedback</p>
-                <p>4.4 Staffing recognition award</p>
-              </div>
-              <div>
-                <p><a href="#mr-financials">Section Five � Financials</a></p>
-                <p>5.1 Overdue invoices</p>
-                <p>5.2 Contract variations</p>
-                <p>5.3 Adhoc work request</p>
-                <p>5.4 Quotes</p>
-              </div>
+              {[
+                { label: 'This month at a glance', href: '#mr-charts', page: 2 },
+                { label: '1. Overview', href: '#mr-overview', page: 3 },
+                { label: '1.1 Service delivery', href: '#mr-overview-delivery', page: 3, sub: true },
+                { label: '1.2 Service disruption', href: '#mr-overview-disruption', page: 3, sub: true },
+                { label: '1.3 Previous minutes', href: '#mr-overview-minutes', page: 3, sub: true },
+                { label: '2. Contract review', href: '#mr-contract', page: 4 },
+                { label: '2.1 Contract compliance and KPI', href: '#mr-contract-compliance', page: 4, sub: true },
+                { label: '2.2 Work health and safety', href: '#mr-contract-whs', page: 4, sub: true },
+                { label: '2.3 Environmental issues', href: '#mr-contract-env', page: 4, sub: true },
+                { label: '3. Inspections', href: '#mr-inspections', page: 5 },
+                { label: '3.1 Site inspections', href: '#mr-inspections-sites', page: 5, sub: true },
+                { label: '3.2 Faults Reports', href: '#mr-faults', page: 5, sub: true },
+                { label: '4. Staffing', href: '#mr-staffing', page: 6 },
+                { label: '4.1 Toolbox talk', href: '#mr-staffing-toolbox', page: 6, sub: true },
+                { label: '4.2 Staff changes', href: '#mr-staffing-changes', page: 6, sub: true },
+                { label: '4.3 Staff feedback', href: '#mr-staffing-feedback', page: 6, sub: true },
+                { label: '4.4 Staffing recognition award', href: '#mr-staffing-recognition', page: 6, sub: true },
+                { label: '5. Financials', href: '#mr-financials', page: 7 },
+                { label: '5.1 Overdue invoices', href: '#mr-financials-invoices', page: 7, sub: true },
+                { label: '5.2 Contract variations', href: '#mr-financials-variations', page: 7, sub: true },
+                { label: '5.3 Adhoc work request', href: '#mr-financials-adhoc', page: 7, sub: true },
+                { label: '5.4 Quotes', href: '#mr-financials-quotes', page: 7, sub: true },
+              ].map((row) => (
+                <p key={row.label} className={`mr-toc-row${row.sub ? ' mr-toc-row--sub' : ''}`}>
+                  <a href={row.href} onClick={(event) => jumpToSection(event, row.href)}>{row.label}</a>
+                  <span className="mr-toc-dots" aria-hidden="true" />
+                  <span className="mr-toc-page">Page {row.page}</span>
+                </p>
+              ))}
             </div>
           </div>
         </section>
@@ -510,6 +660,37 @@ function ReportBody({
                   </ResponsiveContainer>
                 </div>
               </article>
+            </div>
+            <p className="mr-glance-period">
+              {draft.serviceLine}
+              {draft.serviceLine && (draft.periodRange || draft.periodLabel) ? ' · ' : ''}
+              {draft.periodRange || draft.periodLabel}
+            </p>
+            <div className="mr-kpi-grid">
+              <div className="mr-kpi">
+                <span className="mr-kpi-value">
+                  <TextField editing={editing} chars={6} value={draft.jobs} onChange={(value) => onText('jobs', value)} />
+                </span>
+                <span className="mr-kpi-label">Jobs completed</span>
+              </div>
+              <div className="mr-kpi">
+                <span className="mr-kpi-value">
+                  <TextField editing={editing} chars={6} value={draft.locations} onChange={(value) => onText('locations', value)} />
+                </span>
+                <span className="mr-kpi-label">Locations</span>
+              </div>
+              <div className="mr-kpi">
+                <span className="mr-kpi-value">{faultTotal}</span>
+                <span className="mr-kpi-label">Faults</span>
+              </div>
+              <div className="mr-kpi">
+                <span className="mr-kpi-value">{ticketTotal}</span>
+                <span className="mr-kpi-label">Tickets</span>
+              </div>
+              <div className="mr-kpi">
+                <span className="mr-kpi-value">{serviceTotal || chartServices.length}</span>
+                <span className="mr-kpi-label">Service jobs</span>
+              </div>
             </div>
             {editing ? (
               <div className="mr-table-wrap" style={{ marginTop: 16 }}>
@@ -564,16 +745,14 @@ function ReportBody({
           <div className="mr-section-inner">
             <header className="mr-section-header">
               <h2>1. Overview</h2>
-              <p>Service delivery, disruptions, and issues for {draft.periodLabel}.</p>
+              <p>Service delivery, disruptions, and previous minutes for {draft.periodLabel}.</p>
             </header>
             <div className="mr-exec-card">
-              <h3 className="mr-subhead">1.1 Service Delivery</h3>
+              <h3 className="mr-subhead" id="mr-overview-delivery">1.1 Service Delivery</h3>
               <TextField editing={editing} multiline grow value={draft.serviceDelivery} onChange={(value) => onText('serviceDelivery', value)} />
-              <h3 className="mr-subhead">1.2 Service Disruption</h3>
+              <h3 className="mr-subhead" id="mr-overview-disruption">1.2 Service Disruption</h3>
               <TextField editing={editing} multiline grow value={draft.disruptions} onChange={(value) => onText('disruptions', value)} />
-              <h3 className="mr-subhead">1.3 General Issues</h3>
-              <TextField editing={editing} multiline grow value={draft.generalIssues} onChange={(value) => onText('generalIssues', value)} />
-              <h3 className="mr-subhead">1.4 Previous Minutes</h3>
+              <h3 className="mr-subhead" id="mr-overview-minutes">1.3 Previous Minutes</h3>
               <TextField editing={editing} multiline grow value={draft.previousMinutes} onChange={(value) => onText('previousMinutes', value)} />
             </div>
           </div>
@@ -585,7 +764,7 @@ function ReportBody({
               <h2>2. Contract review</h2>
               <p>Compliance, safety, and environment for this month.</p>
             </header>
-            <h3 className="mr-subhead">2.1 Contract Compliance and KPI</h3>
+            <h3 className="mr-subhead" id="mr-contract-compliance">2.1 Contract Compliance and KPI</h3>
             <div className="mr-table-wrap">
               <table className="mr-table">
                 <thead>
@@ -612,7 +791,7 @@ function ReportBody({
             </div>
             <AddButton editing={editing} onClick={() => onDraft((current) => ({ ...current, compliance: [...current.compliance, { area: '', yes: '', no: '', comments: '' }] }))} />
 
-            <h3 className="mr-subhead">2.2 Work Health and Safety</h3>
+            <h3 className="mr-subhead" id="mr-contract-whs">2.2 Work Health and Safety</h3>
             <p className="mr-nil">
               <TextField editing={editing} value={draft.whsScope} onChange={(value) => onText('whsScope', value)} />
             </p>
@@ -643,7 +822,7 @@ function ReportBody({
               </table>
             </div>
             <AddButton editing={editing} onClick={() => onDraft((current) => ({ ...current, whs: [...current.whs, { label: '', m1: '0', m2: '0', m3: '0', ytd: '0' }] }))} />
-            <h3 className="mr-subhead">2.3 Environmental Issues</h3>
+            <h3 className="mr-subhead" id="mr-contract-env">2.3 Environmental Issues</h3>
             <div className="mr-table-wrap">
               <table className="mr-table">
                 <thead>
@@ -674,15 +853,39 @@ function ReportBody({
               <h2>3. Inspections</h2>
               <p>Site inspections and scheduled work for this month.</p>
             </header>
-            <h3 className="mr-subhead">3.1 Site Inspections</h3>
+            <h3 className="mr-subhead" id="mr-inspections-sites">3.1 Site Inspections</h3>
             {draft.streams.map((stream, streamIndex) => {
               const summary = stream.summary || [];
+              const visits = stream.visits || [];
+              const showQuality = !!stream.showQuality;
               const blankRow = { month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' };
+              const blankVisit = { site: '', dates: '', quality: '', comments: '' };
+              const chartData = summary
+                .filter((row) => row.group || row.schedule || row.completed)
+                .map((row) => {
+                  const schedule = Number(row.schedule) || 0;
+                  const completed = Number(row.completed) || 0;
+                  const pct = schedule > 0 ? Math.round((completed / schedule) * 100) : completed > 0 ? 100 : 0;
+                  return {
+                    group: row.group || 'Sites',
+                    schedule,
+                    completed,
+                    pctLabel: `${pct}%`,
+                  };
+                });
+              const chartTitle = `${stream.detailHeading || stream.heading || 'Site inspections'} – Overall Result${
+                summary[0]?.month || draft.periodLabel ? ` (${summary[0]?.month || draft.periodLabel})` : ''
+              }`;
+              const patchStream = (patch: Partial<(typeof draft.streams)[number]>) =>
+                onDraft((current) => ({
+                  ...current,
+                  streams: current.streams.map((item, index) => (index === streamIndex ? { ...item, ...patch } : item)),
+                }));
               return (
               <div className="mr-stream" key={`stream-${streamIndex}`}>
                 <div className="mr-stream-head">
                   <h3 className="mr-subhead">
-                    <TextField editing={editing} chars={Math.max(16, (stream.heading || '').length + 1)} value={stream.heading} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, heading: value } : item) }))} />
+                    <TextField editing={editing} chars={Math.max(16, (stream.heading || '').length + 1)} value={stream.heading} onChange={(value) => patchStream({ heading: value })} />
                   </h3>
                   {editing ? (
                     <Button className="mr-add-row" danger size="small" onClick={() => onDraft((current) => ({ ...current, streams: current.streams.filter((_, index) => index !== streamIndex) }))}>
@@ -692,7 +895,7 @@ function ReportBody({
                 </div>
                 {editing || stream.note ? (
                   <p className="mr-nil">
-                    <TextField editing={editing} placeholder="Note" value={stream.note} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, note: value } : item) }))} />
+                    <TextField editing={editing} placeholder="Note" value={stream.note} onChange={(value) => patchStream({ note: value })} />
                   </p>
                 ) : null}
                 <div className="mr-table-wrap" style={{ marginBottom: 8 }}>
@@ -735,12 +938,179 @@ function ReportBody({
                 <div className="mr-row-actions">
                   <AddButton editing={editing} label="Add row" onClick={() => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, summary: [...(item.summary || []), blankRow] } : item) }))} />
                 </div>
+
+                {chartData.length ? (
+                  <article className="mr-chart-card mr-inspect-chart-card">
+                    <header className="mr-chart-card-head">
+                      <h3>{chartTitle}</h3>
+                      <p>Schedule vs completed by site group</p>
+                    </header>
+                    <div className="mr-chart-card-body">
+                      <ResponsiveContainer width="100%" height={chartData.length <= 2 ? 310 : 340}>
+                        <BarChart
+                          data={chartData}
+                          margin={{
+                            top: 32,
+                            right: 20,
+                            left: 12,
+                            bottom: chartData.length <= 2 ? 28 : 48,
+                          }}
+                          barCategoryGap={chartData.length <= 2 ? '42%' : chartData.length <= 4 ? '28%' : '18%'}
+                          barGap={8}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2ece6" vertical={false} />
+                          <XAxis
+                            dataKey="group"
+                            interval={0}
+                            tick={(props) => (
+                              <InspectGroupTick
+                                {...props}
+                                maxChars={chartData.length <= 2 ? 18 : chartData.length <= 4 ? 14 : 12}
+                              />
+                            )}
+                            tickLine={false}
+                            axisLine={{ stroke: '#d1e5d9' }}
+                            height={chartData.length <= 2 ? 48 : 64}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            domain={[0, (dataMax: number) => Math.max(4, Math.ceil(dataMax))]}
+                            tickCount={5}
+                            tick={{ fill: '#6b7280', fontSize: 12 }}
+                            width={40}
+                            axisLine={false}
+                            tickLine={false}
+                            label={{
+                              value: 'Schedule reports',
+                              angle: -90,
+                              position: 'insideLeft',
+                              offset: 0,
+                              style: { fill: '#6b7280', fontSize: 11 },
+                            }}
+                          />
+                          <Tooltip
+                            cursor={{ fill: 'rgba(15, 92, 63, 0.06)' }}
+                            contentStyle={{
+                              borderRadius: 10,
+                              border: '1px solid #d1fae5',
+                              boxShadow: '0 4px 14px rgba(15,36,28,0.08)',
+                            }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: 10 }} iconType="circle" />
+                          <Bar
+                            dataKey="schedule"
+                            name="Schedule for this month"
+                            fill="#166534"
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={chartData.length <= 2 ? 52 : 42}
+                          >
+                            <LabelList
+                              dataKey="schedule"
+                              position="insideTop"
+                              style={{ fill: '#fff', fontSize: 11, fontWeight: 700 }}
+                            />
+                            <LabelList
+                              dataKey="pctLabel"
+                              position="top"
+                              offset={8}
+                              style={{ fill: '#166534', fontSize: 12, fontWeight: 800 }}
+                            />
+                          </Bar>
+                          <Bar
+                            dataKey="completed"
+                            name="Completed"
+                            fill="#86efac"
+                            radius={[6, 6, 0, 0]}
+                            maxBarSize={chartData.length <= 2 ? 52 : 42}
+                          >
+                            <LabelList
+                              dataKey="completed"
+                              position="insideTop"
+                              style={{ fill: '#14532d', fontSize: 11, fontWeight: 700 }}
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </article>
+                ) : null}
+
+                <h3 className="mr-subhead">
+                  <TextField
+                    editing={editing}
+                    chars={Math.max(16, (stream.detailHeading || 'Work completed').length + 1)}
+                    value={stream.detailHeading || 'Work completed'}
+                    onChange={(value) => patchStream({ detailHeading: value })}
+                  />
+                </h3>
+                {editing || stream.detailNote ? (
+                  <p className="mr-nil">
+                    <TextField editing={editing} placeholder="Detail note" value={stream.detailNote || ''} onChange={(value) => patchStream({ detailNote: value })} />
+                  </p>
+                ) : null}
+                <div className="mr-table-wrap" style={{ marginBottom: 8 }}>
+                  <table className="mr-table mr-table--sites mr-table--visits">
+                    <colgroup>
+                      <col className="mr-col-visit-site" />
+                      <col className="mr-col-visit-dates" />
+                      {showQuality ? <col className="mr-col-visit-quality" /> : null}
+                      <col className="mr-col-visit-notes" />
+                      {editing ? <col className="mr-col-act" /> : null}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Sites</th>
+                        <th>{showQuality ? 'Date of Inspection' : 'Date of Service'}</th>
+                        {showQuality ? <th>Cleaning Quality(%)</th> : null}
+                        <th>Comments</th>
+                        {editing ? <th className="mr-actions" /> : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visits.map((row, rowIndex) => (
+                        <tr key={`visit-${streamIndex}-${rowIndex}`}>
+                          <td><TextField editing={editing} value={row.site} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex ? { ...entry, site: value } : entry) } : item) }))} /></td>
+                          <td className="mr-visit-dates">
+                            {editing ? (
+                              <TextField editing={editing} value={row.dates} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex ? { ...entry, dates: value } : entry) } : item) }))} />
+                            ) : row.dateLinks?.length ? (
+                              <div className="mr-date-links">
+                                {row.dateLinks.map((link) => (
+                                  <a
+                                    key={`visit-date-${streamIndex}-${rowIndex}-${link.id}`}
+                                    className="mr-date-link"
+                                    href={`/new-reports?reportId=${link.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Open inspection report"
+                                  >
+                                    {link.date}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              row.dates
+                            )}
+                          </td>
+                          {showQuality ? (
+                            <td><TextField editing={editing} fit="num" value={row.quality} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex ? { ...entry, quality: value } : entry) } : item) }))} /></td>
+                          ) : null}
+                          <td><TextField editing={editing} multiline value={row.comments} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex ? { ...entry, comments: value } : entry) } : item) }))} /></td>
+                          {editing ? <td className="mr-actions"><RemoveButton editing onClick={() => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).filter((_, visitIndex) => visitIndex !== rowIndex) } : item) }))} /></td> : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mr-row-actions">
+                  <AddButton editing={editing} label="Add site visit" onClick={() => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: [...(item.visits || []), blankVisit] } : item) }))} />
+                </div>
               </div>
               );
             })}
-            <AddButton editing={editing} label="Add service" onClick={() => onDraft((current) => ({ ...current, streams: [...current.streams, { heading: 'New service', note: '', summary: [{ month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' }] }] }))} />
+            <AddButton editing={editing} label="Add service" onClick={() => onDraft((current) => ({ ...current, streams: [...current.streams, { heading: 'New service', note: '', detailHeading: 'Work completed', detailNote: '', showQuality: false, summary: [{ month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' }], visits: [] }] }))} />
 
-            <h3 className="mr-subhead">
+            <h3 className="mr-subhead" id="mr-faults">
               3.2 <TextField editing={editing} value={draft.feedbackHeading} onChange={(value) => onText('feedbackHeading', value)} />
             </h3>
             {draft.feedback.length ? (
@@ -749,9 +1119,9 @@ function ReportBody({
                   <thead>
                     <tr>
                       <th>Site</th>
-                      <th>Feedback</th>
+                      <th>Fault</th>
                       <th>Comment</th>
-                      <th>Date Rectified</th>
+                      <th>Date reported</th>
                       {editing ? <th /> : null}
                     </tr>
                   </thead>
@@ -759,7 +1129,21 @@ function ReportBody({
                     {draft.feedback.map((row, index) => (
                       <tr key={`feedback-${index}`}>
                         <td><TextField editing={editing} value={row.site} onChange={(value) => onDraft((current) => ({ ...current, feedback: current.feedback.map((item, itemIndex) => itemIndex === index ? { ...item, site: value } : item) }))} /></td>
-                        <td><TextField editing={editing} multiline value={row.feedback} onChange={(value) => onDraft((current) => ({ ...current, feedback: current.feedback.map((item, itemIndex) => itemIndex === index ? { ...item, feedback: value } : item) }))} /></td>
+                        <td>
+                          {editing || !row.id ? (
+                            <TextField editing={editing} multiline value={row.feedback} onChange={(value) => onDraft((current) => ({ ...current, feedback: current.feedback.map((item, itemIndex) => itemIndex === index ? { ...item, feedback: value } : item) }))} />
+                          ) : (
+                            <a
+                              className="mr-fault-link"
+                              href={`/report-faults?faultId=${row.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Open fault report"
+                            >
+                              {row.feedback || `Fault #${row.id}`}
+                            </a>
+                          )}
+                        </td>
                         <td><TextField editing={editing} multiline value={row.comment} onChange={(value) => onDraft((current) => ({ ...current, feedback: current.feedback.map((item, itemIndex) => itemIndex === index ? { ...item, comment: value } : item) }))} /></td>
                         <td><TextField editing={editing} fit="short" value={row.rectified} onChange={(value) => onDraft((current) => ({ ...current, feedback: current.feedback.map((item, itemIndex) => itemIndex === index ? { ...item, rectified: value } : item) }))} /></td>
                         {editing ? <td><RemoveButton editing onClick={() => onDraft((current) => ({ ...current, feedback: current.feedback.filter((_, itemIndex) => itemIndex !== index) }))} /></td> : null}
@@ -771,7 +1155,7 @@ function ReportBody({
             ) : (
               <p className="mr-nil">Nil</p>
             )}
-            <AddButton editing={editing} label="Add feedback" onClick={() => onDraft((current) => ({ ...current, feedback: [...current.feedback, { site: '', feedback: '', comment: '', rectified: '' }] }))} />
+            <AddButton editing={editing} label="Add fault report" onClick={() => onDraft((current) => ({ ...current, feedback: [...current.feedback, { site: '', feedback: '', comment: '', rectified: '' }] }))} />
           </div>
         </section>
 
@@ -781,7 +1165,7 @@ function ReportBody({
               <h2>4. Staffing</h2>
               <p>Toolbox talks, staff changes, feedback, and recognition.</p>
             </header>
-            <h3 className="mr-subhead">4.1 Toolbox talk</h3>
+            <h3 className="mr-subhead" id="mr-staffing-toolbox">4.1 Toolbox talk</h3>
             {draft.toolbox.length ? (
               <div className="mr-events">
                 {draft.toolbox.map((talk, index) => (
@@ -800,11 +1184,11 @@ function ReportBody({
               <p className="mr-nil">Nil</p>
             )}
             <AddButton editing={editing} label="Add toolbox talk" onClick={() => onDraft((current) => ({ ...current, toolbox: [...current.toolbox, { title: '', date: '', detail: '' }] }))} />
-            <h3 className="mr-subhead">4.2 Staff changes � New staff and staff leaving</h3>
+            <h3 className="mr-subhead" id="mr-staffing-changes">4.2 Staff changes — New staff and staff leaving</h3>
             <TextField editing={editing} multiline value={draft.staffChanges} onChange={(value) => onText('staffChanges', value)} />
-            <h3 className="mr-subhead">4.3 Staff feedback</h3>
+            <h3 className="mr-subhead" id="mr-staffing-feedback">4.3 Staff feedback</h3>
             <TextField editing={editing} multiline value={draft.staffFeedback} onChange={(value) => onText('staffFeedback', value)} />
-            <h3 className="mr-subhead">4.4 Staffing recognition award</h3>
+            <h3 className="mr-subhead" id="mr-staffing-recognition">4.4 Staffing recognition award</h3>
             <TextField editing={editing} multiline value={draft.recognition} onChange={(value) => onText('recognition', value)} />
           </div>
         </section>
@@ -815,7 +1199,7 @@ function ReportBody({
               <h2>5. Financials</h2>
               <p>Overdue invoices, contract variations, adhoc requests, and quotes.</p>
             </header>
-            <h3 className="mr-subhead">5.1 Overdue invoices</h3>
+            <h3 className="mr-subhead" id="mr-financials-invoices">5.1 Overdue invoices</h3>
             <p className="mr-nil"><TextField editing={editing} value={draft.invoiceIntro} onChange={(value) => onText('invoiceIntro', value)} /></p>
             {draft.invoices.length ? (
               <div className="mr-table-wrap">
@@ -840,7 +1224,7 @@ function ReportBody({
               </div>
             ) : null}
             <AddButton editing={editing} label="Add invoice" onClick={() => onDraft((current) => ({ ...current, invoices: [...current.invoices, { number: '', detail: '' }] }))} />
-            <h3 className="mr-subhead">5.2 Contract variations</h3>
+            <h3 className="mr-subhead" id="mr-financials-variations">5.2 Contract variations</h3>
             {draft.variations.length ? (
               <div className="mr-table-wrap">
                 <table className="mr-table">
@@ -873,7 +1257,7 @@ function ReportBody({
             )}
             <AddButton editing={editing} label="Add variation" onClick={() => onDraft((current) => ({ ...current, variations: [...current.variations, { site: '', date: '', reason: '', requestedBy: '', amount: '' }] }))} />
             <p><TextField editing={editing} multiline value={draft.variationComments} onChange={(value) => onText('variationComments', value)} /></p>
-            <h3 className="mr-subhead">5.3 Adhoc work request</h3>
+            <h3 className="mr-subhead" id="mr-financials-adhoc">5.3 Adhoc work request</h3>
             {draft.adhoc.length ? (
               <div className="mr-table-wrap">
                 <table className="mr-table">
@@ -906,7 +1290,7 @@ function ReportBody({
             )}
             <AddButton editing={editing} label="Add adhoc request" onClick={() => onDraft((current) => ({ ...current, adhoc: [...current.adhoc, { site: '', description: '', requestedBy: '', date: '', amount: '' }] }))} />
             <p><TextField editing={editing} multiline value={draft.adhocComments} onChange={(value) => onText('adhocComments', value)} /></p>
-            <h3 className="mr-subhead">5.4 Quotes</h3>
+            <h3 className="mr-subhead" id="mr-financials-quotes">5.4 Quotes</h3>
             <TextField editing={editing} multiline value={draft.quotes} onChange={(value) => onText('quotes', value)} />
           </div>
         </section>

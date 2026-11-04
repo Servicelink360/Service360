@@ -46,7 +46,7 @@ export const autoMergeUsesPicker = (it: TemplateItem, isStaffUser: boolean): boo
 export const resolveAutoMergeFieldValue = (
   it: TemplateItem,
   values: Record<string, any>,
-  profile?: { fullName?: string; username?: string },
+  profile?: { id?: number | string; userId?: number | string; fullName?: string; username?: string },
 ): string => {
   const t = String(it?.type || "").toUpperCase();
   if (t === "[REPORT_DATE]") return moment().format("YYYY-MM-DD");
@@ -58,13 +58,15 @@ export const resolveAutoMergeFieldValue = (
     return String(values.companyName || values.customerName || "").trim();
   }
   if (t === "[REPORT_BY]") {
-    return String(
-      values.staffDisplayName ||
-        values.reportBy ||
-        profile?.fullName ||
-        profile?.username ||
-        "",
-    ).trim();
+    const staffId = +(
+      values.staffId ||
+      values.reportStaffId ||
+      profile?.id ||
+      profile?.userId ||
+      0
+    );
+    if (Number.isFinite(staffId) && staffId > 0) return `Usr-${staffId}`;
+    return "";
   }
   return "";
 };
@@ -101,6 +103,11 @@ export const parseMediaListValue = (v: unknown): string[] => {
   try {
     const p = JSON.parse(s);
     if (Array.isArray(p)) return p.map(String).filter(Boolean);
+    if (p && typeof p === "object") {
+      const before = Array.isArray((p as any).before) ? (p as any).before.map(String).filter(Boolean) : [];
+      const after = Array.isArray((p as any).after) ? (p as any).after.map(String).filter(Boolean) : [];
+      if (before.length || after.length) return [...before, ...after];
+    }
     if (typeof p === "string" && p) return [p];
   } catch {
     if (/^https?:\/\//i.test(s) || s.startsWith("/")) return [s];
@@ -108,6 +115,78 @@ export const parseMediaListValue = (v: unknown): string[] => {
   }
   return [];
 };
+
+/** Template IMAGES layout: together (one gallery) or separate before/after galleries. */
+export type ImagePhotoMode = "together" | "separate";
+
+/** True for Adhoc-style "Before and after photos" IMAGES fields. */
+export const looksLikeBeforeAfterPhotoField = (it: TemplateItem | null | undefined): boolean => {
+  const label = String(it?.config?.label || it?.name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  return /before\s*(and|&|\+)\s*after/.test(label) || label === "before and after photos";
+};
+
+export const getImagePhotoMode = (it: TemplateItem | null | undefined): ImagePhotoMode => {
+  const raw = String(it?.config?.photoMode || "").trim().toLowerCase();
+  if (raw === "separate") return "separate";
+  if (raw === "together") return "together";
+  // Default: Before + after (together). Staff can switch to Before | After in the Select.
+  return "together";
+};
+
+export const isSeparateImagePhotoMode = (it: TemplateItem | null | undefined) =>
+  getImagePhotoMode(it) === "separate";
+
+export const beforeAfterSideKey = (fieldKey: string, side: "before" | "after") =>
+  `${fieldKey}__ba_${side}`;
+
+export type BeforeAfterMediaValue = {
+  mode: ImagePhotoMode;
+  before: string[];
+  after: string[];
+  all: string[];
+};
+
+/** Parse IMAGES value that may be a flat URL list (together) or `{ before, after }` (separate). */
+export const parseBeforeAfterMediaValue = (v: unknown): BeforeAfterMediaValue => {
+  if (v == null || v === "") {
+    return { mode: "together", before: [], after: [], all: [] };
+  }
+  if (Array.isArray(v)) {
+    const all = v.map(String).filter(Boolean);
+    return { mode: "together", before: [], after: [], all };
+  }
+  const s = String(v).trim();
+  if (!s || s === "[]") {
+    return { mode: "together", before: [], after: [], all: [] };
+  }
+  try {
+    const p = JSON.parse(s);
+    if (p && typeof p === "object" && !Array.isArray(p)) {
+      const before = Array.isArray(p.before) ? p.before.map(String).filter(Boolean) : [];
+      const after = Array.isArray(p.after) ? p.after.map(String).filter(Boolean) : [];
+      if ("before" in p || "after" in p) {
+        return { mode: "separate", before, after, all: [...before, ...after] };
+      }
+    }
+    if (Array.isArray(p)) {
+      const all = p.map(String).filter(Boolean);
+      return { mode: "together", before: [], after: [], all };
+    }
+  } catch {
+    /* fall through */
+  }
+  const all = parseMediaListValue(v);
+  return { mode: "together", before: [], after: [], all };
+};
+
+export const serializeBeforeAfterMediaValue = (before: string[], after: string[]): string =>
+  JSON.stringify({
+    before: (before || []).filter(Boolean),
+    after: (after || []).filter(Boolean),
+  });
 
 export const isJsonMediaFieldType = (fieldType: string) =>
   ["IMAGES", "PHOTOS", "PHOTO", "IMAGE", "VIDEOS", "VIDEO"].includes(fieldType);

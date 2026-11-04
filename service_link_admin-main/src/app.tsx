@@ -1,6 +1,7 @@
 import React from 'react';
 import { Provider } from 'react-redux';
 import GlobalStyles from '@app/assets/styles/globalStyle';
+import '@app/assets/styles/app-shell-dark.css';
 import { store } from './redux/store';
 import Boot from './redux/boot';
 import Routes from './router';

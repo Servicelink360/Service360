@@ -6,7 +6,7 @@ import { UploadImageMultilHandle } from "@app/components/common/upload-image-mul
 import { UsersDiv } from "@app/components/common/container.style";
 import endPoint from "@app/constants/endPoint";
 import serviceType from "@app/constants/serviceType";
-import { CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, EnvironmentOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, CheckCircleFilled, ClockCircleOutlined, CloseOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, EditOutlined, EnvironmentOutlined, EyeOutlined, FilePdfOutlined, FileTextOutlined, FilterOutlined, MailOutlined, SaveOutlined, SearchOutlined, UndoOutlined, UpOutlined } from "@ant-design/icons";
 import { Link, useHistory, useLocation } from "react-router-dom";
 import { callAPIAsync } from "../../library/helpers/api";
 import { getStaffLocationDetailed } from "@app/library/helpers/geolocation";
@@ -46,12 +46,17 @@ import {
   legacyFieldKey,
   matchReportItemForTemplate,
   mergeReportMediaRowsForForm,
+  beforeAfterSideKey,
+  getImagePhotoMode,
+  parseBeforeAfterMediaValue,
   parseMediaListValue,
   parseReportItemValueForForm,
   reportFieldStorageKey,
   resolveAutoMergeFieldValue,
+  serializeBeforeAfterMediaValue,
   serviceCandidatesForTemplateAtSite,
   templateMatchesSiteServices,
+  type ImagePhotoMode,
 } from "./new-reports-field-utils";
 import {
   SUBMIT_PROGRESS_MEDIA_MAX,
@@ -90,6 +95,7 @@ import {
   formatReportViewDate,
   formatReportViewTime,
   formatSubmittedByRow,
+  formatSubmittedByUserCode,
   getReportPdfField,
   reportPdfLinkLabel,
   resolveReportPdfHref,
@@ -186,7 +192,11 @@ function buildCompanyCustomerOptions(
   }>;
 }
 
-const staffPrimaryGreen = { background: "#389e0d", borderColor: "#389e0d" };
+const staffPrimaryGreen: React.CSSProperties = {
+  background: "#389e0d",
+  borderColor: "#389e0d",
+  color: "#ffffff",
+};
 /** Submitted Reports modal — reference UI */
 const submittedMetaLabel: React.CSSProperties = {
   fontSize: 11,
@@ -568,6 +578,25 @@ const NewReportModalMobilePortraitStyles = createGlobalStyle`
       font-size: 16px !important;
       height: 44px !important;
       padding: 0 16px !important;
+    }
+
+    /* Photo Download — white label on green (modal body color must not win) */
+    .new-report-form-modal .nr-photo-download-btn.ant-btn,
+    .new-report-form-modal .nr-photo-download-btn.ant-btn span,
+    .new-report-form-modal .nr-photo-download-btn.ant-btn .anticon {
+      color: #ffffff !important;
+    }
+
+    .new-report-form-modal .nr-photo-download-btn.ant-btn:not([disabled]) {
+      background: #389e0d !important;
+      border-color: #389e0d !important;
+    }
+
+    .new-report-form-modal .nr-photo-download-btn.ant-btn[disabled] {
+      color: rgba(255, 255, 255, 0.85) !important;
+      background: #389e0d !important;
+      border-color: #389e0d !important;
+      opacity: 0.55;
     }
 
     .new-report-form-modal .nr-report-ampm-btns .ant-btn {
@@ -1497,20 +1526,138 @@ const submittedDeleteFooterBtn: React.CSSProperties = {
 };
 const submittedYesGreen = "#52c41a";
 
+function classifyBeforeAfterPhotoName(name: unknown): "before" | "after" | null {
+  const n = String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2013\u2014\u2212]/g, "-")
+    .replace(/\s+/g, " ");
+  if (!n) return null;
+  if (/(^|[-\s])after(\s+photos?)?$/.test(n) || n === "after photos" || n.endsWith("- after")) {
+    return "after";
+  }
+  if (/(^|[-\s])before(\s+photos?)?$/.test(n) || n === "before photos" || n.endsWith("- before")) {
+    return "before";
+  }
+  return null;
+}
+
 function buildSubmittedReportBlocks(reports: any[] | undefined) {
   const sorted = mergeReportMediaRowsForForm(reports || [])
     .filter((r) => !isJunkTemplateField({ name: r.name, type: r.type }))
     .sort((a, b) => (+a.order || 0) - (+b.order || 0));
+
+  // Pair separate Before/After rows so Before always renders first in the view.
+  const consumed = new Set<number>();
+  const paired: any[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (consumed.has(i)) continue;
+    const r = sorted[i];
+    const t = String(r?.type || "").toUpperCase();
+    if (!isJsonMediaFieldType(t)) {
+      paired.push(r);
+      continue;
+    }
+    const ba = parseBeforeAfterMediaValue(r.value);
+    if (ba.mode === "separate") {
+      paired.push({
+        ...r,
+        name: "Before and After Photos",
+        value: serializeBeforeAfterMediaValue(ba.before, ba.after),
+        __baPaired: true,
+      });
+      continue;
+    }
+    const side = classifyBeforeAfterPhotoName(r.name);
+    if (!side) {
+      paired.push(r);
+      continue;
+    }
+    let beforeUrls = side === "before" ? ba.all : [];
+    let afterUrls = side === "after" ? ba.all : [];
+    let order = +r.order || 0;
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (consumed.has(j)) continue;
+      const other = sorted[j];
+      if (!isJsonMediaFieldType(String(other?.type || "").toUpperCase())) continue;
+      const otherSide = classifyBeforeAfterPhotoName(other.name);
+      if (!otherSide || otherSide === side) continue;
+      // Same-ish order cluster (or next media siblings).
+      if (Math.abs((+other.order || 0) - order) > 2 && j > i + 3) continue;
+      const otherBa = parseBeforeAfterMediaValue(other.value);
+      if (otherSide === "before") beforeUrls = otherBa.all;
+      if (otherSide === "after") afterUrls = otherBa.all;
+      consumed.add(j);
+      order = Math.min(order, +other.order || 0);
+      break;
+    }
+    consumed.add(i);
+    paired.push({
+      ...r,
+      name: "Before and After Photos",
+      order,
+      value: serializeBeforeAfterMediaValue(beforeUrls, afterUrls),
+      __baPaired: true,
+    });
+  }
+
   let n = 0;
   const blocks: Array<{ kind: "photos" | "field"; num: number; report: any; urls: string[] }> = [];
-  for (const r of sorted) {
+  for (const r of paired) {
     const t = String(r.type || "").toUpperCase();
-    n += 1;
     if (isJsonMediaFieldType(t)) {
-      blocks.push({ kind: "photos", num: n, report: r, urls: parseMediaListValue(r.value) });
+      const ba = parseBeforeAfterMediaValue(r.value);
+      if (ba.mode === "separate" || r.__baPaired) {
+        // Always Before Photos first, then After Photos.
+        n += 1;
+        blocks.push({
+          kind: "photos",
+          num: n,
+          report: { ...r, name: "Before Photos" },
+          urls: ba.before,
+        });
+        n += 1;
+        blocks.push({
+          kind: "photos",
+          num: n,
+          report: { ...r, name: "After Photos" },
+          urls: ba.after,
+        });
+      } else {
+        const side = classifyBeforeAfterPhotoName(r.name);
+        n += 1;
+        blocks.push({
+          kind: "photos",
+          num: n,
+          report: {
+            ...r,
+            name: side === "before" ? "Before Photos" : side === "after" ? "After Photos" : r.name,
+          },
+          urls: ba.all,
+        });
+      }
     } else {
+      n += 1;
       blocks.push({ kind: "field", num: n, report: r, urls: [] });
     }
+  }
+
+  // Force Before Photos before After Photos if they somehow inverted.
+  const beforeIdx = blocks.findIndex(
+    (b) => b.kind === "photos" && classifyBeforeAfterPhotoName(b.report?.name) === "before",
+  );
+  const afterIdx = blocks.findIndex(
+    (b) => b.kind === "photos" && classifyBeforeAfterPhotoName(b.report?.name) === "after",
+  );
+  if (beforeIdx >= 0 && afterIdx >= 0 && afterIdx < beforeIdx) {
+    const tmp = blocks[afterIdx];
+    blocks[afterIdx] = blocks[beforeIdx];
+    blocks[beforeIdx] = tmp;
+  }
+  let num = 0;
+  for (const b of blocks) {
+    num += 1;
+    b.num = num;
   }
   return blocks;
 }
@@ -1676,6 +1823,8 @@ const NewReports: React.FC<{
   const [filterServices, setFilterServices] = useState<any[]>([]);
   const [visible, setVisible] = useState(false);
   const [preferAdhocTemplate, setPreferAdhocTemplate] = useState(false);
+  /** Per-field override on New Report: together | separate (Before | After). */
+  const [photoLayoutByField, setPhotoLayoutByField] = useState<Record<string, ImagePhotoMode>>({});
   const adhocWarnSiteRef = useRef("");
   const [viewOpen, setViewOpen] = useState(false);
   const [viewRow, setViewRow] = useState<any | null>(null);
@@ -2628,6 +2777,7 @@ const NewReports: React.FC<{
     resetSubmitUi();
     setPreferAdhocTemplate(Boolean(opts?.adhoc));
     adhocWarnSiteRef.current = "";
+    setPhotoLayoutByField({});
     setEditing(null);
     form.resetFields();
     setServices([]);
@@ -2755,6 +2905,7 @@ const NewReports: React.FC<{
     setEditing({ ...editRow, reports: mergedReports });
     form.resetFields();
     const reportValues: Record<string, any> = {};
+    const editPhotoLayouts: Record<string, ImagePhotoMode> = {};
     const editTpl =
       reportTemplates.find((t: any) => +t.id === +editRow.reportTemplateId) ||
       (init.reportTemplates || []).find((t: any) => +t.id === +editRow.reportTemplateId);
@@ -2788,9 +2939,34 @@ const NewReports: React.FC<{
           if (t === "[SITE_ADDRESS]" && editRow.siteAddress) parsed = String(editRow.siteAddress);
         }
         if (parsed !== undefined && parsed !== null && parsed !== "") {
-          reportValues[fieldKey] = parsed;
+          const tUpper = String(it.type || "").toUpperCase();
+          const ba = parseBeforeAfterMediaValue(rep?.value ?? parsed);
+          const preferSeparate =
+            ba.mode === "separate" || getImagePhotoMode(it) === "separate";
+          if (
+            preferSeparate &&
+            (tUpper === "IMAGES" || tUpper === "PHOTOS")
+          ) {
+            editPhotoLayouts[fieldKey] = "separate";
+            if (ba.before.length) {
+              reportValues[beforeAfterSideKey(fieldKey, "before")] = JSON.stringify(ba.before);
+            }
+            if (ba.after.length) {
+              reportValues[beforeAfterSideKey(fieldKey, "after")] = JSON.stringify(ba.after);
+            }
+            // Legacy together array opened under separate config: put all into Before.
+            if (ba.mode === "together" && ba.all.length) {
+              reportValues[beforeAfterSideKey(fieldKey, "before")] = JSON.stringify(ba.all);
+            }
+          } else {
+            if (tUpper === "IMAGES" || tUpper === "PHOTOS") {
+              editPhotoLayouts[fieldKey] = "together";
+            }
+            reportValues[fieldKey] = parsed;
+          }
         }
       });
+      setPhotoLayoutByField(editPhotoLayouts);
 
       const coveredKeys = new Set<string>();
       sortedTpl.forEach((it: TemplateItem, idx: number) => {
@@ -3205,10 +3381,37 @@ const NewReports: React.FC<{
     refreshAutoMergeTemplateFields();
   };
 
+  const resolveFieldPhotoMode = useCallback(
+    (it: TemplateItem, fieldKey: string): ImagePhotoMode => {
+      const override = photoLayoutByField[fieldKey];
+      if (override) return override;
+      return getImagePhotoMode(it);
+    },
+    [photoLayoutByField],
+  );
+
+  const isFieldSeparatePhotos = useCallback(
+    (it: TemplateItem, fieldKey: string) => resolveFieldPhotoMode(it, fieldKey) === "separate",
+    [resolveFieldPhotoMode],
+  );
+
   const uploadPendingMediaFields = async (): Promise<boolean> => {
     const templateMedia = templateItemsForSubmit
       .map((it, idx) => ({ it, idx, fieldKey: getTemplateFieldKey(it, idx) }))
-      .filter(({ it }) => isJsonMediaFieldType(String(it.type || "").toUpperCase()));
+      .filter(({ it }) => isJsonMediaFieldType(String(it.type || "").toUpperCase()))
+      .flatMap(({ it, idx, fieldKey }) => {
+        if (
+          isFieldSeparatePhotos(it, fieldKey) &&
+          (String(it.type || "").toUpperCase() === "IMAGES" ||
+            String(it.type || "").toUpperCase() === "PHOTOS")
+        ) {
+          return [
+            { it, idx, fieldKey: beforeAfterSideKey(fieldKey, "before") },
+            { it, idx, fieldKey: beforeAfterSideKey(fieldKey, "after") },
+          ];
+        }
+        return [{ it, idx, fieldKey }];
+      });
     const extraMedia = extraSavedReportRowsForEdit
       .map((r, idx) => ({ r, fieldKey: legacyFieldKey(r, idx) }))
       .filter(({ r }) => isJsonMediaFieldType(String(r.type || "").toUpperCase()));
@@ -3287,7 +3490,26 @@ const NewReports: React.FC<{
         .map((r: any, idx: number) => {
           const fieldKey = legacyFieldKey(r, idx);
           const fieldType = String(r.type || "").toUpperCase();
-          const raw = values[fieldKey];
+          const legacyIt: TemplateItem = {
+            name: String(r.name ?? "").trim(),
+            type: fieldType,
+            config: { label: String(r.name ?? "").trim() },
+          };
+          const separateImages =
+            (fieldType === "IMAGES" || fieldType === "PHOTOS") &&
+            isFieldSeparatePhotos(legacyIt, fieldKey);
+          let raw = values[fieldKey];
+          if (separateImages) {
+            const before = parseMediaListValue(values[beforeAfterSideKey(fieldKey, "before")]);
+            const after = parseMediaListValue(values[beforeAfterSideKey(fieldKey, "after")]);
+            if (!before.length && !after.length) return null;
+            return {
+              name: String(r.name ?? "").trim() || `field_${idx + 1}`,
+              type: r.type,
+              order: r.order ?? idx + 1,
+              value: serializeBeforeAfterMediaValue(before, after),
+            };
+          }
           if (raw === undefined || raw === null || raw === "") return null;
 
           let value: any = raw;
@@ -3358,12 +3580,18 @@ const NewReports: React.FC<{
         const fieldTypeUpper = String(it.type || "").toUpperCase();
         const isSiteAutoMerge =
           fieldTypeUpper === "[SITE_NAME]" || fieldTypeUpper === "[SITE_ADDRESS]";
+        const separateImages =
+          isJsonMediaFieldType(fieldTypeUpper) &&
+          isFieldSeparatePhotos(it, fieldKey) &&
+          (fieldTypeUpper === "IMAGES" || fieldTypeUpper === "PHOTOS");
         if (isSiteAutoMerge) {
           if (raw === undefined || raw === null || raw === "") {
             raw = resolveAutoMergeFieldValue(it, values, profile);
           }
           // Always persist site rows so PDFs keep Site Name / Address even when blank.
           raw = raw == null ? "" : String(raw);
+        } else if (separateImages) {
+          // Value lives on before/after side keys — handled below.
         } else if (raw === undefined || raw === null || raw === "") {
           return null;
         }
@@ -3389,9 +3617,19 @@ const NewReports: React.FC<{
           value = raw.join("; ");
         }
         if (isJsonMediaFieldType(fieldType)) {
-          const arr = parseMediaListValue(raw);
-          if (!arr.length) return null;
-          value = JSON.stringify(arr);
+          if (
+            isFieldSeparatePhotos(it, fieldKey) &&
+            (fieldType === "IMAGES" || fieldType === "PHOTOS")
+          ) {
+            const before = parseMediaListValue(values[beforeAfterSideKey(fieldKey, "before")]);
+            const after = parseMediaListValue(values[beforeAfterSideKey(fieldKey, "after")]);
+            if (!before.length && !after.length) return null;
+            value = serializeBeforeAfterMediaValue(before, after);
+          } else {
+            const arr = parseMediaListValue(raw);
+            if (!arr.length) return null;
+            value = JSON.stringify(arr);
+          }
         }
 
         return {
@@ -3462,6 +3700,33 @@ const NewReports: React.FC<{
       .filter(({ it }) => isJsonMediaFieldType(String(it.type || "").toUpperCase()));
     for (const { it, fieldKey } of mediaFields) {
       if (!it.required) continue;
+      const fieldType = String(it.type || "").toUpperCase();
+      if (
+        isFieldSeparatePhotos(it, fieldKey) &&
+        (fieldType === "IMAGES" || fieldType === "PHOTOS")
+      ) {
+        const beforeKey = beforeAfterSideKey(fieldKey, "before");
+        const afterKey = beforeAfterSideKey(fieldKey, "after");
+        const beforeExisting = parseMediaListValue(form.getFieldValue(beforeKey));
+        const afterExisting = parseMediaListValue(form.getFieldValue(afterKey));
+        const beforePending = mediaUploadRefs.current[beforeKey]?.hasPending();
+        const afterPending = mediaUploadRefs.current[afterKey]?.hasPending();
+        if (!beforeExisting.length && !beforePending) {
+          message.error("Please add Before Photos.");
+          return;
+        }
+        if (!afterExisting.length && !afterPending) {
+          message.error("Please add After Photos.");
+          return;
+        }
+        if (!beforeExisting.length && beforePending) {
+          form.setFieldsValue({ [beforeKey]: JSON.stringify(["__pending_upload__"]) });
+        }
+        if (!afterExisting.length && afterPending) {
+          form.setFieldsValue({ [afterKey]: JSON.stringify(["__pending_upload__"]) });
+        }
+        continue;
+      }
       const existing = parseMediaListValue(form.getFieldValue(fieldKey));
       const pending = mediaUploadRefs.current[fieldKey]?.hasPending();
       if (!existing.length && !pending) {
@@ -4165,7 +4430,7 @@ const NewReports: React.FC<{
           onClick={() => openView(r)}
         />
         {(+profileType === userType.CUSTOMER || +profileType === userType.ADMIN) && !isDeletedReportTab ? (
-          <Link to={`/messages?reportId=${r.id}`} title="Message about this report">
+          <Link to={`/messages?userTaskId=${r.id}`} title="Message about this report">
             <Button type="link" size="small" icon={<MailOutlined />} aria-label="Message about this report" />
           </Link>
         ) : null}
@@ -4903,6 +5168,9 @@ const NewReports: React.FC<{
         }
       : { paddingTop: 8 };
 
+  const fromMessages =
+    new URLSearchParams(location.search).get("from") === "messages";
+
   return (
     <Layout title={pageTitle}>
       <ReportTimePickerPopupStyles />
@@ -4916,6 +5184,31 @@ const NewReports: React.FC<{
           isMobilePortrait ? " new-reports-list-wrap--mobile-portrait" : ""
         }${reportsPageDark ? " new-reports-page-dark new-reports-theme-dark" : ""}`}
       >
+        {fromMessages && !viewOpen ? (
+          <button
+            type="button"
+            onClick={() => history.push("/messages")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              alignSelf: "flex-start",
+              margin: "0 0 12px",
+              padding: "8px 12px",
+              border: "1px solid #d9e8d4",
+              borderRadius: 8,
+              background: "#e8f5e3",
+              color: "#2f6b22",
+              fontSize: 13,
+              fontWeight: 600,
+              lineHeight: 1.2,
+              cursor: "pointer",
+            }}
+          >
+            <ArrowLeftOutlined style={{ fontSize: 12 }} />
+            <span>Back to messages</span>
+          </button>
+        ) : null}
         <div className="nr-list-page">
         <div
           className={`nr-list-chrome${mobileUiDark ? " nr-list-chrome--dark" : ""}${
@@ -5586,6 +5879,30 @@ const NewReports: React.FC<{
             }
           `}
         </style>
+        {fromMessages ? (
+          <button
+            type="button"
+            onClick={() => history.push("/messages")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              margin: "0 0 16px",
+              padding: "8px 12px",
+              border: "1px solid #d9e8d4",
+              borderRadius: 8,
+              background: "#e8f5e3",
+              color: "#2f6b22",
+              fontSize: 13,
+              fontWeight: 600,
+              lineHeight: 1.2,
+              cursor: "pointer",
+            }}
+          >
+            <ArrowLeftOutlined style={{ fontSize: 12 }} />
+            <span>Back to messages</span>
+          </button>
+        ) : null}
         {viewRow ? (
           <>
             <Row gutter={[40, 8]}>
@@ -5593,7 +5910,11 @@ const NewReports: React.FC<{
                 <div style={submittedMetaLabel}>Site</div>
                 <span style={submittedMetaValue}>{viewRow.siteName || EM_DASH}</span>
                 <div style={{ ...submittedMetaLabel, marginTop: 18 }}>Submitted by</div>
-                <span style={submittedGreenPill}>{formatSubmittedByRow(viewRow)}</span>
+                <span style={submittedGreenPill}>
+                  {+profileType === userType.ADMIN
+                    ? formatSubmittedByRow(viewRow)
+                    : formatSubmittedByUserCode(viewRow)}
+                </span>
                 {viewPdfHref ? (
                   <div style={{ marginTop: 12 }}>
                     <Typography.Link
@@ -5673,6 +5994,8 @@ const NewReports: React.FC<{
                   Select all photos
                 </Checkbox>
                 <Button
+                  type="primary"
+                  className="nr-photo-download-btn"
                   icon={<DownloadOutlined />}
                   disabled={!viewPhotoKeys.size}
                   loading={photoDownloadBusy}
@@ -6435,36 +6758,122 @@ const NewReports: React.FC<{
                     );
                   }
                   if (fieldType === "IMAGES" || fieldType === "PHOTOS") {
-                    return (
-                      <Col xs={24} sm={24} md={12} span={templateFieldColSpan} key={key}>
-                        <Form.Item
-                          name={fieldKey}
-                          label={label}
-                          rules={[
-                            {
-                              validator: async () => {
-                                if (!required) return;
-                                const existing = parseMediaListValue(
-                                  form.getFieldValue(fieldKey),
-                                );
-                                const pending =
-                                  mediaUploadRefs.current[fieldKey]?.hasPending();
-                                if (existing.length || pending) return;
-                                throw new Error(
-                                  `Please add ${label || "required photos"}`,
-                                );
-                              },
-                            },
+                    const separatePhotos = isFieldSeparatePhotos(it, fieldKey);
+                    const layoutMode = resolveFieldPhotoMode(it, fieldKey);
+                    const layoutChooser = (
+                      <Form.Item label={label || "Photos"} style={{ marginBottom: 12 }}>
+                        <Select
+                          value={layoutMode}
+                          style={{ width: "100%", maxWidth: 360 }}
+                          options={[
+                            { value: "together", label: "Before + after (together)" },
+                            { value: "separate", label: "Before | After (separate)" },
                           ]}
-                        >
-                          <TemplateImageUpload
-                            multiple
-                            ref={(instance) => {
-                              mediaUploadRefs.current[fieldKey] = instance;
-                            }}
-                          />
-                        </Form.Item>
-                      </Col>
+                          onChange={(value: ImagePhotoMode) =>
+                            setPhotoLayoutByField((prev) => ({
+                              ...prev,
+                              [fieldKey]: value,
+                            }))
+                          }
+                        />
+                      </Form.Item>
+                    );
+
+                    if (separatePhotos) {
+                      const beforeKey = beforeAfterSideKey(fieldKey, "before");
+                      const afterKey = beforeAfterSideKey(fieldKey, "after");
+                      return (
+                        <React.Fragment key={key}>
+                          <Col span={24}>{layoutChooser}</Col>
+                          <Col xs={24} sm={24} md={12} span={templateFieldColSpan}>
+                            <Form.Item
+                              name={beforeKey}
+                              label="Before Photos"
+                              rules={[
+                                {
+                                  validator: async () => {
+                                    if (!required) return;
+                                    const existing = parseMediaListValue(
+                                      form.getFieldValue(beforeKey),
+                                    );
+                                    const pending =
+                                      mediaUploadRefs.current[beforeKey]?.hasPending();
+                                    if (existing.length || pending) return;
+                                    throw new Error("Please add Before Photos");
+                                  },
+                                },
+                              ]}
+                            >
+                              <TemplateImageUpload
+                                multiple
+                                ref={(instance) => {
+                                  mediaUploadRefs.current[beforeKey] = instance;
+                                }}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} sm={24} md={12} span={templateFieldColSpan}>
+                            <Form.Item
+                              name={afterKey}
+                              label="After Photos"
+                              rules={[
+                                {
+                                  validator: async () => {
+                                    if (!required) return;
+                                    const existing = parseMediaListValue(
+                                      form.getFieldValue(afterKey),
+                                    );
+                                    const pending =
+                                      mediaUploadRefs.current[afterKey]?.hasPending();
+                                    if (existing.length || pending) return;
+                                    throw new Error("Please add After Photos");
+                                  },
+                                },
+                              ]}
+                            >
+                              <TemplateImageUpload
+                                multiple
+                                ref={(instance) => {
+                                  mediaUploadRefs.current[afterKey] = instance;
+                                }}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </React.Fragment>
+                      );
+                    }
+                    return (
+                      <React.Fragment key={key}>
+                        <Col span={24}>{layoutChooser}</Col>
+                        <Col xs={24} sm={24} md={24} span={24}>
+                          <Form.Item
+                            name={fieldKey}
+                            rules={[
+                              {
+                                validator: async () => {
+                                  if (!required) return;
+                                  const existing = parseMediaListValue(
+                                    form.getFieldValue(fieldKey),
+                                  );
+                                  const pending =
+                                    mediaUploadRefs.current[fieldKey]?.hasPending();
+                                  if (existing.length || pending) return;
+                                  throw new Error(
+                                    `Please add ${label || "required photos"}`,
+                                  );
+                                },
+                              },
+                            ]}
+                          >
+                            <TemplateImageUpload
+                              multiple
+                              ref={(instance) => {
+                                mediaUploadRefs.current[fieldKey] = instance;
+                              }}
+                            />
+                          </Form.Item>
+                        </Col>
+                      </React.Fragment>
                     );
                   }
                   if (fieldType === "PHOTO" || fieldType === "IMAGE") {
@@ -6713,12 +7122,74 @@ const NewReports: React.FC<{
                   }
 
                   if (fieldType === "IMAGES" || fieldType === "PHOTOS") {
+                    const legacyIt: TemplateItem = {
+                      name: label,
+                      type: fieldType,
+                      config: { label },
+                    };
+                    const separatePhotos = isFieldSeparatePhotos(legacyIt, fieldKey);
+                    const layoutMode = resolveFieldPhotoMode(legacyIt, fieldKey);
+                    const layoutChooser = (
+                      <Form.Item label={label || "Photos"} style={{ marginBottom: 12 }}>
+                        <Select
+                          value={layoutMode}
+                          style={{ width: "100%", maxWidth: 360 }}
+                          options={[
+                            { value: "together", label: "Before + after (together)" },
+                            { value: "separate", label: "Before | After (separate)" },
+                          ]}
+                          onChange={(value: ImagePhotoMode) =>
+                            setPhotoLayoutByField((prev) => ({
+                              ...prev,
+                              [fieldKey]: value,
+                            }))
+                          }
+                        />
+                      </Form.Item>
+                    );
+                    if (separatePhotos) {
+                      const beforeKey = beforeAfterSideKey(fieldKey, "before");
+                      const afterKey = beforeAfterSideKey(fieldKey, "after");
+                      return (
+                        <React.Fragment key={fieldKey}>
+                          <Col span={24}>{layoutChooser}</Col>
+                          <Col xs={24} sm={24} md={12} span={12}>
+                            <Form.Item name={beforeKey} label="Before Photos" rules={[{ required }]}>
+                              <TemplateImageUpload
+                                multiple
+                                ref={(instance) => {
+                                  mediaUploadRefs.current[beforeKey] = instance;
+                                }}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} sm={24} md={12} span={12}>
+                            <Form.Item name={afterKey} label="After Photos" rules={[{ required }]}>
+                              <TemplateImageUpload
+                                multiple
+                                ref={(instance) => {
+                                  mediaUploadRefs.current[afterKey] = instance;
+                                }}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </React.Fragment>
+                      );
+                    }
                     return (
-                      <Col span={24} key={fieldKey}>
-                        <Form.Item name={fieldKey} label={label} rules={[{ required }]}>
-                          <TemplateImageUpload multiple />
-                        </Form.Item>
-                      </Col>
+                      <React.Fragment key={fieldKey}>
+                        <Col span={24}>{layoutChooser}</Col>
+                        <Col span={24}>
+                          <Form.Item name={fieldKey} rules={[{ required }]}>
+                            <TemplateImageUpload
+                              multiple
+                              ref={(instance) => {
+                                mediaUploadRefs.current[fieldKey] = instance;
+                              }}
+                            />
+                          </Form.Item>
+                        </Col>
+                      </React.Fragment>
                     );
                   }
                   if (fieldType === "PHOTO" || fieldType === "IMAGE") {

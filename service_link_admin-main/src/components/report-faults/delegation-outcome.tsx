@@ -103,7 +103,7 @@ export const DelegationOutcomeBadge: React.FC<BadgeProps> = ({ outcome, style })
   if (!outcome) return null;
   const meta = OUTCOME_META[outcome];
   return (
-    <Tag color={meta.color} style={style}>
+    <Tag className={`fault-status-tag fault-status-tag--${outcome}`} color={meta.color} style={style}>
       {meta.label}
     </Tag>
   );
@@ -125,7 +125,11 @@ export const FaultListStatusBadge: React.FC<ListStatusBadgeProps> = ({ record, s
   const meta = LIST_STATUS_META[listStatus];
   const detail = faultListStatusDetailLabel(record);
   const tag = (
-    <Tag color={meta.color} style={style}>
+    <Tag
+      className={`fault-status-tag fault-status-tag--${listStatus}`}
+      color={meta.color}
+      style={style}
+    >
       {meta.label}
     </Tag>
   );

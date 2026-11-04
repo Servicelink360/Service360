@@ -101,11 +101,34 @@ function parseUrlList(value: string): string[] {
   try {
     const p = JSON.parse(value);
     if (Array.isArray(p)) return p.map(String).filter(Boolean);
+    if (p && typeof p === 'object') {
+      const before = Array.isArray(p.before) ? p.before.map(String).filter(Boolean) : [];
+      const after = Array.isArray(p.after) ? p.after.map(String).filter(Boolean) : [];
+      if (before.length || after.length || 'before' in p || 'after' in p) {
+        return [...before, ...after];
+      }
+    }
     if (typeof p === 'string' && p) return [p];
   } catch {
     // ignore
   }
   return [];
+}
+
+function parseBeforeAfterObject(
+  value: string,
+): { before: string[]; after: string[] } | null {
+  try {
+    const p = JSON.parse(value);
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+    if (!('before' in p) && !('after' in p)) return null;
+    return {
+      before: Array.isArray(p.before) ? p.before.map(String).filter(Boolean) : [],
+      after: Array.isArray(p.after) ? p.after.map(String).filter(Boolean) : [],
+    };
+  } catch {
+    return null;
+  }
 }
 
 function isMediaFieldType(type: string): boolean {
@@ -153,6 +176,27 @@ export function expandReportItemsForStorage(items: ReportItemInput[]): ReportIte
     const val = item.value != null && item.value !== '' ? String(item.value) : '';
     if (!isMediaFieldType(type) || val.length <= USER_TASK_REPORT_VALUE_MAX) {
       out.push(item);
+      continue;
+    }
+    // Oversized before/after object: keep structure by splitting into two labeled rows.
+    // Before Photos first, then After Photos (clean titles for PDF).
+    const ba = parseBeforeAfterObject(val);
+    if (ba) {
+      if (ba.before.length) {
+        out.push({
+          ...item,
+          name: 'Before Photos',
+          value: JSON.stringify(ba.before),
+        });
+      }
+      if (ba.after.length) {
+        out.push({
+          ...item,
+          name: 'After Photos',
+          value: JSON.stringify(ba.after),
+        });
+      }
+      if (!ba.before.length && !ba.after.length) out.push(item);
       continue;
     }
     const urls = parseUrlList(val);

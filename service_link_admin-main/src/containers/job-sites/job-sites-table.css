@@ -174,10 +174,6 @@
   margin-top: 4px;
 }
 
-.job-sites-service-expand__tasks {
-  margin-top: 16px;
-}
-
 .gm-interval-frequency {
   margin-bottom: 12px;
   padding: 10px 12px;
@@ -543,20 +539,6 @@
 
 .gm-frequency-column__hint--muted {
   color: #8c8c8c;
-}
-
-.job-sites-recurring-tasks__title {
-  margin: 0 0 4px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #262626;
-}
-
-.job-sites-recurring-tasks__help {
-  margin: 0 0 10px 0;
-  font-size: 11px;
-  color: #8c8c8c;
-  line-height: 1.35;
 }
 
 .site-modal .job-sites-schedule-table .ant-table-thead > tr > th {

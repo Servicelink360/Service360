@@ -9,7 +9,7 @@ import {
 } from "@ant-design/icons";
 import { ActionListBtn, TableWrapper } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
-import { dateFormat, dateTimeFormat, pageData } from "@app/config/data.config";
+import { dateTimeFormat, pageData } from "@app/config/data.config";
 import { Col, Popconfirm, Row, Form, Input, Tag } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,10 +20,8 @@ import { ColDef } from "ag-grid-community";
 import actions from "@app/redux/sites/actions";
 import TableComponent from "@app/components/common/Table/index";
 import { checkRole, formatTime } from "../../library/helpers/utility";
-import TaskLogModal from "@app/components/tasks/task-log";
 import { ButtonDiv, ButtonMR, InformationDiv, StatusRow, UsernameRow, UsersDiv, Fieldset, ActionsWrapper } from "@app/components/common/container.style";
 import SiteModal from "@app/components/sites";
-import TaskModal from "@app/components/tasks";
 import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 import { Link } from "react-router-dom";
@@ -199,7 +197,7 @@ const JobSite = (props: IProps) => {
     const [form] = Form.useForm();
     const intl = useIntl();
     const { staffId } = props;
-    const { loading, rows, row, success, modalType, customers, count, loadingAction, services, staffs, reportTemplates } = useSelector((state: any) => state?.sites);
+    const { loading, rows, row, success, modalType, customers, count, loadingAction, services, staffs } = useSelector((state: any) => state?.sites);
     const dispatch = useDispatch();
 
     const sortOrderFor = useCallback(
@@ -428,20 +426,9 @@ const JobSite = (props: IProps) => {
     );
 
     const handleOnClick = (modalType: string, row?: any): void => {
-        if (modalType === actionType.ADD || modalType === actionType.VIEW || modalType === actionType.UPDATE_ITEM || modalType === actionType.UPDATE
-            || modalType === actionType.SHIFT_MANAGEMENT || modalType === actionType.VIEW_LOG || modalType === actionType.UPDATE_TASK) {
+        if (modalType === actionType.ADD || modalType === actionType.VIEW || modalType === actionType.UPDATE
+            || modalType === actionType.SHIFT_MANAGEMENT) {
             dispatch({ type: actions.MODAL, payload: { modalType, row } });
-        } else if (modalType === actionType.ADD_ITEM) {
-
-            dispatch({
-                type: actions.MODAL, payload: {
-                    modalType, row: {
-                        siteItemId: row.id,
-                        siteItem: { siteId: row.siteId },
-                        staffs: row.staffs
-                    }
-                }
-            });
         } else if (modalType === actionType.SEARCH) {
             setPage(1);
             loadSites(1, limit);
@@ -631,8 +618,8 @@ const JobSite = (props: IProps) => {
         );
     }
 
-    const expandedRowRenderTask = (siteItem) => {
-        const frequencyPanel = (
+    const expandedRowRenderTask = (siteItem) => (
+        <div className="job-sites-service-expand">
             <SiteItemFrequencyPanel
                 siteId={+siteItem.parentSiteId}
                 siteItemId={+siteItem.id}
@@ -640,146 +627,8 @@ const JobSite = (props: IProps) => {
                 disabled={!canEditSite}
                 onUpdated={() => loadSites()}
             />
-        );
-
-        const tasksTable = (
-            <TableWrapper
-                className="job-sites-tasks-table"
-                columns={[
-                    {
-                        title: "Task name",
-                        dataIndex: "name",
-                        width: 250,
-                        render: (text: string, taskRow: any) => (
-                            <span style={{ cursor: 'pointer' }}> {taskRow && taskRow.name}</span>
-                        ),
-                    },
-                    {
-                        title: "Staff",
-                        dataIndex: "staff",
-                        render: (text: string, taskRow: any) =>
-                            taskRow.staff && taskRow.staff.fullName,
-                        width: 200,
-                    },
-                    {
-                        title: 'Start date - Finish date',
-                        dataIndex: "type",
-                        width: 200,
-                        render: (_text: string, taskRow: any) =>
-                            (taskRow?.shifts ?? []).map((h: any) => (
-                                <p
-                                    key={h.id}
-                                    onClick={async () => {
-                                        handleOnClick(actionType.VIEW_LOG, taskRow);
-                                    }}
-                                >
-                                    {moment(taskRow.startDate).format(dateFormat) +
-                                        ' ' +
-                                        formatTime(h.from) +
-                                        ' - ' +
-                                        moment(taskRow.endDate).format(dateFormat) +
-                                        ' ' +
-                                        formatTime(h.to)}
-                                </p>
-                            )),
-                    },
-                    {
-                        title: "Repeat",
-                        dataIndex: "shift",
-                        render: (text: string, taskRow: any) => {
-                            if (taskRow?.type) {
-                                return taskRow.type === "E" ? (
-                                    <Tag>Everyday</Tag>
-                                ) : taskRow.type === "W" ? (
-                                    <Tag>Working day</Tag>
-                                ) : (
-                                    taskRow?.typeValue &&
-                                    taskRow.typeValue.split(',').map((r: string) => (
-                                        <Tag key={taskRow.id + "-" + r}>
-                                            {+r === 0 ? "Mon" : +r === 1 ? "Tue" : +r === 2 ? "Wed" : +r === 3 ? "Thu" : +r === 4 ? "Fri" : +r === 5 ? "Sat" : +r === 6 ? "Sun" : ""}
-                                        </Tag>
-                                    ))
-                                );
-                            }
-                            return "";
-                        },
-                        width: 120,
-                    },
-                    {
-                        title: 'Action',
-                        align: 'center' as const,
-                        dataIndex: "action",
-                        width: 80,
-                        render: (text: string, taskRow: any) => (
-                            <>
-                                <ButtonMR
-                                    className="btnLink"
-                                    style={{ marginLeft: 10 }}
-                                    onClick={() => {
-                                        handleOnClick(actionType.UPDATE_ITEM, {
-                                            ...taskRow,
-                                            staffs: siteItem.staffs,
-                                        });
-                                    }}
-                                >
-                                    <EditOutlined />
-                                </ButtonMR>
-                                <Popconfirm
-                                    title={"Are you sure you want to change to active?"}
-                                    okText={intl.formatMessage({ id: "button.Yes" })}
-                                    cancelText={intl.formatMessage({ id: "button.No" })}
-                                    placement="topRight"
-                                    onConfirm={() => {
-                                        dispatch(
-                                            actions.saveInto(
-                                                { taskId: taskRow?.id },
-                                                actionType.DELETE_ITEM,
-                                                false,
-                                            ),
-                                        );
-                                    }}
-                                >
-                                    <button className="btnDelete"><DeleteOutlined /></button>
-                                </Popconfirm>
-                            </>
-                        ),
-                    },
-                ]}
-                dataSource={(siteItem?.tasks ?? []).map((task: any, i: number) => ({
-                    ...task,
-                    key: task.id ?? `task-${i}`,
-                }))}
-                pagination={false}
-                footer={() =>
-                    checkRole('ADMIN') || checkRole('EDIT') ? (
-                        <ButtonMR
-                            onClick={() => {
-                                handleOnClick(actionType.ADD_ITEM, siteItem);
-                            }}
-                            className="btnLink"
-                        >
-                            <FileAddOutlined /> Create recurring task
-                        </ButtonMR>
-                    ) : (
-                        ""
-                    )
-                }
-            />
-        );
-
-        return (
-            <div className="job-sites-service-expand">
-                {frequencyPanel}
-                <div className="job-sites-service-expand__tasks">
-                    <p className="job-sites-recurring-tasks__title">Recurring tasks</p>
-                    <p className="job-sites-recurring-tasks__help">
-                        Separate from frequency above — scheduled work orders for this service.
-                    </p>
-                    {tasksTable}
-                </div>
-            </div>
-        );
-    }
+        </div>
+    );
 
     const ActionBTN = () => {
         return (
@@ -894,40 +743,19 @@ const JobSite = (props: IProps) => {
                     />
                 </InformationDiv>
             </UsersDiv>
-            {modalType ?
-                modalType === actionType.ADD_ITEM || modalType === actionType.UPDATE_ITEM || modalType === actionType.UPDATE_TASK ?
-                    <TaskModal
-                        title={modalType === actionType.UPDATE_TASK ? "Update shift" : modalType === actionType.ADD_ITEM ? "Add new task" : "Update task"}
-                        loadingAction={loadingAction}
-                        data={row}
-                        modalType={modalType}
-                        isSuccess={success}
-                        reportTemplates={reportTemplates}
-                        getDataInit={getDataInit}
-                    />
-                    : modalType === actionType.VIEW_LOG ?
-                        <TaskLogModal
-                            title={"Logs"}
-                            loadingAction={loadingAction}
-                            userId={0}
-                            taskId={0}
-                            taskShiftId={0}
-                            modalType={modalType}
-                            isSuccess={success}
-                        />
-                        : (
-                            <SiteModal
-                                title={modalType === actionType.ADD ? "Add new job site" : "Update job site"}
-                                loadingAction={loadingAction}
-                                data={row}
-                                modalType={modalType}
-                                isSuccess={success}
-                                services={services}
-                                customers={customers}
-                                staffs={staffs}
-                                getDataInit={getDataInit}
-                            />
-                        ) : ""}
+            {modalType ? (
+                <SiteModal
+                    title={modalType === actionType.ADD ? "Add new job site" : "Update job site"}
+                    loadingAction={loadingAction}
+                    data={row}
+                    modalType={modalType}
+                    isSuccess={success}
+                    services={services}
+                    customers={customers}
+                    staffs={staffs}
+                    getDataInit={getDataInit}
+                />
+            ) : ""}
         </Layout>
     );
 };

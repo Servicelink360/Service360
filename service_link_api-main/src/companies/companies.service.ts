@@ -67,11 +67,37 @@ export class CompaniesService {
     };
   }
 
+  /**
+   * Hide supplier-only orgs from the Companies directory.
+   * A row linked from consumable_suppliers with no customer users is a supply company, not a client company.
+   */
+  private static readonly EXCLUDE_SUPPLIER_ONLY_SQL = `
+    NOT (
+      EXISTS (
+        SELECT 1 FROM consumable_suppliers cs
+        WHERE cs.company_id = cc.id
+          AND cs.deleted_at IS NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM customers c WHERE c.company_id = cc.id
+      )
+    )`;
+
   /** Dropdown list (same shape as legacy getCustomerCompanies). */
   async getAllOptions() {
     try {
-      const companies = await this.companyRepository.find({ order: { name: 'ASC' } });
-      return { ...errorCode.SUCCESS, data: companies.map((c) => this.toOptionRow(c)) };
+      const rows = await this.companyRepository.manager.query(
+        `SELECT cc.id, cc.name
+         FROM customer_companies cc
+         WHERE ${CompaniesService.EXCLUDE_SUPPLIER_ONLY_SQL}
+         ORDER BY cc.name ASC`,
+      );
+      return {
+        ...errorCode.SUCCESS,
+        data: (rows || []).map((r: { id: number; name: string }) =>
+          this.toOptionRow({ id: +r.id, name: r.name } as CustomerCompany),
+        ),
+      };
     } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;
@@ -99,9 +125,10 @@ export class CompaniesService {
         params.push(`%${body.keyword}%`);
         keywordSql = ` AND cc.name ILIKE $${params.length}`;
       }
+      const excludeSql = ` AND ${CompaniesService.EXCLUDE_SUPPLIER_ONLY_SQL}`;
 
       const countRows = await this.companyRepository.manager.query(
-        `SELECT COUNT(*)::int AS cnt FROM customer_companies cc WHERE 1=1${keywordSql}`,
+        `SELECT COUNT(*)::int AS cnt FROM customer_companies cc WHERE 1=1${keywordSql}${excludeSql}`,
         params,
       );
       const count = +(countRows?.[0]?.cnt ?? 0);
@@ -119,7 +146,7 @@ export class CompaniesService {
           (SELECT COUNT(DISTINCT site_id)::int FROM site_items WHERE company_id = cc.id) AS site_count,
           ${CompaniesService.STAFF_COUNT_SQL} AS staff_count
         FROM customer_companies cc
-        WHERE 1=1${keywordSql}
+        WHERE 1=1${keywordSql}${excludeSql}
         ORDER BY ${orderCol} ${orderDir}, cc.id DESC
         LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
         [...params, limit, offset],

@@ -30,7 +30,8 @@ const BoxWrapper = styled.div`
     margin: 0 0 0 0 !important;
   }
 
-  /* Dashboard: force dark card in mobile portrait dark mode */
+  /* App-wide mobile dark shell (admin / staff / customer — all Layout pages) */
+  html[data-color-mode='dark'] body.app-shell-dark &,
   html[data-color-mode='dark'] body.dashboard-page-body-dark & {
     background-color: #121212 !important;
     border: 1px solid #333333 !important;
@@ -43,6 +44,7 @@ const BoxWrapper = styled.div`
     -moz-box-shadow:
       0 0 0 1px rgba(255, 255, 255, 0.04),
       0 20px 60px rgba(0, 0, 0, 0.95) !important;
+    color: #f0f0f0 !important;
   }
 
   @media only screen and (max-width: 767px) {

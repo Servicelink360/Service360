@@ -146,6 +146,14 @@
 				"rules": {
 					"react-hooks/rules-of-hooks": "off"
 				}
+			},
+			{
+				"files": [
+					"src/containers/messages/index.tsx"
+				],
+				"rules": {
+					"react-hooks/rules-of-hooks": "off"
+				}
 			}
 		]
 	},

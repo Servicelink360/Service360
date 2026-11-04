@@ -1390,11 +1390,24 @@ export class SitesService {
       if (+customerId) {
         query.andWhere('site_items.customerId=:customerId', { customerId })
       }
-      const result = await query.getOne();
-      if (!result)
+      // All matching site lines (getOne missed staff on other rows for same site/service/customer)
+      const results = await query.getMany();
+      if (!results?.length) {
         return { ...errorCode.SUCCESS, data: [] };
+      }
 
-      return { ...errorCode.SUCCESS, data: result.staffs.filter(c => c.staff) };
+      const seen = new Set<number>();
+      const rows = [];
+      for (const item of results) {
+        for (const link of item.staffs || []) {
+          const person = link?.staff;
+          const id = person?.id;
+          if (id == null || seen.has(+id)) continue;
+          seen.add(+id);
+          rows.push(link);
+        }
+      }
+      return { ...errorCode.SUCCESS, data: rows };
     } catch (error) {
       console.log(error.message);
       return { ...errorCode.EXCEPTION, message: error.message };
@@ -1492,6 +1505,7 @@ export class SitesService {
       const query = this.siteItemsRepository.createQueryBuilder('site_items')
         .leftJoinAndSelect('site_items.customer', 'customer', 'customer.status!=4').addSelect(['customer.id', 'customer.fullName'])
         .leftJoinAndSelect('customer.customerInfo', 'customerInfo')
+        .leftJoinAndSelect('customerInfo.company', 'company')
         .where('site_items.siteId=:siteId and site_items.serviceId=:serviceId', { siteId, serviceId })
       if (userInfo.type === userType.STAFF) {
         query.innerJoin('site_items.staffs', 'staffs', 'staffs.staffId = :staffId', { staffId: userInfo.userId })
@@ -1506,13 +1520,19 @@ export class SitesService {
         const id = r.customer?.id;
         if (id == null || seen.has(id)) continue;
         seen.add(id);
+        const info = r.customer.customerInfo;
+        const companyName = String(
+          info?.company?.name || info?.companyName || '',
+        ).trim();
+        const personName = String(r.customer.fullName || '').trim();
+        const displayName = companyName || personName;
         rows.push({
           id,
-          name: r.customer.fullName,
-          fullName: r.customer.fullName,
-          customerName: r.customer.fullName,
-          companyName: r.customer.customerInfo?.companyName,
-          customerInfo: r.customer.customerInfo,
+          name: displayName,
+          fullName: personName,
+          customerName: displayName,
+          companyName: displayName,
+          customerInfo: info,
         });
       }
       return { ...errorCode.SUCCESS, data: rows };
@@ -1691,12 +1711,22 @@ export class SitesService {
         // .andWhere('tasks.staffId =:id', { id: userInfo.userId })
       }
       const result = await query.getMany();
-      let rows = result.map((r) => ({
-        id: r.id,
-        name: r.name,
-        location: r.location,
-        addressName: r.addressName,
-      }));
+      let rows = result.map((r) => {
+        const customerIds = Array.from(
+          new Set(
+            (r.items || [])
+              .map((item) => Number(item.customerId))
+              .filter((id) => Number.isFinite(id) && id > 0),
+          ),
+        );
+        return {
+          id: r.id,
+          name: r.name,
+          location: r.location,
+          addressName: r.addressName,
+          customerIds,
+        };
+      });
       if (userInfo.type === userType.STAFF) {
         const baysideSiteIds = await this.getBaysideCouncilSiteIdsForStaff(userInfo.userId);
         rows = sortStaffDropdownSites(rows, baysideSiteIds);

@@ -56,7 +56,9 @@ const getSampleValue = (item: any) => {
         case 'GPS':
             return '-33.8688, 151.2093'
         case 'IMAGES':
-            return 'Image attachment placeholder'
+            return item?.config?.photoMode === 'separate'
+                ? 'Before photos | After photos'
+                : 'Image attachment placeholder'
         case 'VIDEOS':
             return 'Video attachment placeholder'
         case '[SITE_NAME]':

@@ -94,6 +94,9 @@ export class UserTask {
     @Column({ name: 'notifies_staff' })
     notifiesStaff: number
 
+    /** 1 = staff must attach media images when completing; 2 = not required */
+    @Column({ name: 'media_required', default: 2 })
+    mediaRequired: number
 
     @Column({ name: 'created_by' })
     createdBy: number

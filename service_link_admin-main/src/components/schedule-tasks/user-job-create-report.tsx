@@ -35,13 +35,15 @@ const Index = (props: IProps) => {
     const dispatch = useDispatch()
     const intl = useIntl()
     const [changed, setChanged] = useState(false)
-    const [items, setItems] = useState(data ? data.items : [])
+    const [items, setItems] = useState(data?.items ? data.items : [])
     const [form] = Form.useForm()
 
 
     useEffect(() => {
         getDataInit()
-    }, [getDataInit])
+        // Mount-only: unstable getDataInit prop caused an infinite Redux loop / freeze
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     useEffect(() => {
         if (isSuccess) {
@@ -50,24 +52,23 @@ const Index = (props: IProps) => {
     }, [isSuccess, form])
 
     useEffect(() => {
-        if (data) {
+        if (!data?.id) return;
 
-            const items = [];
-            if (data && data.items && data.items.length > 0)
-                for (const it of data.items) {
-                    if (it.type === 'DATE') {
-                        items[it.name] = moment(it.value)
-                    }
-                    else if (it.type === 'TIME') {
-                        items[it.name] =moment(moment().format("YYYY-MM-DD " + it.value))  
-                    } else {
-                        items[it.name] = it.value
-                    }
+        const items: Record<string, any> = {};
+        if (data.items && data.items.length > 0) {
+            for (const it of data.items) {
+                if (it.type === 'DATE') {
+                    items[it.name] = moment(it.value)
+                } else if (it.type === 'TIME') {
+                    items[it.name] = moment(moment().format("YYYY-MM-DD " + it.value))
+                } else {
+                    items[it.name] = it.value
                 }
-            form.setFieldsValue({ ...data, ...items })
-
+            }
         }
-    }, [data, form])
+        form.setFieldsValue({ ...data, ...items })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data?.id])
 
     const validateMessages = {
         required: intl.formatMessage({ id: 'form.error.Required' }),
@@ -93,7 +94,7 @@ const Index = (props: IProps) => {
         return (<>
             <ActionHeaderModalWrap>
                 {
-                    (modalType !== actionType.VIEW || (modalType === actionType.VIEW && data.items.length === 0)) &&
+                    (modalType !== actionType.VIEW || (modalType === actionType.VIEW && !(data?.items?.length))) &&
                     <ActionBtn
                         type="primary"
                         icon={<SaveOutlined />}
@@ -142,7 +143,7 @@ const Index = (props: IProps) => {
 
     return (
         <Modal
-            visible={modalType ? true : false}
+            open={Boolean(modalType)}
             onCancel={() => dispatch({ type: actions.MODAL, payload: null })}
             title={title}
             closable={false}
@@ -310,14 +311,14 @@ const Index = (props: IProps) => {
                                     {data?.createdUser &&
                                         sprintf(intl.formatMessage({ id: 'modal.createdInformation' }), {
                                             name: data?.createdUser?.fullName,
-                                            datetime: moment(data?.createdAt).zone("+10:00").format(dateTimeFormat),
+                                            datetime: moment(data?.createdAt).utcOffset("+10:00").format(dateTimeFormat),
                                         })}
                                 </p>
                                 <p style={{ fontSize: 12 }}>
                                     {data?.updatedUser
                                         ? sprintf(intl.formatMessage({ id: 'modal.updatedInformation' }), {
                                             name: data?.createdUser?.fullName,
-                                            datetime: moment(data?.updatedAt).zone("+10:00").format(dateTimeFormat),
+                                            datetime: moment(data?.updatedAt).utcOffset("+10:00").format(dateTimeFormat),
                                         })
                                         : null}
                                 </p>

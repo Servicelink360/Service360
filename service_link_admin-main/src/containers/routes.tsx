@@ -75,6 +75,9 @@ const routes = [
 
 	{ path: 'tickets', component: asyncComponent(() => import('@app/containers/tickets')) },
 	{ path: 'invoices', component: asyncComponent(() => import('@app/containers/invoices')) },
+	{ path: 'consumables', component: asyncComponent(() => import('@app/containers/consumables')) },
+	/** Mock only — proposed grouped sidebar (does not change live nav). */
+	{ path: 'nav-mock', component: asyncComponent(() => import('@app/containers/nav-mock')), exact: true },
 
 ];
 

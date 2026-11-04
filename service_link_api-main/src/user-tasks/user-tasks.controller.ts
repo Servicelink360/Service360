@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Res, UseGuards, Request, Query, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Res, UseGuards, Request, Query, Put, StreamableFile, HttpException, HttpStatus, Header } from '@nestjs/common';
 import { UserTasksService } from './user-tasks.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -46,7 +46,7 @@ export class UserTasksController {
   @Post('checkOut/:id')
   async checkOut(@Res() res, @Param('id') id: number, @Request() req, @Body() body: CheckoutDto) {
     const user: IUserInfo = req.user;
-    return customHttpCode(res, await this.userTasksService.checkOut(user, +id));
+    return customHttpCode(res, await this.userTasksService.checkOut(user, +id, body));
   }
 
 
@@ -217,6 +217,33 @@ export class UserTasksController {
   async create(@Res() res, @Body() body: CreateUserTaskDto, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.userTasksService.create(user, body));
+  }
+
+  /** On-demand PDF from DB — not a stored AWS/S3 pdf_file URL. */
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get(':id/pdf')
+  @Header('Cache-Control', 'no-store')
+  async downloadPdf(@Param('id') id: number, @Request() req): Promise<StreamableFile> {
+    const user: IUserInfo = req.user;
+    const result = await this.userTasksService.generatePdfFromDatabase(user, +id);
+    const raw = result?.data?.buffer;
+    const buf = raw
+      ? Buffer.isBuffer(raw)
+        ? raw
+        : Buffer.from(raw as any)
+      : null;
+    if (result?.code !== 1 || !buf?.length) {
+      throw new HttpException(
+        { code: result?.code ?? 0, message: result?.message || 'Could not generate PDF' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const fileName = result.data.fileName || `task-${id}.pdf`;
+    return new StreamableFile(buf, {
+      type: 'application/pdf',
+      disposition: `inline; filename="${fileName}"`,
+    });
   }
 
   // Keep parameterized routes at the bottom so they don't shadow more specific routes.

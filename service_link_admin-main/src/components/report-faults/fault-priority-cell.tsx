@@ -17,6 +17,7 @@ const pillBadge = (
   icon: React.ReactNode,
   label: string,
   tone: PillTone,
+  toneKey: 'urgent' | 'normal',
   title?: string,
   large?: boolean,
   small?: boolean,
@@ -27,6 +28,7 @@ const pillBadge = (
   const gap = small ? 4 : 6;
   const inner = (
     <span
+      className={`fault-priority-pill fault-priority-pill--${toneKey}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -42,7 +44,10 @@ const pillBadge = (
         whiteSpace: 'nowrap',
       }}
     >
-      <span style={{ display: 'inline-flex', fontSize: iconSize, color: tone.color }}>
+      <span
+        className="fault-priority-pill__icon"
+        style={{ display: 'inline-flex', fontSize: iconSize, color: tone.color }}
+      >
         {icon}
       </span>
       {label}
@@ -61,6 +66,7 @@ export const renderFaultPriority = (
       <ThunderboltFilled />,
       'Urgent',
       BADGE_PALETTE.urgent,
+      'urgent',
       undefined,
       large,
       small,
@@ -71,6 +77,7 @@ export const renderFaultPriority = (
       <FlagOutlined />,
       'Normal',
       BADGE_PALETTE.normal,
+      'normal',
       undefined,
       large,
       small,

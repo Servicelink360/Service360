@@ -64,6 +64,12 @@ const buildFormValuesFromData = (record: any, fallbackOrder: number) => {
         if (typeof record.config.visibleToStaff === 'boolean') {
             formValues.visibleToStaff = record.config.visibleToStaff
         }
+        if (record.config.photoMode === 'separate' || record.config.photoMode === 'together') {
+            formValues.photoMode = record.config.photoMode
+        }
+    }
+    if ((formValues.type === 'IMAGES' || formValues.type === 'PHOTOS') && !formValues.photoMode) {
+        formValues.photoMode = 'together'
     }
     // Default: DATE/TIME fields are visible to staff unless explicitly hidden.
     if (STAFF_VISIBILITY_TYPES.includes(formValues.type) && typeof formValues.visibleToStaff !== 'boolean') {
@@ -97,6 +103,9 @@ const normalizeItemValues = (values: any, fallbackOrder: number) => {
     if (STAFF_VISIBILITY_TYPES.includes(values.type)) {
         // Persist visibility flag; default true (visible).
         config.visibleToStaff = typeof values.visibleToStaff === 'boolean' ? values.visibleToStaff : true
+    }
+    if ((values.type === 'IMAGES' || values.type === 'PHOTOS') && values.photoMode) {
+        config.photoMode = values.photoMode === 'separate' ? 'separate' : 'together'
     }
     const normalized: any = {
         name: values.name,
@@ -206,6 +215,7 @@ const ItemModal: React.FC<ItemModalProps> = ({ loadingAction, setShowModal, setC
     const showNumericFields = NUMERIC_TYPES.includes(currentType)
     const showTableConfigField = currentType === 'TABLE'
     const showGpsConfigField = currentType === 'GPS'
+    const showImagePhotoModeField = currentType === 'IMAGES' || currentType === 'PHOTOS'
     const showYesNoPresetField = currentType === 'YES_NO'
     const showStaffVisibilityField = STAFF_VISIBILITY_TYPES.includes(currentType)
     const optionPlaceholder = currentType === 'CHECKLIST'
@@ -476,6 +486,28 @@ const ItemModal: React.FC<ItemModalProps> = ({ loadingAction, setShowModal, setC
                                 <Fieldset>
                                     <Form.Item name="allowMultipleLocations" label={'Allow Multiple Locations'} valuePropName="checked">
                                         <Switch />
+                                    </Form.Item>
+                                </Fieldset>
+                            </Col>
+                        </Row>
+                    )}
+                    {showImagePhotoModeField && (
+                        <Row>
+                            <Col md={24} sm={24} xs={24} className="r-padding-media-max-576">
+                                <Fieldset>
+                                    <Form.Item
+                                        name="photoMode"
+                                        label="Photo layout"
+                                        className="break-line"
+                                        initialValue="together"
+                                        tooltip="Together = one gallery. Separate = Before photos and After photos side by side."
+                                    >
+                                        <Select
+                                            options={[
+                                                { value: 'together', label: 'Together (before & after in one gallery)' },
+                                                { value: 'separate', label: 'Separate (Before | After)' },
+                                            ]}
+                                        />
                                     </Form.Item>
                                 </Fieldset>
                             </Col>

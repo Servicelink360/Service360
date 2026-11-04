@@ -24,6 +24,12 @@ export class SendMessageDto {
   @IsInt()
   userTaskId?: number;
 
+  /** Consumables delivery linked to this message */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  consumableDeliveryId?: number;
+
   /** Admin only: send in a customer thread */
   @IsOptional()
   @Type(() => Number)
@@ -42,6 +48,16 @@ export class SendMessageDto {
   @Type(() => Number)
   @IsInt({ each: true })
   ccCustomerIds?: number[];
+
+  /**
+   * External email addresses to Cc/email.
+   * Customers: only their own company personnel emails are accepted.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(320, { each: true })
+  ccEmails?: string[];
 
   /** Staff only: send in a colleague (staff ↔ staff) thread. */
   @IsOptional()

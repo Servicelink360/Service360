@@ -51,6 +51,27 @@ export class CreateUserTaskDto {
     @ApiProperty({default:1, description:'1 Yes 2 no'})
     notifiesStaff: number
 
+    @ApiProperty({
+      default: 2,
+      description: '1 Yes 2 No — staff must attach media images when completing the task',
+    })
+    mediaRequired?: number
+
     @ApiProperty({default:""})
     companyName:string
+
+    @ApiProperty({ default: 2, description: '1 Yes 2 No — create one task per matching day in the date range' })
+    recurring?: number
+
+    @ApiProperty({
+      default: '',
+      description: 'Comma-separated JS weekday numbers 0=Sun … 6=Sat when recurring=1',
+    })
+    recurDays?: string
+
+    @ApiProperty({
+      required: false,
+      description: 'JSON array of media image/video URLs attached to the task',
+    })
+    images?: string
 }

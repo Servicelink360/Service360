@@ -1,3 +1,143 @@
+.staff-my-tasks-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.staff-my-tasks-hint {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #8c8c8c;
+}
+
+.staff-my-tasks-empty {
+  padding: 32px 0;
+  text-align: center;
+  color: #8c8c8c;
+}
+
+.staff-my-tasks-task-cell__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.staff-my-tasks-task-cell__title {
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.staff-my-tasks-task-cell__site {
+  margin-top: 2px;
+  font-size: 13px;
+  color: #595959;
+  word-break: break-word;
+}
+
+.staff-my-tasks-desc-cell {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #434343;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.staff-my-tasks-when-cell {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #595959;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.staff-my-tasks-action-cell .ant-btn,
+.staff-my-tasks-action-cell button {
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  padding: 4px 10px;
+}
+
+.staff-my-tasks-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.staff-my-tasks-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.staff-my-tasks-view {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.staff-my-tasks-view dt {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8c8c8c;
+}
+
+.staff-my-tasks-view dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #262626;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.staff-my-tasks-media {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.staff-my-tasks-media__label {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f5f5f5;
+  font-size: 12px;
+  font-weight: 600;
+  color: #595959;
+}
+
+.staff-my-tasks-media__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.staff-my-tasks-media__empty {
+  margin: 0;
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.staff-my-tasks-media__pdf {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
 .staff-my-tasks-mobile-list {
   display: flex;
   flex-direction: column;
@@ -13,7 +153,6 @@
   background: #fff;
   padding: 14px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  cursor: pointer;
 }
 
 .staff-my-tasks-card__head {
@@ -45,9 +184,18 @@
   word-break: break-word;
 }
 
+.staff-my-tasks-card__desc {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #434343;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 .staff-my-tasks-card__meta {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px 12px;
   margin: 12px 0 0;
   padding-top: 12px;
@@ -75,11 +223,22 @@
   margin-top: 12px;
 }
 
+.staff-my-tasks-card__action .ant-btn,
+.staff-my-tasks-card__action button {
+  width: 100%;
+}
+
 .staff-my-tasks-table-wrap {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .staff-my-tasks-table-wrap .ant-table {
-  min-width: 720px;
+  width: 100%;
+}
+
+.staff-my-tasks-table-wrap .ant-table-thead > tr > th,
+.staff-my-tasks-table-wrap .ant-table-tbody > tr > td {
+  vertical-align: top;
+  word-break: break-word;
 }

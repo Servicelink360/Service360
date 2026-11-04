@@ -1,8 +1,8 @@
 import appActions from '@app/redux/app/actions';
 import useMobilePortrait from '@app/lib/hooks/useMobilePortrait';
 import { useColorMode } from '@app/context/ColorModeContext';
-import { HomeOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
-import { useHistory, useLocation } from 'react-router-dom';
+import { MenuOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
+import { useLocation } from 'react-router-dom';
 import { Layout } from 'antd';
 import React from 'react';
 import { useIntl } from 'react-intl';
@@ -16,7 +16,6 @@ const { toggleCollapsed, toggleOpenDrawer } = appActions;
 
 export default function Topbar() {
   const intl = useIntl()
-  const history = useHistory();
   const location = useLocation();
 
   const { collapsed, openDrawer } = useSelector((state: any) => state.App);
@@ -42,6 +41,12 @@ export default function Topbar() {
       : 'isomorphicTopbar';
 
   const titleLabel = resolvePageTitleLabel(location.pathname, location.search);
+  const onDashboard =
+    location.pathname === '/dashboard' ||
+    location.pathname === '/' ||
+    titleLabel === 'sidebar.dashboard';
+  // No "Dashboard" title text — logo / menu brand already goes there.
+  const showPageTitle = !onDashboard;
 
   const headerStyle: React.CSSProperties = {
     position: 'fixed',
@@ -59,6 +64,7 @@ export default function Topbar() {
       <Header style={headerStyle} className={topbarClass}>
         <div className="isoLeft">
           <button
+            type="button"
             className={
               menuExpanded ? 'triggerBtn menuOpen' : 'triggerBtn menuCollapsed'
             }
@@ -66,23 +72,13 @@ export default function Topbar() {
             aria-expanded={menuExpanded}
             aria-label="Menu"
             style={topbarDark ? { color: '#ffffff' } : undefined}
-          />
-          <h2 style={topbarDark ? { color: '#ffffff' } : undefined}>
-            {titleLabel ? intl.formatMessage({ id: titleLabel }) : ''}
-          </h2>
-          {isMobilePortrait ? (
-            <button
-              type="button"
-              className="topbarDashboardBtn"
-              onClick={() => {
-                window.dispatchEvent(new Event('service360-home'));
-                if (location.pathname !== '/dashboard') history.push('/dashboard');
-              }}
-              aria-label="Home"
-              style={topbarDark ? { color: '#ffffff' } : undefined}
-            >
-              <HomeOutlined aria-hidden />
-            </button>
+          >
+            <MenuOutlined aria-hidden className="triggerBtnIcon" />
+          </button>
+          {showPageTitle ? (
+            <h2 style={topbarDark ? { color: '#ffffff' } : undefined}>
+              {titleLabel ? intl.formatMessage({ id: titleLabel }) : ''}
+            </h2>
           ) : null}
         </div>
         <ul className="isoRight">

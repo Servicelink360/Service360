@@ -87,6 +87,24 @@ const Index: React.FC = () => {
             width: 200,
             sorter: true,
         },
+        ...(type === userType.CUSTOMER
+            ? [
+                  {
+                      title: "Company",
+                      key: "company",
+                      width: 200,
+                      ellipsis: true,
+                      render: (_text: string, row: any) => {
+                          const name =
+                              row?.customerInfo?.company?.name ||
+                              row?.customerInfo?.companyName ||
+                              row?.companyName ||
+                              "";
+                          return name || "—";
+                      },
+                  },
+              ]
+            : []),
         {
             title: "Status",
             render: (text: string, row: any) => {

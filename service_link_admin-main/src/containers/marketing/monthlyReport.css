@@ -160,6 +160,17 @@
   gap: 12px;
 }
 
+.marketing-site .mr-page--app .mr-kpi-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.marketing-site .mr-glance-period {
+  margin: 16px 0 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--mr-muted);
+}
+
 .marketing-site .mr-kpi-grid--8 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -221,7 +232,7 @@
 
 .marketing-site .mr-cover-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 22px;
 }
@@ -569,6 +580,12 @@
   .marketing-site .mr-hero-meta,
   .marketing-site .mr-cover-grid,
   .marketing-site .mr-events {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .marketing-site .mr-cover-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -702,6 +719,32 @@
   margin-top: 2px;
   color: #4d6359;
   font-size: 13px;
+}
+
+/* Dark shell — list intro bar must not stay white */
+body.app-shell-dark .mr-list-bar,
+#main-content.app-content--dark .mr-list-bar,
+html[data-color-mode='dark'] body.app-shell-dark .mr-list-bar {
+  background: #1a1a1a !important;
+  border-color: #333333 !important;
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .mr-list-bar-title,
+#main-content.app-content--dark .mr-list-bar-title {
+  color: #f0f0f0 !important;
+}
+
+body.app-shell-dark .mr-list-bar-note,
+#main-content.app-content--dark .mr-list-bar-note {
+  color: #bfbfbf !important;
+}
+
+body.app-shell-dark .mr-list-bar .ant-picker,
+#main-content.app-content--dark .mr-list-bar .ant-picker {
+  background: #121212 !important;
+  border-color: #444444 !important;
+  color: #f0f0f0 !important;
 }
 
 .mr-edit-bar {
@@ -1077,6 +1120,28 @@
   box-shadow: none;
 }
 
+.marketing-site .mr-inspect-chart-card {
+  margin: 14px 0 18px;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid #d1fae5;
+  background: linear-gradient(180deg, #f7fbf8 0%, #ffffff 42%);
+  box-shadow: 0 1px 2px rgba(15, 36, 28, 0.05);
+}
+
+.marketing-site .mr-inspect-chart-card .mr-chart-card-head {
+  padding: 14px 16px 6px;
+}
+
+.marketing-site .mr-inspect-chart-card .mr-chart-card-head h3 {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.marketing-site .mr-inspect-chart-card .mr-chart-card-body {
+  padding: 4px 8px 12px;
+}
+
 .marketing-site .mr-page--app .mr-stream + .mr-stream {
   margin-top: 12px;
   padding-top: 4px;
@@ -1084,9 +1149,9 @@
 }
 
 .marketing-site .mr-toc {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-top: 8px;
   padding: 16px 18px;
   border-radius: 14px;
@@ -1095,23 +1160,108 @@
 }
 
 .marketing-site .mr-toc h4 {
-  grid-column: 1 / -1;
-  margin: 0;
+  margin: 0 0 8px;
   font-size: 0.95rem;
   font-weight: 800;
   color: var(--mr-ink);
 }
 
-.marketing-site .mr-toc p {
-  margin: 0 0 4px;
-  font-size: 0.86rem;
+.marketing-site .mr-toc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--mr-ink);
+  font-weight: 800;
+}
+
+.marketing-site .mr-toc-row--sub {
+  padding-left: 1.1rem;
+  font-weight: 500;
   color: var(--mr-muted);
 }
 
+.marketing-site .mr-toc-dots {
+  flex: 1 1 auto;
+  min-width: 20px;
+  border-bottom: 1px dotted #9ca3af;
+  transform: translateY(-3px);
+}
+
+.marketing-site .mr-toc-page {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #166534;
+  white-space: nowrap;
+}
+
 .marketing-site .mr-toc a {
-  color: var(--mr-ink);
-  font-weight: 800;
+  color: inherit;
+  font-weight: inherit;
   text-decoration: none;
+}
+
+.marketing-site .mr-toc a:hover {
+  color: #166534;
+  text-decoration: underline;
+}
+
+.marketing-site .mr-page--app [id^="mr-"] {
+  scroll-margin-top: 20px;
+}
+
+.marketing-site .mr-fault-link {
+  color: #166534;
+  font-weight: 700;
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+.marketing-site .mr-fault-link:hover {
+  color: #0f5c3f;
+}
+
+/* Visits: give Date of Inspection most of the row so dates wrap as a sentence. */
+.marketing-site .mr-table--visits {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.marketing-site .mr-table--visits .mr-col-visit-site { width: 160px; }
+.marketing-site .mr-table--visits .mr-col-visit-dates { width: auto; }
+.marketing-site .mr-table--visits .mr-col-visit-quality { width: 96px; }
+.marketing-site .mr-table--visits .mr-col-visit-notes { width: 110px; }
+
+.marketing-site .mr-table--visits td.mr-visit-dates {
+  overflow: visible;
+  width: 100%;
+  vertical-align: top;
+}
+
+.marketing-site .mr-visit-dates .mr-date-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px 10px;
+  width: 100%;
+  max-width: 100%;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.marketing-site .mr-date-link {
+  display: inline-block;
+  flex: 0 0 auto;
+  color: #166534;
+  font-weight: 700;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.marketing-site .mr-date-link:hover {
+  color: #0f5c3f;
 }
 
 .marketing-site .mr-subhead {

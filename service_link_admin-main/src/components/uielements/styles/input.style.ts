@@ -9,6 +9,22 @@ const styledTheme = require('styled-theme');
 const { palette } = styledTheme;
 
 const InputWrapper = (ComponentName: any) => styled(ComponentName)`
+  /* allowClear wraps Input as affix — must darken the wrapper too */
+  &.ant-input-affix-wrapper {
+    background-color: #fff;
+
+    body.app-shell-dark & {
+      background-color: #1a1a1a !important;
+      border-color: #444444 !important;
+      color: #f0f0f0 !important;
+    }
+
+    body.app-shell-dark & > input.ant-input {
+      background-color: transparent !important;
+      color: #f0f0f0 !important;
+    }
+  }
+
   &.ant-input {
     padding: 4px 10px;
     width: 100%;
@@ -23,6 +39,12 @@ const InputWrapper = (ComponentName: any) => styled(ComponentName)`
     border: 1px solid ${palette('border', 0)};
     ${borderRadius('4px')};
     ${transition()};
+
+    body.app-shell-dark & {
+      background-color: #1a1a1a !important;
+      color: #f0f0f0 !important;
+      border-color: #444444 !important;
+    }
 
     &:focus {
       border-color: ${palette('primary', 0)};
@@ -265,6 +287,17 @@ const InputSearchWrapper = (ComponentName: any) => styled(ComponentName)`
     max-height: 35px;
     ${borderRadius('4px')};
     ${transition()};
+
+    body.app-shell-dark & {
+      background-color: #1a1a1a !important;
+      border-color: #444444 !important;
+      color: #f0f0f0 !important;
+    }
+
+    body.app-shell-dark & .ant-input {
+      background-color: transparent !important;
+      color: #f0f0f0 !important;
+    }
 
     .ant-input {
       height: auto;

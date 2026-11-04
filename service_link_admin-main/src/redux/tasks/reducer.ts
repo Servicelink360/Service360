@@ -83,9 +83,7 @@ const hawbReducer = (state = initialState, action: any) => {
                 isSaveAdd: false,
             }
         default:
-            return {
-                ...state,
-            }
+            return state
     }
 }
 

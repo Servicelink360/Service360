@@ -1,20 +1,18 @@
-import { EditOutlined, FileAddOutlined, ReloadOutlined, DeleteOutlined } from "@ant-design/icons";
-import { ActionBtn, TableWrapper, } from "@app/components/common/Common.styles";
+import { EditOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ActionBtn } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
-import { dateFormat, dateTimeFormat, limitData, pageData } from "@app/config/data.config";
-import { Col, Popconfirm, Form, Input, Tag } from "antd";
+import { dateTimeFormat, limitData, pageData } from "@app/config/data.config";
+import { Col, Form, Input, Tag } from "antd";
 import moment from "moment";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useIntl } from "react-intl";
 import { useDispatch, useSelector } from "react-redux";
-import TaskLogModal from "@app/components/tasks/task-log";
 import { ColDef } from "ag-grid-community";
 import actions from "@app/redux/sites/actions";
 import TableComponent from "@app/components/common/Table/index";
 import { checkRole, formatTime } from "../../library/helpers/utility";
 import { ButtonDiv, ButtonMR, InformationDiv, StatusRow, UsernameRow, UsersDiv } from "@app/components/common/container.style";
 import SiteModal from "@app/components/sites";
-import TaskModal from "@app/components/tasks";
 import { GlobalHotKeys } from "react-hotkeys";
 import actionType from "../../constants/actionType";
 const Unit: React.FC = () => {
@@ -24,25 +22,11 @@ const Unit: React.FC = () => {
     const intl = useIntl();
     const urlParams = new URLSearchParams(window.location.search);
     const id = urlParams.get("id") ? urlParams.get("id") : 0;
-    const { loading, row, success, modalType, customers, count, loadingAction, services, staffs, info, reportTemplates } = useSelector((state: any) => state?.sites);
+    const { loading, row, success, modalType, customers, count, loadingAction, services, staffs, info } = useSelector((state: any) => state?.sites);
     const dispatch = useDispatch();
 
     const handleOnClick = useCallback((modalType: string, row?: any): void => {
-        if (modalType === actionType.ADD || modalType === actionType.VIEW_LOG) {
-            dispatch({ type: actions.MODAL, payload: { modalType, row } });
-        } else if (modalType === actionType.ADD_ITEM) {
-            dispatch({
-                type: actions.MODAL, payload: {
-                    modalType, row: {
-                        siteItemId: row.id,
-                        siteItem: { siteId: row.siteId },
-                        staffs: row.staffs
-                    }
-                }
-            });
-        } else if (modalType === actionType.UPDATE_ITEM) {
-            dispatch({ type: actions.MODAL, payload: { modalType, row } });
-        } else if (modalType === actionType.UPDATE) {
+        if (modalType === actionType.ADD || modalType === actionType.UPDATE) {
             dispatch({ type: actions.MODAL, payload: { modalType, row } });
         } else {
             dispatch(actions.getInfo(id));
@@ -202,95 +186,6 @@ const Unit: React.FC = () => {
         },
     ], []);
 
-    const expandedRowRenderTask = (item) => {
-        const columns = [
-            {
-                title: "Task name",
-                dataIndex: "name",
-                width: 250,
-                render: (text: string, row: any) => {
-                    return <span style={{ cursor: 'pointer' }}> {row && row.name}</span>
-                },
-            },
-            {
-                title: "Staff",
-                dataIndex: "staff",
-                render: (text: string, row: any) => {
-                    return row.staff && row.staff.fullName
-                },
-                width: 200,
-            },
-            // {
-            //     title: "Shift",
-            //     dataIndex: "shift",
-            //     render: (text: string, row: any) => {
-            //         return row.shift && row.shift.name
-            //     },
-            //     width: 200,
-            // },
-            {
-                title: 'Start date - Finish date',
-                dataIndex: "type",
-                width: 200,
-                render: (text: string, row: any) => {
-                    return row?.shifts.map((h, j) => {
-                        return <p key={h.id} onClick={async () => {
-                            handleOnClick(actionType.VIEW_LOG, row);
-                        }}>{moment(row.startDate).format(dateFormat) + " " + formatTime(h.from) + " - " + (moment(row.endDate).format(dateFormat) + " " + formatTime(h.to)) + "  "}</p>
-                    })
-                },
-            },
-            {
-                title: "Repeat",
-                dataIndex: "shift",
-                render: (text: string, row: any) => {
-                    if (row?.type)
-                        return row.type === "E" ? <Tag>Everyday</Tag> : row.type === "W" ? <Tag>Working day</Tag> : row?.typeValue && row?.typeValue.split(',').map((r) => <Tag>{+r === 0 ? "Mon" : +r === 1 ? "Tue" : +r === 2 ? "Wed" : +r === 3 ? "Thu" : +r === 4 ? "Fri" : +r === 5 ? "Sat" : +r === 6 ? "Sun" : ""}</Tag>)
-                    return ""
-                },
-                width: 120,
-            },
-            {
-                title: 'Action',
-                align: 'center',
-                dataIndex: "action",
-                width: 80,
-                render: (text: string, row: any) => {
-                    return <>
-                        <button className="btnLink" style={{ marginLeft: 10 }} onClick={() => { handleOnClick(actionType.UPDATE_ITEM, { ...row, staffs: item.staffs }); }}> <EditOutlined /> </button>
-                        <Popconfirm
-                            title={"Are you sure you want to change to active?"}
-                            okText={intl.formatMessage({ id: "button.Yes" })}
-                            cancelText={intl.formatMessage({ id: "button.No" })}
-                            placement="topRight"
-                            onConfirm={(e) => { dispatch(actions.saveInto({ taskId: row?.id }, actionType.DELETE_ITEM, false)); }}
-                        >
-                            <button className="btnLink" style={{ marginLeft: 10 }}> <DeleteOutlined /> </button>
-                        </Popconfirm>
-                    </>
-                },
-            },
-        ];
-
-        const data = [];
-        for (let i = 0; i < item.tasks.length; ++i) {
-            data.push({
-                ...item.tasks[i],
-                key: "task" + i.toString()
-            });
-
-        }
-        return <TableWrapper columns={columns} dataSource={data} pagination={false} footer={() => {
-            return checkRole('ADMIN') || checkRole('EDIT') ? <ButtonMR
-                onClick={() => {
-                    handleOnClick(actionType.ADD_ITEM, item);
-                }}
-                className="btnLink"
-            ><FileAddOutlined /> Create recurring task</ButtonMR> : ""
-        }} />;
-    }
-
-
     const ActionBTN = () => {
         return (
             <>
@@ -370,7 +265,7 @@ const Unit: React.FC = () => {
                         pagination={false}
                     />
                 </InformationDiv>
-                <UsernameRow>Service & Task</UsernameRow>
+                <UsernameRow>Services</UsernameRow>
                 <InformationDiv>
                     {info?.items?.length > 0 ?
                         <TableComponent
@@ -382,41 +277,22 @@ const Unit: React.FC = () => {
                             limit={limit}
                             data={info ? info?.items : []}
                             loading={loading}
-                            expandedRowRender={expandedRowRenderTask}
                         /> : ""}
                 </InformationDiv>
             </UsersDiv>
-            {modalType ?
-                modalType === actionType.ADD_ITEM || modalType === actionType.UPDATE_ITEM ?
-                    <TaskModal
-                        title={modalType === actionType.ADD_ITEM ? "Add new task" : "Update task"}
-                        loadingAction={loadingAction}
-                        data={row}
-                        modalType={modalType}
-                        isSuccess={success}
-                        reportTemplates={reportTemplates}
-                        getDataInit={getDataInit}
-                    />
-                    : modalType === actionType.VIEW_LOG ?
-                        <TaskLogModal
-                            title={"Logs"}
-                            loadingAction={loadingAction}
-                            modalType={modalType}
-                            isSuccess={success} userId={0} taskId={0} taskShiftId={0} />
-                        :
-                        (
-                            <SiteModal
-                                title={modalType === actionType.ADD ? "Add new Job site" : "Update Job site"}
-                                loadingAction={loadingAction}
-                                data={row}
-                                modalType={modalType}
-                                isSuccess={success}
-                                services={services}
-                                customers={customers}
-                                staffs={staffs}
-                                getDataInit={getDataInit}
-                            />
-                        ) : ""}
+            {modalType ? (
+                <SiteModal
+                    title={modalType === actionType.ADD ? "Add new Job site" : "Update Job site"}
+                    loadingAction={loadingAction}
+                    data={row}
+                    modalType={modalType}
+                    isSuccess={success}
+                    services={services}
+                    customers={customers}
+                    staffs={staffs}
+                    getDataInit={getDataInit}
+                />
+            ) : ""}
         </Layout>
     );
 };

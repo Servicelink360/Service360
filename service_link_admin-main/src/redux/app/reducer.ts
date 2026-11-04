@@ -29,6 +29,9 @@ export default function appReducer(state = initState, action: any) {
 				openDrawer: !state.openDrawer,
 			};
 		case actions.SET_OPEN_DRAWER:
+			if (state.openDrawer === action.open) {
+				return state;
+			}
 			return {
 				...state,
 				openDrawer: action.open,
@@ -44,16 +47,34 @@ export default function appReducer(state = initState, action: any) {
 				};
 			}
 			break;
-		case actions.CHANGE_OPEN_KEYS:
+		case actions.CHANGE_OPEN_KEYS: {
+			const next = action.openKeys || [];
+			const prev = state.openKeys || [];
+			if (
+				prev.length === next.length &&
+				prev.every((key: string, i: number) => String(key) === String(next[i]))
+			) {
+				return state;
+			}
 			return {
 				...state,
-				openKeys: action.openKeys,
+				openKeys: next,
 			};
-		case actions.CHANGE_CURRENT:
+		}
+		case actions.CHANGE_CURRENT: {
+			const next = action.current || [];
+			const prev = state.current || [];
+			if (
+				prev.length === next.length &&
+				prev.every((key: string, i: number) => String(key) === String(next[i]))
+			) {
+				return state;
+			}
 			return {
 				...state,
-				current: action.current,
+				current: next,
 			};
+		}
 		case actions.CLEAR_MENU:
 			return {
 				...state,
