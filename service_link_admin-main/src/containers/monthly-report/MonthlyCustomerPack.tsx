@@ -510,32 +510,40 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
         reportsBySite.set(site, (reportsBySite.get(site) || 0) + 1);
       });
 
-      // Bayside / Mascot Public Amenities: parents are portfolio headers only — KPI
-      // counts child parks, not the parent 1×/day target (that was showing ~98%).
-      const amenityParents = (contracted.find((svc) =>
+      // Bayside / Mascot Public Amenities: schedule = parent frequency (1×/day).
+      // Child-park uploads roll into the parent. 4 done of 20 due = 20%, never 100%.
+      const amenityContractSites = (contracted.find((svc) =>
         (stream.serviceId != null && +svc.id === +stream.serviceId)
         || String(svc.name || '').trim().toLowerCase() === String(stream.label || '').trim().toLowerCase(),
-      )?.sites || [])
+      )?.sites || []);
+      const amenityParents = amenityContractSites
         .filter((site) => isAmenityParentName(site.name))
         .map((site) => ({
           name: site.name,
           labels: childLabelsFromAddress(site.addressName || ''),
         }))
         .filter((site) => site.labels.length > 0);
-      const isAmenityParentSite = (site: string) =>
-        amenityParents.some((parent) => softSiteMatch(site, parent.name));
-      const isAmenityChildSite = (site: string) =>
-        amenityParents.some((parent) =>
-          parent.labels.some((label) => softSiteMatch(site, label)),
-        );
       if (amenityParents.length) {
-        // Drop parent portfolio rows from schedule/completed.
-        [...reportsBySite.keys()].forEach((site) => {
-          if (isAmenityParentSite(site)) reportsBySite.delete(site);
-        });
         amenityParents.forEach((parent) => {
-          [...stream.scheduleBySite.keys()].forEach((siteName) => {
-            if (softSiteMatch(siteName, parent.name)) stream.scheduleBySite.set(siteName, 0);
+          let rolled = 0;
+          [...reportsBySite.entries()].forEach(([site, reports]) => {
+            const underParent = softSiteMatch(site, parent.name)
+              || parent.labels.some((label) => softSiteMatch(site, label));
+            if (!underParent) return;
+            rolled += reports;
+            reportsBySite.delete(site);
+          });
+          // Prefer the contracted parent name so scheduleBySite frequency matches.
+          const parentKey =
+            [...stream.scheduleBySite.keys()].find((name) => softSiteMatch(name, parent.name))
+            || parent.name;
+          if (rolled > 0) reportsBySite.set(parentKey, rolled);
+          // Child parks have no own frequency — clear any leftover schedule on them.
+          parent.labels.forEach((label) => {
+            [...stream.scheduleBySite.keys()].forEach((siteName) => {
+              if (softSiteMatch(siteName, parent.name)) return;
+              if (softSiteMatch(siteName, label)) stream.scheduleBySite.set(siteName, 0);
+            });
           });
         });
       }
@@ -543,12 +551,8 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
       const groups = new Map<string, { schedule: number; completed: number; sites: Set<string> }>();
       reportsBySite.forEach((reports, site) => {
         if (reports <= 0) return;
-        // Child parks follow the parent: any upload this month = fully complete for KPI.
-        const freqDue = isAmenityChildSite(site)
-          ? reports
-          : (stream.scheduleBySite.get(site) || 0);
-        // No /sites frequency: treat uploads as schedule=completed so group % never exceeds 100%
-        // (mixing due=0 extras into a scheduled group was showing 133%/150%).
+        const freqDue = stream.scheduleBySite.get(site) || 0;
+        // No /sites frequency: count uploads only (schedule=completed). Never invent 100% over a real due.
         const due = freqDue > 0 ? freqDue : reports;
         const group = siteGroup(site);
         const entry = groups.get(group) || { schedule: 0, completed: 0, sites: new Set<string>() };

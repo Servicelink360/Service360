@@ -230,24 +230,31 @@ function simulateSummary(svc, workRows, daysInMonth) {
       labels: childLabelsFromAddress(site.addressName || ""),
     }))
     .filter((site) => site.labels.length > 0);
-  const isAmenityParentSite = (site) =>
-    amenityParents.some((parent) => softSiteMatch(site, parent.name));
-  const isAmenityChildSite = (site) =>
-    amenityParents.some((parent) => parent.labels.some((label) => softSiteMatch(site, label)));
-
-  [...reportsBySite.keys()].forEach((site) => {
-    if (isAmenityParentSite(site)) reportsBySite.delete(site);
-  });
   amenityParents.forEach((parent) => {
-    [...scheduleBySite.keys()].forEach((siteName) => {
-      if (softSiteMatch(siteName, parent.name)) scheduleBySite.set(siteName, 0);
+    let rolled = 0;
+    [...reportsBySite.entries()].forEach(([site, reports]) => {
+      const underParent = softSiteMatch(site, parent.name)
+        || parent.labels.some((label) => softSiteMatch(site, label));
+      if (!underParent) return;
+      rolled += reports;
+      reportsBySite.delete(site);
+    });
+    const parentKey =
+      [...scheduleBySite.keys()].find((name) => softSiteMatch(name, parent.name))
+      || parent.name;
+    if (rolled > 0) reportsBySite.set(parentKey, rolled);
+    parent.labels.forEach((label) => {
+      [...scheduleBySite.keys()].forEach((siteName) => {
+        if (softSiteMatch(siteName, parent.name)) return;
+        if (softSiteMatch(siteName, label)) scheduleBySite.set(siteName, 0);
+      });
     });
   });
 
   const groups = new Map();
   reportsBySite.forEach((reports, site) => {
     if (reports <= 0) return;
-    const freqDue = isAmenityChildSite(site) ? reports : scheduleBySite.get(site) || 0;
+    const freqDue = scheduleBySite.get(site) || 0;
     const due = freqDue > 0 ? freqDue : reports;
     const group = siteGroup(site);
     const entry = groups.get(group) || { schedule: 0, completed: 0, sites: new Set() };
@@ -476,17 +483,17 @@ async function main() {
         const parks = pacSummary.rows.find((r) => r.group === "Parks and amenities");
         if (parks) {
           assert(
-            "PAC parks schedule not parent-daily inflated",
-            parks.schedule < 50,
+            "PAC parks uses parent daily schedule (not per-child 100%)",
+            parks.schedule >= parks.completed && parks.pct != null && parks.pct <= 100,
             `schedule=${parks.schedule} completed=${parks.completed} pct=${parks.pct}`,
           );
           assert(
-            "PAC parks pct is 100 when children visited",
-            parks.schedule === 0 || parks.pct === 100,
+            "PAC parks % is completed/schedule (4/20 ≠ 100%)",
+            parks.schedule <= 0 || parks.pct === Math.round((parks.completed / parks.schedule) * 100),
             `pct=${parks.pct}`,
           );
         } else {
-          ok("PAC parks summary", "no parks group this month (no child uploads)");
+          ok("PAC parks summary", "no parks group this month (no uploads)");
         }
         void parentInKpi;
       }
