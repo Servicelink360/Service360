@@ -1057,10 +1057,8 @@ const MessagesPage: React.FC = () => {
       return withFromMessages(`/report-faults?faultId=${activeReportFaultId}`) || null;
     }
     if (activeUserTaskId) {
-      // Scheduled tasks open on My Tasks / Task today; custom reports still open from that list via id.
-      return (
-        withFromMessages(isStaff ? '/my-tasks' : '/task-today') || null
-      );
+      // Message-about-report deep links use userTaskId = user_tasks.id (New Reports row).
+      return withFromMessages(`/new-reports?reportId=${activeUserTaskId}`) || null;
     }
     if (activeConsumableDeliveryId) {
       return (
@@ -1068,7 +1066,7 @@ const MessagesPage: React.FC = () => {
       );
     }
     return null;
-  }, [activeReportFaultId, activeUserTaskId, activeConsumableDeliveryId, isStaff]);
+  }, [activeReportFaultId, activeUserTaskId, activeConsumableDeliveryId]);
 
   const linkedItemLabel = useMemo(() => {
     if (activeReportFaultId) return `fault report #${activeReportFaultId}`;
