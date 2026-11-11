@@ -113,6 +113,11 @@ export class MonthlyReportsService {
              WHERE ut.status = 1
                AND ut.type = 'CUSTOM'
                AND c.company_id IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM public.report_templates rt
+                 WHERE rt.id = ut.report_template_id
+                   AND UPPER(TRIM(COALESCE(rt.category, ''))) IN ('INCIDENT', 'SAFETY_AUDIT')
+               )
                AND COALESCE(ut.check_in, ut.created_at) >= $1
              GROUP BY c.company_id, to_char(COALESCE(ut.check_in, ut.created_at), 'YYYY-MM')
            )
@@ -137,6 +142,11 @@ export class MonthlyReportsService {
              WHERE ut.status = 1
                AND ut.type = 'CUSTOM'
                AND c.company_id IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM public.report_templates rt
+                 WHERE rt.id = ut.report_template_id
+                   AND UPPER(TRIM(COALESCE(rt.category, ''))) IN ('INCIDENT', 'SAFETY_AUDIT')
+               )
                AND COALESCE(ut.check_in, ut.created_at) >= $1
              GROUP BY c.company_id, to_char(COALESCE(ut.check_in, ut.created_at), 'YYYY-MM')
            ),
@@ -145,10 +155,22 @@ export class MonthlyReportsService {
              FROM public.monthly_report_edits
              WHERE deleted_at IS NULL AND purged_at IS NULL
            ),
+           contracted AS (
+             -- When a month is selected, include every company we provide services to (site_items).
+             SELECT DISTINCT COALESCE(si.company_id, c.company_id) AS company_id,
+                    $2::text AS month
+             FROM public.site_items si
+             INNER JOIN public.users cu ON cu.id = si.customer_id AND cu.status <> 4
+             LEFT JOIN public.customers c ON c.user_id = si.customer_id
+             WHERE $2::text IS NOT NULL
+               AND COALESCE(si.company_id, c.company_id) IS NOT NULL
+           ),
            keys AS (
              SELECT company_id, month FROM job_months
              UNION
              SELECT company_id, month FROM kept_edits
+             UNION
+             SELECT company_id, month FROM contracted WHERE month IS NOT NULL
            )
            SELECT cc.id AS "companyId",
                   cc.name,
@@ -242,7 +264,7 @@ export class MonthlyReportsService {
     }
 
     const ids = scope.userIds;
-    const [work, priorWork, faults, priorFaults, tickets, priorTickets, invoices, priorInvoices, personnel, toolbox, edit] =
+    const [work, priorWork, faults, priorFaults, tickets, priorTickets, invoices, priorInvoices, personnel, toolbox, edit, contractedServices, consumables] =
       await Promise.all([
         this.loadWork(ids, window.start, window.end),
         this.countWork(ids, window.priorStart, window.priorEnd),
@@ -262,10 +284,12 @@ export class MonthlyReportsService {
           : Promise.resolve([]),
         this.loadToolbox(window.start, window.end),
         this.loadEdit(scope.companyId, monthKey),
+        this.loadContractedServices(ids, scope.companyId, parsed.month),
+        this.loadConsumables(ids, scope.companyId, scope.name, window.start, window.end),
       ]);
 
-    const sites = this.sitesFrom(work, faults, tickets);
-    const services = this.servicesFrom(work);
+    const sites = this.sitesFrom(work, faults, tickets, contractedServices);
+    const services = this.servicesFrom(work, contractedServices);
     const summary = this.summary(scope.name, window.label, work, faults, tickets, invoices, sites, services);
 
     return {
@@ -293,13 +317,13 @@ export class MonthlyReportsService {
             label: 'Jobs completed',
             value: work.length,
             prior: priorWork,
-            note: 'Completed site reports and scheduled jobs',
+            note: 'Submitted reports on New Reports for this month',
           },
           {
             label: 'Faults logged',
             value: faults.length,
             prior: priorFaults,
-            note: `${faults.filter((f) => f.priority === 'Urgent').length} urgent � ${
+            note: `${faults.filter((f) => f.priority === 'Urgent').length} urgent · ${
               faults.filter((f) => f.status === 'Completed').length
             } completed`,
           },
@@ -318,6 +342,8 @@ export class MonthlyReportsService {
         ],
         sites,
         services,
+        contractedServices,
+        consumables,
         work,
         faults,
         tickets,
@@ -361,6 +387,7 @@ export class MonthlyReportsService {
     work: { site: string }[],
     faults: { site: string }[],
     tickets: { site: string }[],
+    contracted: { sites: { name: string }[] }[] = [],
   ) {
     const map = new Map<string, { site: string; jobs: number; faults: number; tickets: number }>();
     const bump = (site: string, key: 'jobs' | 'faults' | 'tickets') => {
@@ -372,18 +399,191 @@ export class MonthlyReportsService {
     work.forEach((row) => bump(row.site, 'jobs'));
     faults.forEach((row) => bump(row.site, 'faults'));
     tickets.forEach((row) => bump(row.site, 'tickets'));
-    return [...map.values()].sort((a, b) => b.jobs + b.faults + b.tickets - (a.jobs + a.faults + a.tickets));
+    contracted.forEach((svc) => {
+      (svc.sites || []).forEach((site) => {
+        const name = site.name || 'Unnamed site';
+        if (!map.has(name)) map.set(name, { site: name, jobs: 0, faults: 0, tickets: 0 });
+      });
+    });
+    return [...map.values()].sort((a, b) => b.jobs + b.faults + b.tickets - (a.jobs + a.faults + a.tickets) || a.site.localeCompare(b.site));
   }
 
-  private servicesFrom(work: { service: string }[]) {
+  private servicesFrom(
+    work: { service: string }[],
+    contracted: { name: string }[] = [],
+  ) {
     const map = new Map<string, number>();
+    contracted.forEach((row) => {
+      const name = row.name || 'Other';
+      if (!map.has(name)) map.set(name, 0);
+    });
     work.forEach((row) => {
       const name = row.service || 'Other';
       map.set(name, (map.get(name) || 0) + 1);
     });
     return [...map.entries()]
       .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name));
+  }
+
+  /** Visits expected in one month from a detailed schedule cell (Sites frequency grid). */
+  private visitsFromCadence(value: unknown): number {
+    const v = String(value || '').trim().toLowerCase();
+    if (v === 'weekly' || v === 'once') return 4;
+    if (v === 'fortnight' || v === 'fortnightly') return 2;
+    if (v === 'monthly') return 1;
+    if (v === 'daily') return 30;
+    return 0;
+  }
+
+  /** Visits expected this month from simple Sites frequency (times / period). */
+  private visitsFromSimpleFrequency(
+    timesRaw: unknown,
+    countRaw: unknown,
+    periodRaw: unknown,
+    month: number,
+    daysInMonth: number,
+  ): number {
+    const period = String(periodRaw || '').trim().toLowerCase();
+    if (!period || period === 'na') return 0;
+    const times = Math.max(1, Math.floor(Number(timesRaw) || 1));
+    const count = Math.max(1, Math.floor(Number(countRaw) || 1));
+    if (period === 'day') return Math.max(0, Math.round((times / count) * daysInMonth));
+    if (period === 'week') return Math.max(0, Math.round((times / count) * (daysInMonth / 7)));
+    if (period === 'month') {
+      if (count <= 1) return Math.max(1, times);
+      // 1× per N months — due when month index matches the stride (Jan=1).
+      const due = ((month - 1) % count) === 0;
+      return due ? Math.max(1, times) : 0;
+    }
+    if (period === 'year') return month === 1 ? Math.max(1, times) : 0;
+    return 0;
+  }
+
+  /** All services (and sites) assigned to this customer on job sites — not only services with jobs this month. */
+  private async loadContractedServices(ids: number[], companyId: number | null, month = 1) {
+    type ContractedSite = {
+      id: number;
+      name: string;
+      /** Parent amenity roll-up address listing child parks (1.Park A, 2.Park B, …). */
+      addressName?: string;
+      frequencyTimes?: number | null;
+      frequencyCount?: number | null;
+      frequencyPeriod?: string | null;
+      monthCadence?: string | null;
+      scheduleVisits: number;
+    };
+    if (!ids.length && !companyId) {
+      return [] as { id: number; name: string; sites: ContractedSite[] }[];
+    }
+    const monthCol = `month_${String(Math.min(12, Math.max(1, month))).padStart(2, '0')}`;
+    const daysInMonth = new Date(2000, month, 0).getDate();
+    const rows: Array<{
+      service_id: number;
+      service_name: string;
+      site_id: number;
+      site_name: string;
+      address_name: string;
+      site_item_id: number;
+      frequency_times: number | null;
+      frequency_count: number | null;
+      frequency_period: string | null;
+      detail_visits: number | null;
+      detail_cadence: string | null;
+    }> = await this.dataSource.query(
+      `SELECT
+          sv.id AS service_id,
+          COALESCE(NULLIF(TRIM(sv.name), ''), 'Other') AS service_name,
+          st.id AS site_id,
+          COALESCE(NULLIF(TRIM(st.name), ''), 'Unnamed site') AS site_name,
+          COALESCE(NULLIF(TRIM(st.address_name), ''), '') AS address_name,
+          si.id AS site_item_id,
+          si.frequency_times,
+          si.frequency_count,
+          si.frequency_period,
+          (
+            -- One visit expectation per site/service for the month (not sum of every activity line).
+            SELECT COALESCE(MAX(
+              CASE LOWER(COALESCE(sias.${monthCol}, ''))
+                WHEN 'weekly' THEN 4
+                WHEN 'once' THEN 4
+                WHEN 'fortnight' THEN 2
+                WHEN 'fortnightly' THEN 2
+                WHEN 'monthly' THEN 1
+                WHEN 'daily' THEN 30
+                ELSE 0
+              END
+            ), 0)
+            FROM public.site_item_activity_schedules sias
+            WHERE sias.site_item_id = si.id
+          )::int AS detail_visits,
+          (
+            SELECT LOWER(COALESCE(sias.${monthCol}, ''))
+            FROM public.site_item_activity_schedules sias
+            WHERE sias.site_item_id = si.id
+              AND COALESCE(sias.${monthCol}, '') <> ''
+            ORDER BY sias.id
+            LIMIT 1
+          ) AS detail_cadence
+       FROM public.site_items si
+       INNER JOIN public.services sv ON sv.id = si.service_id
+       INNER JOIN public.sites st ON st.id = si.site_id
+       INNER JOIN public.users cu ON cu.id = si.customer_id AND cu.status <> 4
+       WHERE (
+         (CARDINALITY($1::int[]) > 0 AND si.customer_id = ANY($1::int[]))
+         OR ($2::int IS NOT NULL AND (
+           si.company_id = $2
+           OR EXISTS (
+             SELECT 1 FROM public.customers c
+             WHERE c.user_id = si.customer_id AND c.company_id = $2
+           )
+         ))
+       )
+       ORDER BY 2 ASC, 4 ASC`,
+      [ids, companyId],
+    );
+    const map = new Map<number, { id: number; name: string; sites: ContractedSite[] }>();
+    for (const row of rows) {
+      const serviceId = +row.service_id;
+      if (!Number.isFinite(serviceId) || serviceId <= 0) continue;
+      const entry = map.get(serviceId) || {
+        id: serviceId,
+        name: row.service_name || 'Other',
+        sites: [],
+      };
+      const siteId = +row.site_id;
+      const siteName = row.site_name || 'Unnamed site';
+      if (!Number.isFinite(siteId) || siteId <= 0) continue;
+      const detailVisits = Math.max(0, Math.floor(Number(row.detail_visits) || 0));
+      const simpleVisits = this.visitsFromSimpleFrequency(
+        row.frequency_times,
+        row.frequency_count,
+        row.frequency_period,
+        month,
+        daysInMonth,
+      );
+      const scheduleVisits = detailVisits > 0 ? detailVisits : simpleVisits;
+      const addressName = String(row.address_name || '').trim();
+      const existing = entry.sites.find((site) => site.id === siteId);
+      if (existing) {
+        existing.scheduleVisits = Math.max(existing.scheduleVisits, scheduleVisits);
+        if (!existing.monthCadence && row.detail_cadence) existing.monthCadence = row.detail_cadence;
+        if (!existing.addressName && addressName) existing.addressName = addressName;
+      } else {
+        entry.sites.push({
+          id: siteId,
+          name: siteName,
+          addressName: addressName || undefined,
+          frequencyTimes: row.frequency_times,
+          frequencyCount: row.frequency_count,
+          frequencyPeriod: row.frequency_period,
+          monthCadence: row.detail_cadence,
+          scheduleVisits,
+        });
+      }
+      map.set(serviceId, entry);
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
   private async resolveCustomer(user: IUserInfo, companyIdRaw: string) {
@@ -477,11 +677,15 @@ export class MonthlyReportsService {
 
   private async loadWork(ids: number[], start: string, end: string) {
     if (!ids.length) return [];
+    // Completed = submitted New Reports (/new-reports) for the month — same CUSTOM
+    // rows as that page (exclude Incident / Safety Audit sidebar pages).
     const rows = await this.dataSource.query(
       `SELECT ut.id,
               ut.type,
               ut.task_name,
+              ut.service_id,
               ut.service_name,
+              ut.site_id,
               ut.site_name,
               ut.site_address,
               ut.pdf_file,
@@ -492,6 +696,12 @@ export class MonthlyReportsService {
        LEFT JOIN public.users staff ON staff.id = ut.staff_id
        WHERE ut.customer_id = ANY($1::int[])
          AND ut.status = 1
+         AND UPPER(TRIM(COALESCE(ut.type, ''))) = 'CUSTOM'
+         AND NOT EXISTS (
+           SELECT 1 FROM public.report_templates rt
+           WHERE rt.id = ut.report_template_id
+             AND UPPER(TRIM(COALESCE(rt.category, ''))) IN ('INCIDENT', 'SAFETY_AUDIT')
+         )
          AND COALESCE(ut.check_in, ut.created_at) >= $2
          AND COALESCE(ut.check_in, ut.created_at) <= $3
        ORDER BY COALESCE(ut.check_in, ut.created_at) DESC, ut.id DESC
@@ -501,12 +711,14 @@ export class MonthlyReportsService {
     return rows.map((row: any) => ({
       id: +row.id,
       date: row.done_at,
+      siteId: row.site_id != null && +row.site_id > 0 ? +row.site_id : null,
       site: row.site_name || '',
       address: row.site_address || '',
+      serviceId: row.service_id != null && +row.service_id > 0 ? +row.service_id : null,
       service: row.service_name || row.task_name || 'Job',
       title: row.task_name || row.service_name || 'Completed job',
       detail: stripHtml(row.detail),
-      kind: String(row.type || '').toUpperCase() === 'CUSTOM' ? 'Site report' : 'Scheduled job',
+      kind: 'Site report',
       pdfFile: row.pdf_file || '',
       staffName: row.staff_name || '',
     }));
@@ -519,6 +731,12 @@ export class MonthlyReportsService {
        FROM public.user_tasks ut
        WHERE ut.customer_id = ANY($1::int[])
          AND ut.status = 1
+         AND UPPER(TRIM(COALESCE(ut.type, ''))) = 'CUSTOM'
+         AND NOT EXISTS (
+           SELECT 1 FROM public.report_templates rt
+           WHERE rt.id = ut.report_template_id
+             AND UPPER(TRIM(COALESCE(rt.category, ''))) IN ('INCIDENT', 'SAFETY_AUDIT')
+         )
          AND COALESCE(ut.check_in, ut.created_at) >= $2
          AND COALESCE(ut.check_in, ut.created_at) <= $3`,
       [ids, start, end],
@@ -620,6 +838,112 @@ export class MonthlyReportsService {
       title: row.title || 'Invoice',
       detail: stripHtml(row.notes),
     }));
+  }
+
+  /** Consumable deliveries emailed to this client in the period (not supplier orders / drafts). */
+  private async loadConsumables(
+    ids: number[],
+    companyId: number | null,
+    companyName: string,
+    start: string,
+    end: string,
+  ) {
+    if (!ids.length && !companyId) return [];
+    const rows: Array<{
+      id: number;
+      site_name: string | null;
+      subject: string | null;
+      emailed_to: string | null;
+      items_json: string | null;
+      emailed_at: Date | string | null;
+      created_at: Date | string | null;
+    }> = await this.dataSource.query(
+      `SELECT d.id,
+              d.site_name,
+              d.subject,
+              d.emailed_to,
+              d.items_json,
+              d.emailed_at,
+              d.created_at
+       FROM public.consumable_deliveries d
+       WHERE d.deleted_at IS NULL
+         AND d.supplier_id IS NULL
+         AND (d.emailed_at IS NOT NULL OR d.email_status = 'sent')
+         AND COALESCE(d.emailed_at, d.created_at) >= $3
+         AND COALESCE(d.emailed_at, d.created_at) <= $4
+         AND (
+           ($1::int IS NOT NULL AND d.company_id = $1)
+           OR (CARDINALITY($2::int[]) > 0 AND d.customer_id = ANY($2::int[]))
+           OR (
+             d.company_id IS NULL
+             AND TRIM(COALESCE($5, '')) <> ''
+             AND LOWER(TRIM(d.company_name)) = LOWER(TRIM($5))
+           )
+         )
+       ORDER BY COALESCE(d.emailed_at, d.created_at) DESC, d.id DESC
+       LIMIT 200`,
+      [companyId, ids, start, end, companyName || ''],
+    );
+    if (!rows.length) return [];
+
+    const deliveryIds = rows.map((row) => +row.id).filter((id) => id > 0);
+    const itemRows: Array<{
+      delivery_id: number;
+      name: string;
+      unit: string | null;
+      quantity: string | number | null;
+      sort_order: number | null;
+    }> = deliveryIds.length
+      ? await this.dataSource.query(
+          `SELECT delivery_id, name, unit, quantity, sort_order
+           FROM public.consumable_delivery_items
+           WHERE delivery_id = ANY($1::int[])
+           ORDER BY delivery_id ASC, sort_order ASC, id ASC`,
+          [deliveryIds],
+        )
+      : [];
+    const itemsByDelivery = new Map<number, string[]>();
+    for (const item of itemRows) {
+      const deliveryId = +item.delivery_id;
+      const qty = Number(item.quantity);
+      const qtyLabel = Number.isFinite(qty) ? String(qty) : String(item.quantity || '').trim();
+      const unit = String(item.unit || '').trim();
+      const name = String(item.name || '').trim() || 'Item';
+      const line = [qtyLabel, unit, name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+      const list = itemsByDelivery.get(deliveryId) || [];
+      list.push(line);
+      itemsByDelivery.set(deliveryId, list);
+    }
+
+    return rows.map((row) => {
+      const id = +row.id;
+      let items = itemsByDelivery.get(id) || [];
+      if (!items.length && row.items_json) {
+        try {
+          const parsed = JSON.parse(String(row.items_json));
+          if (Array.isArray(parsed)) {
+            items = parsed.map((entry: any) => {
+              const qty = Number(entry?.quantity);
+              const qtyLabel = Number.isFinite(qty) ? String(qty) : String(entry?.quantity || '').trim();
+              const unit = String(entry?.unit || '').trim();
+              const name = String(entry?.name || '').trim() || 'Item';
+              return [qtyLabel, unit, name].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+            }).filter(Boolean);
+          }
+        } catch {
+          // keep empty items
+        }
+      }
+      return {
+        id,
+        date: row.emailed_at || row.created_at,
+        site: row.site_name || '',
+        subject: row.subject || 'Consumables delivery',
+        emailedTo: row.emailed_to || '',
+        items,
+        itemsLabel: items.join('; '),
+      };
+    });
   }
 
   async saveReport(user: IUserInfo, body: { companyId?: number; month?: string; body?: unknown }) {
@@ -849,10 +1173,15 @@ export class MonthlyReportsService {
     }
     const dateLabel = String(draft.periodLabel || month);
     const clientName = String(draft.clientName || 'Customer');
+    const serviceLine = String(draft.serviceLine || '').replace(/\s+/g, ' ').trim();
+    const subtitle = serviceLine
+      ? (/report$/i.test(serviceLine) ? serviceLine : `${serviceLine} Report`)
+      : '';
     try {
       const url = await convertReportLayoutPdf({
-        title: 'Monthly Report',
-        dateLabel,
+        title: 'MONTHLY REPORT',
+        subtitle,
+        dateLabel: String(dateLabel || '').replace(/^\s*monthly\s+report\s*/i, '').trim(),
         contentHtml: monthlyDraftToReportHtml(draft),
         submittedBy: 'ServiceLink',
         rowNumber: `${clientName} ${month}`,
@@ -924,7 +1253,7 @@ function pdfMark(value: unknown) {
   return pdfText(text);
 }
 
-const CHART_COLORS = ['#0f5c3f', '#147a54', '#3b82f6', '#6366f1', '#f59e0b', '#dc2626'];
+const CHART_COLORS = ['#0f5c3f', '#84cc16', '#3b82f6', '#6366f1', '#f59e0b', '#dc2626'];
 
 function weeklyChartSvg(rows: { week: string; jobs: number; faults: number; tickets: number }[]) {
   if (!rows.length) return '<p class="mp-nil">No weekly volume recorded.</p>';
@@ -968,25 +1297,33 @@ function weeklyChartSvg(rows: { week: string; jobs: number; faults: number; tick
   return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Weekly volume">${parts.join('')}</svg><div class="mp-legend">${legend}</div>`;
 }
 
-function wrapChartLabel(text: string, maxChars = 14): string[] {
-  const words = String(text || '').trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return [''];
-  const lines: string[] = [];
-  let current = '';
-  words.forEach((word) => {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length <= maxChars) {
-      current = next;
-      return;
-    }
-    if (current) lines.push(current);
-    current = word.length > maxChars ? `${word.slice(0, maxChars - 1)}…` : word;
-  });
-  if (current) lines.push(current);
-  return lines.slice(0, 3);
+function pdfGroupIcon(group: string) {
+  const text = String(group || '').toLowerCase();
+  const svg = (path: string) =>
+    `<span class="mp-perf-cat-ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="#0d6b2f"><path d="${path}"/></svg></span>`;
+  // Match on-screen reference icons exactly.
+  if (/early|learn|child|school|kind|elc|preschool|daycare/.test(text)) {
+    return svg('M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82zM12 3 1 9l11 6 9-4.91V17h2V9L12 3z');
+  }
+  if (/community/.test(text) || (/centre|center/.test(text) && !/town|library|aquatic/.test(text))) {
+    return svg('M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z');
+  }
+  if (/town|library|hall/.test(text)) {
+    return svg('M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z');
+  }
+  if (/aquatic|bath|pool|swim/.test(text)) {
+    return svg('M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2C20 10.48 17.33 6.55 12 2zm0 18c-2.76 0-5-2.02-5-5.2 0-1.85 1.36-4.22 5-7.76 3.64 3.54 5 5.91 5 7.76 0 3.18-2.24 5.2-5 5.2z');
+  }
+  if (/park|amenit|cottage|oval|garden|green/.test(text)) {
+    return svg('M17 12h2L12 2 5.05 12H7l-3.9 6h6.92v4h3.96v-4H21z');
+  }
+  if (/depot/.test(text)) {
+    return svg('M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z');
+  }
+  return svg('M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z');
 }
 
-/** Grouped bars: Schedule vs Completed by site group (Innerwest-style KPI chart). */
+/** Grouped bars: Schedule vs Completed — performance card matching reference UI. */
 function inspectionChartSvg(
   rows: { group: string; schedule: number; completed: number }[],
   title: string,
@@ -994,72 +1331,141 @@ function inspectionChartSvg(
   const data = rows.filter((row) => row.group || row.schedule || row.completed);
   if (!data.length) return '';
   const series = [
-    { key: 'schedule' as const, color: '#166534', name: 'Schedule for this month' },
-    { key: 'completed' as const, color: '#86efac', name: 'Completed' },
+    { key: 'schedule' as const, color: '#064e1b', name: 'Schedule for this month' },
+    { key: 'completed' as const, color: '#9ff36c', name: 'Completed' },
   ];
   const maxRaw = Math.max(1, ...data.flatMap((row) => [row.schedule, row.completed]));
-  const max = maxRaw <= 4 ? 4 : Math.ceil(maxRaw / 4) * 4;
+  const max = Math.max(4, Math.ceil(maxRaw * 1.28));
   const n = data.length;
-  const width = n <= 2 ? 420 : n <= 4 ? 500 : 560;
-  const height = 278;
-  const padL = 44;
-  const padB = 68;
-  const padT = 22;
+  const width = n <= 2 ? 560 : n <= 4 ? 660 : 760;
+  const height = 360;
+  const padL = 62;
+  const padB = 18;
+  const padT = 58;
   const padR = 16;
   const plotW = width - padL - padR;
   const plotH = height - padT - padB;
   const usable = n <= 2 ? plotW * 0.55 : plotW;
   const offsetX = n <= 2 ? padL + (plotW - usable) / 2 : padL;
   const groupW = usable / n;
-  const barW = Math.max(14, Math.min(36, (groupW - 20) / 2));
-  const gap = 6;
+  const barW = Math.max(22, Math.min(48, (groupW - 18) / 2));
+  const gap = 8;
   const parts: string[] = [];
   for (let step = 0; step <= 4; step += 1) {
     const y = padT + plotH - (plotH * step) / 4;
     const label = String(Math.round((max * step) / 4));
     parts.push(
-      `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${width - padR}" y2="${y.toFixed(1)}" stroke="#e8f0eb" stroke-width="1"/>`,
+      `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${width - padR}" y2="${y.toFixed(1)}" stroke="#d7e5db" stroke-width="1" stroke-dasharray="5 5"/>`,
     );
     parts.push(
-      `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="12" fill="#6b7280">${label}</text>`,
+      `<text x="${padL - 8}" y="${(y + 5).toFixed(1)}" text-anchor="end" font-size="15" font-weight="700" fill="#24352c">${label}</text>`,
     );
   }
   parts.push(
-    `<text x="12" y="${(padT + plotH / 2).toFixed(1)}" text-anchor="middle" font-size="11" fill="#6b7280" transform="rotate(-90 12 ${(padT + plotH / 2).toFixed(1)})">Schedule reports</text>`,
+    `<text x="16" y="${(padT + plotH / 2).toFixed(1)}" text-anchor="middle" font-size="14" font-weight="700" fill="#24352c" letter-spacing="0.3" transform="rotate(-90 16 ${(padT + plotH / 2).toFixed(1)})">Schedule reports</text>`,
   );
   data.forEach((row, index) => {
     const gx = offsetX + index * groupW + (groupW - barW * 2 - gap) / 2;
     series.forEach((item, seriesIndex) => {
       const value = row[item.key];
-      const h = (value / max) * plotH;
+      const h = Math.max((value / max) * plotH, value ? 3 : 0);
       const x = gx + seriesIndex * (barW + gap);
       const y = padT + plotH - h;
       parts.push(
-        `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, value ? 3 : 0).toFixed(1)}" rx="4" fill="${item.color}"/>`,
+        `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="6" fill="${item.color}"/>`,
       );
       if (value > 0) {
+        // Keep numbers inside short bars so they are not cut by the % pill above.
+        const labelY = h >= 22 ? y + 17 : y + Math.max(h / 2, 9);
+        const labelFill = item.key === 'schedule' ? '#fff' : '#064e1b';
+        const fontSize = h >= 22 ? 18 : 15;
         parts.push(
-          `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#0f241c">${value}</text>`,
+          `<text x="${(x + barW / 2).toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}" font-weight="800" fill="${labelFill}">${value}</text>`,
         );
       }
     });
-    const pct = row.schedule > 0 ? Math.round((row.completed / row.schedule) * 100) : row.completed > 0 ? 100 : 0;
-    const midX = offsetX + index * groupW + groupW / 2;
-    const topY = padT + plotH - (Math.max(row.schedule, row.completed) / max) * plotH;
-    parts.push(
-      `<text x="${midX.toFixed(1)}" y="${(topY - 18).toFixed(1)}" text-anchor="middle" font-size="12" font-weight="800" fill="#166534">${pct}%</text>`,
+    const pct = row.schedule > 0
+      ? Math.min(100, Math.round((Math.min(row.completed, row.schedule) / row.schedule) * 100))
+      : row.completed > 0 ? 100 : 0;
+    // Bracket spans only this pair: left of schedule → right of completed.
+    const left = gx;
+    const right = gx + barW * 2 + gap;
+    const midX = (left + right) / 2;
+    const tallH = Math.max(
+      (row.schedule / max) * plotH,
+      (row.completed / max) * plotH,
+      row.schedule || row.completed ? 3 : 0,
     );
-    const lines = wrapChartLabel(row.group, n <= 2 ? 18 : n <= 4 ? 14 : 12);
-    lines.forEach((line, lineIndex) => {
-      parts.push(
-        `<text x="${midX.toFixed(1)}" y="${(height - 44 + lineIndex * 13).toFixed(1)}" text-anchor="middle" font-size="12" fill="#374151">${pdfText(line)}</text>`,
-      );
-    });
+    const topY = padT + plotH - tallH;
+    const lift = tallH < 28 ? 22 : 14;
+    parts.push(
+      `<line x1="${left.toFixed(1)}" y1="${(topY - 4).toFixed(1)}" x2="${left.toFixed(1)}" y2="${(topY - 14).toFixed(1)}" stroke="#b6f08a" stroke-width="2" stroke-linecap="round"/>`,
+      `<line x1="${left.toFixed(1)}" y1="${(topY - 14).toFixed(1)}" x2="${right.toFixed(1)}" y2="${(topY - 14).toFixed(1)}" stroke="#b6f08a" stroke-width="2" stroke-linecap="round"/>`,
+      `<line x1="${right.toFixed(1)}" y1="${(topY - 14).toFixed(1)}" x2="${right.toFixed(1)}" y2="${(topY - 4).toFixed(1)}" stroke="#b6f08a" stroke-width="2" stroke-linecap="round"/>`,
+    );
+    const pill = `${pct}%`;
+    const pillW = Math.max(58, pill.length * 11 + 24);
+    parts.push(
+      `<rect x="${(midX - pillW / 2).toFixed(1)}" y="${(topY - 28 - lift).toFixed(1)}" width="${pillW}" height="28" rx="14" fill="#c8f7a6"/>`,
+      `<text x="${midX.toFixed(1)}" y="${(topY - 14 - lift).toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="800" fill="#064e1b">${pill}</text>`,
+    );
   });
-  const legend = series
-    .map((item) => `<span class="mp-key"><i style="background:${item.color}"></i>${item.name}</span>`)
+  const scheduleTotal = data.reduce((sum, row) => sum + row.schedule, 0);
+  const completedTotal = data.reduce((sum, row) => sum + row.completed, 0);
+  const cappedCompleted = data.reduce(
+    (sum, row) => sum + (row.schedule > 0 ? Math.min(row.completed, row.schedule) : 0),
+    0,
+  );
+  const overallPct = scheduleTotal > 0
+    ? Math.round((cappedCompleted / scheduleTotal) * 100)
+    : completedTotal > 0 ? 100 : 0;
+  const pctLabel = `${overallPct}%`;
+  // Same band geometry as bars (offsetX + usable), so chips stay under each pair.
+  const catInset = ((offsetX / width) * 100).toFixed(2);
+  const catSpan = ((usable / width) * 100).toFixed(2);
+  const cats = data
+    .map(
+      (row) =>
+        `<div class="mp-perf-cat">${pdfGroupIcon(row.group)}<span class="mp-perf-cat-label">${pdfText(row.group)}</span></div>`,
+    )
     .join('');
-  return `<div class="mp-inspect-chart"><div class="mp-inspect-chart-head"><strong>${pdfText(title)}</strong><span>Schedule vs completed by site group</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${pdfText(title)}">${parts.join('')}</svg><div class="mp-legend">${legend}</div></div>`;
+  const stat = (
+    label: string,
+    value: string,
+    icon: string,
+    accent = false,
+  ) =>
+    `<div class="mp-perf-stat${accent ? ' accent' : ''}">${icon}<div><em>${label}</em><strong>${value}</strong></div></div>`;
+  const ico = (path: string, size = 21) =>
+    `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="#147a3a" aria-hidden="true"><path d="${path}"/></svg>`;
+  // Same icons as on-screen reference rail.
+  const icoCheck = ico('M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z', 21);
+  const icoCal = ico('M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z');
+  const icoDone = ico('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z');
+  const icoAim = ico('M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z');
+  return `<div class="mp-perf-card">
+    <div class="mp-perf-head"><strong>${pdfText(title)}</strong><span>Schedule vs completed by site group</span></div>
+    <div class="mp-perf-layout">
+      <div class="mp-perf-main">
+        <div class="mp-perf-body">
+          <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${pdfText(title)}">${parts.join('')}</svg>
+          <div class="mp-perf-cats" style="margin-left:${catInset}%;width:${catSpan}%">${cats}</div>
+        </div>
+        <div class="mp-perf-foot">
+          <div class="mp-legend">
+            <span class="mp-key"><i style="background:#064e1b"></i>Schedule for this month</span>
+            <span class="mp-key"><i style="background:#9ff36c"></i>Completed</span>
+          </div>
+        </div>
+      </div>
+      <div class="mp-perf-stats">
+        ${stat('Overall Completion', pctLabel, icoCheck, true)}
+        ${stat('Total Scheduled', String(scheduleTotal), icoCal)}
+        ${stat('Total Completed', String(completedTotal), icoDone)}
+        ${stat('Completion Rate', pctLabel, icoAim)}
+      </div>
+    </div>
+  </div>`;
 }
 
 function serviceChartSvg(rows: { name: string; value: number }[]) {
@@ -1096,7 +1502,8 @@ function serviceChartSvg(rows: { name: string; value: number }[]) {
   paths.push(`<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="13" font-weight="700" fill="#0f5c3f">${total}</text>`);
   paths.push(`<text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="13" fill="#6b7280">jobs</text>`);
   const legend = slices.map((row, index) => {
-    return `<div class="mp-slice"><i style="background:${CHART_COLORS[index % CHART_COLORS.length]}"></i><span>${pdfText(row.name)}</span><b>${row.value}</b></div>`;
+    const pct = total > 0 ? Math.round((row.value / total) * 100) : 0;
+    return `<div class="mp-slice"><i style="background:${CHART_COLORS[index % CHART_COLORS.length]}"></i><span>${pdfText(row.name)}</span><b>${row.value} · ${pct}%</b></div>`;
   }).join('');
   return `<div class="mp-donut"><svg viewBox="0 0 156 156" role="img" aria-label="Work by service">${paths.join('')}</svg><div class="mp-slices">${legend}</div></div>`;
 }
@@ -1125,6 +1532,7 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
   const invoices = asRows(draft.invoices);
   const variations = asRows(draft.variations);
   const adhoc = asRows(draft.adhoc);
+  const consumables = asRows(draft.consumables);
 
   const streamHtml = streams.map((stream) => {
     const summary = asRows(stream.summary);
@@ -1152,27 +1560,97 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
       ]),
       [3, 4],
     );
-    const visitTable = visits.length
-      ? pdfTable(
-          showQuality
-            ? ['Sites', 'Date of Inspection', 'Cleaning Quality(%)', 'Comments']
-            : ['Sites', 'Date of Service', 'Comments'],
-          visits.map((row) =>
-            showQuality
-              ? [
-                  String(row.site || ''),
-                  String(row.dates || row.date || ''),
-                  String(row.quality || ''),
-                  String(row.comments || ''),
-                ]
-              : [
-                  String(row.site || ''),
-                  String(row.dates || row.date || ''),
-                  String(row.comments || ''),
-                ],
-          ),
-          showQuality ? [2] : [],
-        )
+    const isPdfAmenityParent = (row: Record<string, unknown>) => {
+      if (row.isGroupHeader) return true;
+      const site = String(row.site || '');
+      if (!/\bpublic\s+amenities\b/i.test(site)) return false;
+      const hasDates = String(row.dates || row.date || '').trim().length > 0;
+      return !hasDates;
+    };
+    const childSiteCell = (site: string): PdfCell => ({
+      html: `<span class="mp-visit-child-site"><span class="mp-visit-site-ico">⌂</span><strong>${pdfText(site)}</strong></span>`,
+    });
+    const blankVisitCell: PdfCell = { html: '&nbsp;' };
+    const visitTextCell = (value: unknown): PdfCell | string => {
+      const text = String(value ?? '').trim();
+      return text || blankVisitCell;
+    };
+    // Parent name sits above each child table (Bayside / Mascot on top of their parks).
+    type PdfVisitBlock = { parent: string | null; rows: Record<string, unknown>[] };
+    const pdfBlocks: PdfVisitBlock[] = [];
+    let pdfCurrent: PdfVisitBlock | null = null;
+    visits.forEach((row) => {
+      if (isPdfAmenityParent(row)) {
+        pdfCurrent = { parent: String(row.site || '').replace(/\s+/g, ' ').trim(), rows: [] };
+        pdfBlocks.push(pdfCurrent);
+        return;
+      }
+      if (pdfCurrent && row.isGroupChild) {
+        pdfCurrent.rows.push(row);
+        return;
+      }
+      pdfCurrent = null;
+      const last = pdfBlocks[pdfBlocks.length - 1];
+      if (last && !last.parent) last.rows.push(row);
+      else pdfBlocks.push({ parent: null, rows: [row] });
+    });
+    const pdfRank = (block: PdfVisitBlock) => {
+      if (!block.parent) return 50;
+      if (/bayside/i.test(block.parent)) return 0;
+      if (/mascot/i.test(block.parent)) return 1;
+      return 10;
+    };
+    pdfBlocks.sort((a, b) => pdfRank(a) - pdfRank(b));
+    const tableForRows = (blockRows: Record<string, unknown>[]) => {
+      if (!blockRows.length) {
+        return showQuality
+          ? pdfTable(['Sites', 'Date of Inspection', 'Cleaning Quality(%)', 'Comments'], [])
+          : pdfTable(['Sites', 'Date of Service', 'Comments'], []);
+      }
+      if (showQuality) {
+        return pdfTable(
+          ['Sites', 'Date of Inspection', 'Cleaning Quality(%)', 'Comments'],
+          blockRows.map((row) => {
+            const isChild = Boolean(row.isGroupChild);
+            const quality = String(row.quality || '').trim();
+            const qualityCell = /satisfactory|good|excellent|pass/i.test(quality)
+              ? { html: `<span class="mp-quality-pill">${pdfText(quality)}</span>` }
+              : visitTextCell(quality);
+            return [
+              isChild ? childSiteCell(String(row.site || '')) : String(row.site || ''),
+              visitTextCell(row.dates || row.date),
+              qualityCell,
+              visitTextCell(row.comments),
+            ];
+          }),
+          [2],
+        );
+      }
+      return pdfTable(
+        ['Sites', 'Date of Service', 'Comments'],
+        blockRows.map((row) => {
+          const isChild = Boolean(row.isGroupChild);
+          return [
+            isChild ? childSiteCell(String(row.site || '')) : String(row.site || ''),
+            visitTextCell(row.dates || row.date),
+            visitTextCell(row.comments),
+          ];
+        }),
+      );
+    };
+    const visitBlock = visits.length
+      ? pdfBlocks.map((block) => {
+        // Skip empty parent amenity shells (no dated child rows) — common on Adhoc drafts.
+        const datedRows = block.rows.filter((row) => String(row.dates || row.date || '').trim());
+        if (block.parent && !datedRows.length) return '';
+        const head = block.parent
+          ? `<div class="mp-visit-parent-head"><span class="mp-visit-parent-ico">▣</span><strong class="mp-visit-group">${pdfText(block.parent)}</strong></div>`
+          : '';
+        const body = tableForRows(block.parent ? datedRows : block.rows);
+        return block.parent
+          ? `<div class="mp-visit-block">${head}<div class="mp-visit-card">${body}</div></div>`
+          : body;
+      }).filter(Boolean).join('')
       : '';
     const detailHead = String(stream.detailHeading || '').trim();
     const detailNote = String(stream.detailNote || '').trim();
@@ -1180,19 +1658,34 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     return `<div class="mp-stream"><h3>${pdfText(String(stream.heading || 'Service'))}</h3>${
       String(stream.note || '').trim() ? `<p class="mp-note">${pdfText(String(stream.note))}</p>` : ''
     }${summaryTable}${chartHtml}${
-      detailHead || visitTable
+      detailHead || visitBlock
         ? `${detailHead ? `<h3>${pdfText(detailHead)}</h3>` : ''}${
             detailNote ? `<p class="mp-note">${pdfText(detailNote)}</p>` : ''
-          }${visitTable}`
+          }${visitBlock}`
         : ''
     }</div>`;
   }).join('');
+
+  const jobsCompleted = pdfText(pdfNil(draft.jobs));
+  const locationsServiced = pdfText(pdfNil(draft.locations));
+  const periodService = String(draft.serviceLine || '').replace(/\s+/g, ' ').trim();
+  const periodReportName = periodService
+    ? (/report$/i.test(periodService) ? periodService : `${periodService} Report`)
+    : '';
+  const periodBar = `${pdfText(periodReportName)}${periodReportName && (draft.periodRange || draft.periodLabel) ? ' – ' : ''}${pdfText(String(draft.periodRange || draft.periodLabel || ''))}`;
 
   return `<style>
     .tcontent--monthly { border: none; background: transparent; }
     .mp, .mp p, .mp td, .mp th, .mp h2, .mp h3, .mp span, .mp strong, .mp b, .mp em, .mp .pill { font-size: 13px; line-height: 1.45; }
     .mp { color: #1f2937; }
-    .mp-toc { margin: 0 0 14px; padding: 10px 12px; border: 1px solid #d1fae5; border-radius: 10px; background: #f0fdf4; break-inside: avoid; page-break-inside: avoid; }
+    .mp-cover { break-after: page; page-break-after: always; }
+    .mp-identity { display: flex; gap: 0; margin: 0 0 12px; border: 1px solid #d7e3dc; border-radius: 10px; overflow: hidden; background: #fff; }
+    .mp-identity > div { flex: 1; display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-right: 1px solid #dce5dd; }
+    .mp-identity > div:last-child { border-right: none; }
+    .mp-id-ico { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; color: #246a38; }
+    .mp-identity em { display: block; font-style: normal; font-weight: 800; color: #18241b; font-size: 11px; margin-bottom: 3px; }
+    .mp-identity strong { display: block; font-weight: 700; white-space: pre-wrap; color: #0f241c; font-size: 12px; line-height: 1.35; }
+    .mp-toc { margin: 0; padding: 8px 10px; border: 1px solid #d1fae5; border-radius: 10px; background: #f0fdf4; break-inside: avoid; page-break-inside: avoid; }
     .mp-toc h2 { margin: 0 0 8px; padding: 7px 10px; background: #166534; color: #fff; border-radius: 8px; font-weight: 700; }
     .mp-toc-row { display: flex; align-items: baseline; gap: 6px; margin: 0 0 3px; font-weight: 700; color: #0f241c; }
     .mp-toc-row.sub { padding-left: 14px; font-weight: 400; color: #4d6359; }
@@ -1200,19 +1693,19 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     .mp-toc-row a:hover { color: #166534; text-decoration: underline; }
     .mp-toc-row i { flex: 1; min-width: 16px; border-bottom: 1px dotted #9ca3af; }
     .mp-toc-row b { flex: 0 0 auto; font-weight: 700; color: #166534; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .mp-kpis { display: flex; gap: 8px; margin: 10px 0 0; }
-    .mp-kpi { flex: 1; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 10px 12px; }
-    .mp-kpi-v { font-weight: 700; color: #166534; line-height: 1.2; }
-    .mp-kpi-l { margin-top: 2px; font-weight: 700; color: #4d6359; }
-    .mp-identity { display: flex; gap: 16px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; }
-    .mp-identity div { flex: 1; }
-    .mp-identity span { display: block; font-weight: 700; color: #6b7280; }
-    .mp-identity strong { display: block; margin-top: 2px; font-weight: 600; white-space: pre-wrap; }
-    .mp-glance { margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; page-break-before: always; break-before: page; }
-    .mp-period { margin: 10px 0 0; color: #4d6359; font-weight: 700; }
+    .mp-glance { margin: 0 0 8px; border: 1px solid #d1fae5; border-radius: 10px; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+    .mp-glance > h2 { margin: 0; border-radius: 0; background: linear-gradient(90deg, #165624 0%, #388e3c 100%); }
+    .mp-glance-lead { margin: 0; padding: 6px 12px 0; color: #f0f8ec; font-size: 12px; }
+    .mp-glance-grid { display: flex; gap: 8px; padding: 8px; background: #fff; }
+    .mp-stats { width: 150px; flex: 0 0 150px; display: flex; flex-direction: column; gap: 6px; }
+    .mp-stat { display: flex; align-items: center; gap: 8px; background: #eaf4ec; border-radius: 8px; padding: 7px 8px; }
+    .mp-stat-ico { width: 16px; height: 16px; flex: 0 0 16px; color: #2c7a3f; }
+    .mp-stat strong { display: block; color: #18241b; font-size: 16px; line-height: 1.1; }
+    .mp-stat span { display: block; color: #2e3a31; font-weight: 600; font-size: 11px; }
+    .mp-period-bar { margin: 0 8px 10px; padding: 8px 12px; border-radius: 8px; background: #eaf4ec; border: 1px solid #cfe6d4; color: #18241b; font-weight: 800; }
     .mp-glance h2, .mp-sec h2 { margin: 0 0 8px; padding: 7px 10px; background: #166534; color: #fff; border-radius: 8px; font-weight: 700; }
     .mp-lead { margin: 0 0 10px; color: #4d6359; }
-    .mp-charts { display: flex; gap: 10px; }
+    .mp-charts { display: flex; gap: 8px; flex: 1; min-width: 0; }
     .mp-card { flex: 1; min-width: 0; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 10px 8px; background: #fff; }
     .mp-card h3 { margin: 0; font-weight: 700; color: #0f241c; }
     .mp-card p { margin: 2px 0 6px; color: #6b7280; }
@@ -1221,7 +1714,7 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     .mp-key, .mp-slice { display: inline-flex; align-items: center; gap: 4px; color: #374151; }
     .mp-key i, .mp-slice i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
     .mp-donut { display: flex; align-items: center; gap: 8px; }
-    .mp-donut svg { width: 132px; flex: 0 0 132px; }
+    .mp-donut svg { width: 120px; flex: 0 0 120px; }
     .mp-slices { flex-direction: column; gap: 3px; }
     .mp-slice b { margin-left: auto; }
     .mp-sec { margin-top: 14px; page-break-before: always; break-before: page; }
@@ -1235,69 +1728,126 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
     .mp-table td.num, .mp-table th:nth-child(n) { }
     .mp-table td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
     .mp-table td.nil, .mp-nil, .mp-muted { color: #6b7280; }
+    .mp-visit-block { margin: 0 0 12px; border: 1px solid #d7e5db; border-radius: 10px; overflow: hidden; }
+    .mp-visit-parent-head {
+      display: flex; align-items: center; gap: 10px; margin: 0;
+      padding: 10px 12px; background: linear-gradient(90deg, #0f5c3f 0%, #1f7a45 100%);
+    }
+    .mp-visit-parent-ico { color: #fff; font-size: 14px; line-height: 1; }
+    .mp-visit-group { color: #fff; font-weight: 800; white-space: nowrap; font-size: 13px; }
+    .mp-visit-card { background: #fff; }
+    .mp-visit-card .mp-table { margin: 0; }
+    .mp-visit-card .mp-table th { background: #eaf7ee; color: #0f5c3f; }
+    .mp-visit-child-site { display: inline-flex; align-items: center; gap: 6px; color: #0f5c3f; }
+    .mp-visit-child-site strong { font-weight: 800; }
+    .mp-visit-site-ico {
+      display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center;
+      border-radius: 4px; background: #e7f6eb; color: #166534; font-size: 10px;
+    }
+    .mp-quality-pill {
+      display: inline-block; padding: 3px 10px; border-radius: 999px;
+      background: #e7f6eb; color: #0f5c3f; font-weight: 800; font-size: 11px;
+    }
     .mp-stream { margin-bottom: 8px; }
-    .mp-inspect-chart { margin: 10px 0 12px; padding: 12px 14px 10px; border: 1px solid #d1fae5; border-radius: 12px; background: linear-gradient(180deg, #f7fbf8 0%, #fff 48%); break-inside: avoid; page-break-inside: avoid; }
-    .mp-inspect-chart-head { margin: 0 0 6px; }
-    .mp-inspect-chart-head strong { display: block; font-size: 13px; color: #0f241c; }
-    .mp-inspect-chart-head span { display: block; margin-top: 2px; font-size: 12px; color: #6b7280; }
-    .mp-inspect-chart svg { width: 100%; height: auto; display: block; }
-    .mp-inspect-chart .mp-legend { margin-top: 6px; justify-content: center; gap: 12px 18px; }
+    .mp-perf-card, .mp-perf-banner, .mp-perf-body, .mp-perf-foot, .mp-perf-cat, .mp-perf-stat, .mp-perf-stat strong {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .mp-perf-card { margin: 10px 0 12px; border: 1px solid #d5e3d9; border-radius: 14px; overflow: hidden; background: #fff; break-inside: avoid; page-break-inside: avoid; }
+    .mp-perf-head { padding: 12px 14px 8px; background: #fff; border-bottom: 1px solid #edf3ee; }
+    .mp-perf-head strong { display: block; font-size: 13px; font-weight: 800; color: #12241b; line-height: 1.35; }
+    .mp-perf-head span { display: block; margin-top: 3px; font-size: 11px; color: #5a6d62; }
+    .mp-perf-layout { display: table; width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 10px; padding: 4px 4px 8px; }
+    .mp-perf-main, .mp-perf-stats { display: table-cell; vertical-align: top; }
+    .mp-perf-main { width: 80%; border: 1px solid #e4eee7; border-radius: 12px; overflow: hidden; }
+    .mp-perf-stats { width: 20%; }
+    .mp-perf-body { padding: 6px 10px 8px; background: #fff; }
+    .mp-perf-body > svg { width: 100%; height: auto; display: block; }
+    .mp-perf-cats { display: table; table-layout: fixed; border-collapse: separate; border-spacing: 0; margin-top: 8px; box-sizing: border-box; }
+    .mp-perf-cat { display: table-cell; vertical-align: top; padding: 10px 4px 8px; border-radius: 10px; background: #f4faf5; border: 1px solid #ddeee1; text-align: center; color: #12241b; font-size: 10px; font-weight: 700; line-height: 1.2; }
+    .mp-perf-cat-ico { display: inline-flex; width: 28px; height: 28px; border-radius: 999px; align-items: center; justify-content: center; background: #fff; border: 1px solid #cfe8c4; margin: 0 auto 6px; }
+    .mp-perf-cat-ico svg { display: block; margin: 0; width: 16px; height: 16px; }
+    .mp-perf-cat-label { display: block; }
+    .mp-perf-foot { margin: 0; padding: 8px 10px; border-top: 1px solid #e4eee7; background: #f7faf8; }
+    .mp-perf-foot .mp-legend { margin: 0; gap: 12px 16px; }
+    .mp-perf-stat { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; padding: 11px 10px; border: 1px solid #d9e7dc; border-radius: 12px; background: #f8fbf9; color: #0f241c; }
+    .mp-perf-stat:last-child { margin-bottom: 0; }
+    .mp-perf-stat.accent { background: #eef9d8; border-color: #c4e89a; }
+    .mp-perf-stat svg { flex: 0 0 auto; display: block; width: 20px; height: 20px; }
+    .mp-perf-stat em { display: block; font-style: normal; font-size: 10px; font-weight: 600; color: #4d6359; line-height: 1.15; }
+    .mp-perf-stat strong { display: block; margin-top: 2px; font-size: 16px; font-weight: 800; color: #064e1b; line-height: 1; }
+    .mp-perf-stat.accent strong { font-size: 17px; }
   </style>
   <div class="mp">
-    <div class="mp-identity">
-      <div><span>Client</span><strong>${pdfText(pdfNil(draft.clientName))}</strong></div>
-      <div><span>Address</span><strong>${pdfText(pdfNil(draft.address))}</strong></div>
-      <div><span>Contact</span><strong>${pdfText(pdfNil(draft.contact))}</strong></div>
-      <div><span>Prepared by</span><strong>${pdfText(pdfNil(draft.preparedBy))}</strong></div>
-    </div>
-    <div class="mp-toc">
-      <h2>Table of contents</h2>
-      <div class="mp-toc-row"><a href="#mp-glance">This month at a glance</a><i></i><b>Page 2</b></div>
-      <div class="mp-toc-row"><a href="#mp-overview">1. Overview</a><i></i><b>Page 3</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-overview-delivery">1.1 Service delivery</a><i></i><b>Page 3</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-overview-disruption">1.2 Service disruption</a><i></i><b>Page 3</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-overview-minutes">1.3 Previous minutes</a><i></i><b>Page 3</b></div>
-      <div class="mp-toc-row"><a href="#mp-contract">2. Contract review</a><i></i><b>Page 4</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-contract-compliance">2.1 Contract compliance and KPI</a><i></i><b>Page 4</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-contract-whs">2.2 Work health and safety</a><i></i><b>Page 4</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-contract-env">2.3 Environmental issues</a><i></i><b>Page 4</b></div>
-      <div class="mp-toc-row"><a href="#mp-inspections">3. Inspections</a><i></i><b>Page 5</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-inspections-sites">3.1 Site inspections</a><i></i><b>Page 5</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-faults">3.2 Faults Reports</a><i></i><b>Page 5</b></div>
-      <div class="mp-toc-row"><a href="#mp-staffing">4. Staffing</a><i></i><b>Page 6</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-staffing-toolbox">4.1 Toolbox talk</a><i></i><b>Page 6</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-staffing-changes">4.2 Staff changes</a><i></i><b>Page 6</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-staffing-feedback">4.3 Staff feedback</a><i></i><b>Page 6</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-staffing-recognition">4.4 Staffing recognition award</a><i></i><b>Page 6</b></div>
-      <div class="mp-toc-row"><a href="#mp-financials">5. Financials</a><i></i><b>Page 7</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-financials-invoices">5.1 Overdue invoices</a><i></i><b>Page 7</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-financials-variations">5.2 Contract variations</a><i></i><b>Page 7</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-financials-adhoc">5.3 Adhoc work request</a><i></i><b>Page 7</b></div>
-      <div class="mp-toc-row sub"><a href="#mp-financials-quotes">5.4 Quotes</a><i></i><b>Page 7</b></div>
+    <div class="mp-cover">
+      <div class="mp-identity">
+        <div>
+          <svg class="mp-id-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          <div><em>Client</em><strong>${pdfText(pdfNil(draft.clientName))}</strong></div>
+        </div>
+        <div>
+          <svg class="mp-id-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg>
+          <div><em>Address</em><strong>${pdfText(pdfNil(draft.address))}</strong></div>
+        </div>
+        <div>
+          <svg class="mp-id-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.01-.24c1.12.37 2.33.57 3.58.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.4 21 3 13.6 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.58a1 1 0 0 1-.25 1.02l-2.2 2.19z"/></svg>
+          <div><em>Contact</em><strong>${pdfText(pdfNil(draft.contact)).replace(/\s*·\s*/g, '\n')}</strong></div>
+        </div>
+        <div>
+          <svg class="mp-id-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 7V3.5L19.5 9H15zM12 11c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm4 8H8v-1.2c0-1.33 2.67-2 4-2s4 .67 4 2V19z"/></svg>
+          <div><em>Prepared by</em><strong>${pdfText(pdfNil(draft.preparedBy))}</strong></div>
+        </div>
+      </div>
+      <div class="mp-toc">
+        <h2>Table of contents</h2>
+        <div class="mp-toc-row"><a href="#mp-glance">This month at a glance</a><i></i><b>Page 2</b></div>
+        <div class="mp-toc-row"><a href="#mp-overview">1. Overview</a><i></i><b>Page 3</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-overview-delivery">1.1 Service delivery</a><i></i><b>Page 3</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-overview-disruption">1.2 Service disruption</a><i></i><b>Page 3</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-overview-minutes">1.3 Previous minutes</a><i></i><b>Page 3</b></div>
+        <div class="mp-toc-row"><a href="#mp-contract">2. Contract review</a><i></i><b>Page 4</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-contract-compliance">2.1 Contract compliance and KPI</a><i></i><b>Page 4</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-contract-whs">2.2 Work health and safety</a><i></i><b>Page 4</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-contract-env">2.3 Environmental issues</a><i></i><b>Page 4</b></div>
+        <div class="mp-toc-row"><a href="#mp-inspections">3. Inspections</a><i></i><b>Page 5</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-inspections-sites">3.1 Site inspections</a><i></i><b>Page 5</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-faults">3.2 Faults Reports</a><i></i><b>Page 5</b></div>
+        <div class="mp-toc-row"><a href="#mp-staffing">4. Staffing</a><i></i><b>Page 6</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-staffing-toolbox">4.1 Toolbox talk</a><i></i><b>Page 6</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-staffing-changes">4.2 Staff changes</a><i></i><b>Page 6</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-staffing-feedback">4.3 Staff feedback</a><i></i><b>Page 6</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-staffing-recognition">4.4 Staffing recognition award</a><i></i><b>Page 6</b></div>
+        <div class="mp-toc-row"><a href="#mp-financials">5. Financials</a><i></i><b>Page 7</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-financials-invoices">5.1 Overdue invoices</a><i></i><b>Page 7</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-financials-variations">5.2 Contract variations</a><i></i><b>Page 7</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-financials-adhoc">5.3 Adhoc work request</a><i></i><b>Page 7</b></div>
+        <div class="mp-toc-row sub"><a href="#mp-financials-quotes">5.4 Quotes</a><i></i><b>Page 7</b></div>
+      </div>
     </div>
     <div class="mp-glance" id="mp-glance">
-      <h2>This month at a glance</h2>
-      ${String(draft.glanceNote || '').trim() ? `<p class="mp-lead">${pdfText(pdfNil(draft.glanceNote))}</p>` : ''}
-      <div class="mp-charts">
-        <article class="mp-card">
-          <h3>Weekly volume</h3>
-          <p>Completed jobs, faults, and tickets</p>
-          ${weeklyChartSvg(weekly)}
-        </article>
-        <article class="mp-card">
-          <h3>Work by service</h3>
-          <p>${pdfText(String(draft.periodLabel || ''))}</p>
-          ${serviceChartSvg(services)}
-        </article>
+      <h2>This month at a glance <span style="float:right;font-weight:500;font-size:12px;opacity:.9">Weekly volume and work by service.</span></h2>
+      <div class="mp-glance-grid">
+        <div class="mp-stats">
+          <div class="mp-stat"><svg class="mp-stat-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm-2 14l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg><div><strong>${serviceTotal || jobsCompleted}</strong><span>Service jobs</span></div></div>
+          <div class="mp-stat"><svg class="mp-stat-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg><div><strong>${jobsCompleted}</strong><span>Jobs completed</span></div></div>
+          <div class="mp-stat"><svg class="mp-stat-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/></svg><div><strong>${locationsServiced}</strong><span>Locations serviced</span></div></div>
+          <div class="mp-stat"><svg class="mp-stat-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.7 19.3l-1.4 1.4a1 1 0 0 1-1.4 0L11.5 12.3l-2.1 2.1 1.4 1.4a1 1 0 0 1 0 1.4l-1.4 1.4a1 1 0 0 1-1.4 0L2.7 13.3a1 1 0 0 1 0-1.4l1.4-1.4a1 1 0 0 1 1.4 0l1.4 1.4 2.1-2.1L2.4 4.2a1 1 0 0 1 0-1.4L3.8 1.4a1 1 0 0 1 1.4 0l6.6 6.6L18.4 1.4a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1 0 1.4L14.6 10l2.1 2.1 1.4-1.4a1 1 0 0 1 1.4 0l1.4 1.4a1 1 0 0 1 0 1.4L18.5 16l2.8 2.8a1 1 0 0 1 1.4.5z"/></svg><div><strong>${faultTotal}</strong><span>Faults resolved</span></div></div>
+          <div class="mp-stat"><svg class="mp-stat-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21.41 11.58l-9-9A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 .59 1.41l9 9a2 2 0 0 0 2.82 0l7-7a2 2 0 0 0 0-2.83zM5.5 7A1.5 1.5 0 1 1 7 5.5 1.5 1.5 0 0 1 5.5 7z"/></svg><div><strong>${ticketTotal}</strong><span>Open tickets</span></div></div>
+        </div>
+        <div class="mp-charts">
+          <article class="mp-card">
+            <h3>Weekly volume</h3>
+            <p>Completed jobs, faults, and tickets</p>
+            ${weeklyChartSvg(weekly)}
+          </article>
+          <article class="mp-card">
+            <h3>Work by service</h3>
+            <p>${pdfText(String(draft.periodLabel || ''))}</p>
+            ${serviceChartSvg(services)}
+          </article>
+        </div>
       </div>
-      <p class="mp-period">${pdfText(String(draft.serviceLine || ''))} · ${pdfText(String(draft.periodRange || draft.periodLabel || ''))}</p>
-      <div class="mp-kpis">
-        <div class="mp-kpi"><div class="mp-kpi-v">${pdfText(pdfNil(draft.jobs))}</div><div class="mp-kpi-l">Jobs completed</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-v">${pdfText(pdfNil(draft.locations))}</div><div class="mp-kpi-l">Locations</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-v">${faultTotal}</div><div class="mp-kpi-l">Faults</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-v">${ticketTotal}</div><div class="mp-kpi-l">Tickets</div></div>
-        <div class="mp-kpi"><div class="mp-kpi-v">${serviceTotal || services.length}</div><div class="mp-kpi-l">Service jobs</div></div>
-      </div>
+      ${periodBar ? `<div class="mp-period-bar">${periodBar}</div>` : ''}
     </div>
     ${pdfSection('1. Overview', [
       `<div id="mp-overview-delivery">${pdfProse('1.1 Service delivery', draft.serviceDelivery)}</div>`,
@@ -1368,6 +1918,17 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
         )
         : pdfProse('5.3 Adhoc work request', draft.adhocComments)}${adhoc.length ? pdfProse('Adhoc comments', draft.adhocComments) : ''}</div>`,
       `<div id="mp-financials-quotes">${pdfProse('5.4 Quotes', draft.quotes)}</div>`,
+      `<div id="mp-financials-consumables">${consumables.length
+        ? pdfTable(
+          ['Date', 'Site', 'Subject', 'Items'],
+          consumables.map((row) => [
+            String(row.date || ''),
+            String(row.site || ''),
+            String(row.subject || ''),
+            String(row.items || row.itemsLabel || ''),
+          ]),
+        )
+        : pdfProse('5.5 Consumables delivered', draft.consumablesComments)}${consumables.length ? pdfProse('Consumables comments', draft.consumablesComments) : ''}</div>`,
     ].join(''), 'mp-financials')}
   </div>`;
 }

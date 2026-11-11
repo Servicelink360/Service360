@@ -909,14 +909,36 @@ body.app-shell-dark .mr-list-bar .ant-picker,
 }
 
 .marketing-site .mr-editing .mr-edit-area {
-  min-height: 52px;
-  resize: vertical;
+  min-height: 32px;
+  resize: none;
 }
 
+/* Grow to full text — no inner vertical scrollbar on any edit field.
+   Do not force height:auto (that fights measured height and causes scrollbars). */
+.marketing-site .mr-editing .ant-input-textarea,
+.marketing-site .mr-editing .ant-input-textarea-show-count,
+.marketing-site .mr-editing .ant-input-textarea > textarea,
+.marketing-site .mr-editing textarea.ant-input,
+.marketing-site .mr-editing .mr-edit-area,
 .marketing-site .mr-editing .mr-edit-grow {
-  max-height: none;
-  overflow: hidden;
-  resize: none;
+  max-height: none !important;
+  overflow: hidden !important;
+  overflow-y: hidden !important;
+  overflow-x: hidden !important;
+  resize: none !important;
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  line-height: 1.45;
+  box-sizing: border-box;
+  scrollbar-width: none;
+}
+
+.marketing-site .mr-editing .ant-input-textarea > textarea::-webkit-scrollbar,
+.marketing-site .mr-editing textarea.ant-input::-webkit-scrollbar,
+.marketing-site .mr-editing .mr-edit-grow::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .marketing-site .mr-editing .mr-hero-meta .mr-edit-inline.ant-input,
@@ -928,11 +950,46 @@ body.app-shell-dark .mr-list-bar .ant-picker,
 
 .marketing-site .mr-editing .mr-table .mr-edit-inline.ant-input {
   width: 100%;
-  max-width: 8rem;
+  max-width: none;
 }
 
 .marketing-site .mr-editing .mr-table td .mr-edit-area {
-  min-height: 36px;
+  min-height: 32px;
+}
+
+.marketing-site .mr-editing .mr-table td,
+.marketing-site .mr-editing .mr-table--sites td,
+.marketing-site .mr-editing .mr-table--visits td {
+  overflow: visible !important;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.marketing-site .mr-editing .mr-table .mr-edit-fill.ant-input,
+.marketing-site .mr-editing .mr-table .mr-edit-area,
+.marketing-site .mr-editing .mr-table textarea.ant-input,
+.marketing-site .mr-editing .mr-table .ant-input-textarea textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  white-space: pre-wrap !important;
+  overflow: hidden !important;
+  overflow-y: hidden !important;
+  word-break: break-word;
+  scrollbar-width: none;
+}
+
+.marketing-site .mr-editing .mr-table-wrap,
+.marketing-site .mr-editing .mr-page--app .mr-table-wrap {
+  overflow: visible !important;
+}
+
+.marketing-site .mr-table td > span {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .marketing-site .mr-page--app .mr-hero {
@@ -1120,26 +1177,271 @@ body.app-shell-dark .mr-list-bar .ant-picker,
   box-shadow: none;
 }
 
-.marketing-site .mr-inspect-chart-card {
+.marketing-site .mr-perf-card {
   margin: 14px 0 18px;
   overflow: hidden;
-  border-radius: 14px;
-  border: 1px solid #d1fae5;
-  background: linear-gradient(180deg, #f7fbf8 0%, #ffffff 42%);
-  box-shadow: 0 1px 2px rgba(15, 36, 28, 0.05);
+  border-radius: 16px;
+  border: 1px solid #d5e3d9;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 36, 28, 0.06);
 }
 
-.marketing-site .mr-inspect-chart-card .mr-chart-card-head {
-  padding: 14px 16px 6px;
+.marketing-site .mr-perf-card .mr-chart-card-head {
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid #edf3ee;
 }
 
-.marketing-site .mr-inspect-chart-card .mr-chart-card-head h3 {
-  font-size: 1rem;
+.marketing-site .mr-perf-card .mr-chart-card-head h3 {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #12241b;
   line-height: 1.35;
 }
 
-.marketing-site .mr-inspect-chart-card .mr-chart-card-body {
-  padding: 4px 8px 12px;
+.marketing-site .mr-perf-card .mr-chart-card-head p {
+  margin-top: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #5a6d62;
+}
+
+.marketing-site .mr-perf-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 172px;
+  gap: 12px;
+  align-items: stretch;
+  padding: 12px 14px 14px;
+}
+
+.marketing-site .mr-perf-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e4eee7;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.marketing-site .mr-perf-body {
+  padding: 8px 14px 12px;
+  background: linear-gradient(180deg, #fcfefc 0%, #fff 40%);
+}
+
+.marketing-site .mr-perf-chart-wrap {
+  overflow: visible;
+}
+
+.marketing-site .mr-inspect-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.marketing-site .mr-perf-cats {
+  display: grid;
+  gap: 0;
+  margin-top: 6px;
+}
+
+.marketing-site .mr-perf-cat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 78px;
+  margin: 0 3px;
+  padding: 12px 6px 10px;
+  border-radius: 12px;
+  background: #f4faf5;
+  border: 1px solid #ddeee1;
+  color: #12241b;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-sizing: border-box;
+}
+
+
+.marketing-site .mr-perf-cat-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  color: #0d6b2f;
+  border: 1px solid #cfe8c4;
+  box-shadow: 0 2px 6px rgba(6, 78, 27, 0.08);
+  font-size: 16px;
+}
+
+.marketing-site .mr-perf-cat-ico svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.marketing-site .mr-perf-cat-label {
+  display: block;
+  max-width: 100%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #1a2c23;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.marketing-site .mr-perf-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 11px 14px;
+  border-top: 1px solid #e4eee7;
+  background: #f7faf8;
+}
+
+.marketing-site .mr-perf-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: #24352c;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.marketing-site .mr-perf-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #e1ebe4;
+}
+
+.marketing-site .mr-perf-legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.marketing-site .mr-perf-stats {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  align-self: stretch;
+}
+
+.marketing-site .mr-perf-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 12px 11px;
+  border-radius: 12px;
+  border: 1px solid #d9e7dc;
+  background: #f8fbf9;
+  box-shadow: 0 1px 2px rgba(15, 36, 28, 0.03);
+}
+
+.marketing-site .mr-perf-stat--accent {
+  background: linear-gradient(165deg, #f5ffe9 0%, #e7f7cf 100%);
+  border-color: #c4e89a;
+}
+
+.marketing-site .mr-perf-stat-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  background: #fff;
+  color: #147a3a;
+  border: 1px solid #d3e8d7;
+  box-shadow: 0 1px 3px rgba(6, 78, 27, 0.06);
+  font-size: 18px;
+}
+
+.marketing-site .mr-perf-stat-ico svg {
+  display: block;
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.marketing-site .mr-perf-stat--accent .mr-perf-stat-ico {
+  color: #0f7a32;
+  border-color: #c6ef9a;
+  background: #fff;
+}
+
+.marketing-site .mr-perf-stat--accent .mr-perf-stat-ico svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.marketing-site .mr-perf-stat-copy {
+  min-width: 0;
+}
+
+.marketing-site .mr-perf-stat em {
+  display: block;
+  margin: 0 0 3px;
+  font-style: normal;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4d6359;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.marketing-site .mr-perf-stat strong {
+  display: block;
+  font-size: 1.32rem;
+  font-weight: 800;
+  color: #064e1b;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.marketing-site .mr-perf-stat--accent strong {
+  font-size: 1.45rem;
+}
+
+@media (max-width: 980px) {
+  .marketing-site .mr-perf-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .marketing-site .mr-perf-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .marketing-site .mr-perf-cats {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .marketing-site .mr-perf-stats {
+    grid-template-columns: 1fr;
+  }
 }
 
 .marketing-site .mr-page--app .mr-stream + .mr-stream {
@@ -1223,21 +1525,180 @@ body.app-shell-dark .mr-list-bar .ant-picker,
   color: #0f5c3f;
 }
 
-/* Visits: give Date of Inspection most of the row so dates wrap as a sentence. */
+/* Visits: parent amenity banner + child parks table (mock). */
 .marketing-site .mr-table--visits {
   table-layout: fixed;
   width: 100%;
+  margin: 0;
+  border-collapse: collapse;
 }
 
-.marketing-site .mr-table--visits .mr-col-visit-site { width: 160px; }
+.marketing-site .mr-table--visits .mr-col-visit-site { width: 22%; }
 .marketing-site .mr-table--visits .mr-col-visit-dates { width: auto; }
-.marketing-site .mr-table--visits .mr-col-visit-quality { width: 96px; }
-.marketing-site .mr-table--visits .mr-col-visit-notes { width: 110px; }
+.marketing-site .mr-table--visits .mr-col-visit-quality { width: 150px; }
+.marketing-site .mr-table--visits .mr-col-visit-notes { width: 12%; }
+
+.marketing-site .mr-visit-block {
+  margin: 0 0 18px;
+}
+
+.marketing-site .mr-visit-block--parent {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #d7e5db;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 36, 28, 0.04);
+}
+
+.marketing-site .mr-visit-parent-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 14px 18px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(90deg, #0f5c3f 0%, #166534 42%, #1f7a45 78%, #2f8f52 100%);
+  overflow: hidden;
+}
+
+.marketing-site .mr-visit-parent-ico {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.marketing-site .mr-visit-group-name {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+.marketing-site .mr-visit-parent-grass {
+  position: absolute;
+  right: 8px;
+  bottom: -2px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.92;
+}
+
+.marketing-site .mr-visit-card {
+  background: #fff;
+}
+
+.marketing-site .mr-visit-card--children .mr-table-wrap--visits {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.marketing-site .mr-table--visit-children thead th {
+  background: #eaf7ee !important;
+  color: #0f5c3f !important;
+  border-color: #d7e8dc !important;
+  font-weight: 800;
+}
+
+.marketing-site .mr-visit-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.marketing-site .mr-visit-col-ico {
+  display: inline-flex;
+  color: #166534;
+  line-height: 0;
+}
+
+.marketing-site .mr-table--visits tr.mr-visit-child td {
+  background: #fff;
+  border-color: #e5eee8;
+  vertical-align: top;
+}
+
+.marketing-site .mr-visit-site-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.marketing-site .mr-visit-site-ico {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 1px;
+  border-radius: 8px;
+  background: #e7f6eb;
+  color: #166534;
+}
+
+.marketing-site .mr-table--visits tr.mr-visit-child td.mr-visit-child-site .mr-field-view,
+.marketing-site .mr-table--visits tr.mr-visit-child td.mr-visit-child-site .mr-edit-area,
+.marketing-site .mr-table--visits tr.mr-visit-child td.mr-visit-child-site .ant-input {
+  color: #0f5c3f;
+  font-weight: 800;
+}
 
 .marketing-site .mr-table--visits td.mr-visit-dates {
   overflow: visible;
   width: 100%;
   vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  color: #1f3d2e;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.marketing-site .mr-table--visits td.mr-visit-quality,
+.marketing-site .mr-table--visits td.mr-visit-comments {
+  vertical-align: middle;
+}
+
+.marketing-site .mr-quality-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #e7f6eb;
+  color: #0f5c3f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.marketing-site .mr-editing .mr-table--visits td.mr-visit-dates .mr-edit-area,
+.marketing-site .mr-editing .mr-table--visits td.mr-visit-dates textarea.ant-input {
+  min-height: 48px;
+  width: 100% !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  overflow-y: hidden !important;
 }
 
 .marketing-site .mr-visit-dates .mr-date-links {
@@ -1513,4 +1974,575 @@ body.app-shell-dark .mr-list-bar .ant-picker,
 
 .submitted-report-view-modal .ant-modal-close {
   color: rgba(255, 255, 255, 0.88);
+}
+
+/* �� Monthly report cover (matches ServiceLink cover design) �� */
+.marketing-site .mr-page--cover {
+  gap: 0;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #d7e3dc;
+  box-shadow: 0 8px 28px rgba(15, 36, 28, 0.08);
+}
+
+.marketing-site .mr-cover {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #18241b;
+}
+
+.marketing-site .mr-cover-inset {
+  padding: 14px 16px 16px;
+}
+
+/* Legacy branding/hero blocks must never render on page 1. */
+.marketing-site .mr-cover-hero,
+.marketing-site .mr-cover-hero-strip,
+.marketing-site .mr-cover-brand,
+.marketing-site .mr-cover-company,
+.marketing-site .mr-cover-top {
+  display: none !important;
+}
+
+.marketing-site .mr-cover .mr-cover-titlebar ~ .mr-cover-titlebar {
+  display: none !important;
+}
+
+.marketing-site .mr-cover-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  background: linear-gradient(90deg, #124b22 0%, #2f7a3d 100%);
+  color: #fff;
+  border-radius: 10px;
+}
+
+.marketing-site .mr-cover-title-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.marketing-site .mr-cover-titlebar h1 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.marketing-site .mr-cover-report-name {
+  margin: 0;
+  font-size: clamp(0.92rem, 1.6vw, 1.05rem);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.25;
+}
+
+.marketing-site .mr-cover-report-name .ant-input {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  padding: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  white-space: normal;
+}
+
+.marketing-site .mr-cover-title-divider {
+  display: none;
+}
+
+.marketing-site .mr-cover-month {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.marketing-site .mr-cover-month .ant-input {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-weight: 600;
+  color: #fff;
+  width: auto !important;
+  min-width: 12ch;
+  max-width: none !important;
+  padding: 0;
+  text-align: center;
+}
+
+.marketing-site .mr-editing .mr-cover-identity {
+  overflow: visible;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.marketing-site .mr-editing .mr-cover-id-card {
+  min-height: 0;
+  align-items: flex-start;
+}
+
+.marketing-site .mr-editing .mr-cover-id-card > div {
+  min-width: 0;
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.marketing-site .mr-editing .mr-cover-id-card .ant-input,
+.marketing-site .mr-editing .mr-cover-id-card .mr-edit-area,
+.marketing-site .mr-editing .mr-cover-id-card .ant-input-textarea,
+.marketing-site .mr-editing .mr-cover-id-card .ant-input-textarea > textarea,
+.marketing-site .mr-editing .mr-cover-id-card textarea.ant-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  white-space: pre-wrap !important;
+  overflow: hidden !important;
+  overflow-y: hidden !important;
+  word-break: break-word;
+  scrollbar-width: none;
+}
+
+.marketing-site .mr-editing .mr-period-bar .ant-input {
+  width: auto !important;
+  min-width: 12ch;
+  max-width: 100% !important;
+  flex: 1 1 auto;
+  height: auto !important;
+  white-space: normal;
+}
+
+.marketing-site .mr-cover-identity {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 10px;
+  border: 1px solid #d8e4da;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.marketing-site .mr-cover-id-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-right: 1px solid #dce5dd;
+  min-height: 74px;
+}
+
+.marketing-site .mr-cover-id-card:last-child {
+  border-right: none;
+}
+
+.marketing-site .mr-cover-id-icon {
+  color: #246a38;
+  font-size: 1.05rem;
+  margin-top: 2px;
+}
+
+.marketing-site .mr-cover-id-card em {
+  display: block;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #18241b;
+  margin-bottom: 4px;
+}
+
+.marketing-site .mr-cover-id-card p {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #18241b;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
+.marketing-site .mr-glance-panel {
+  margin-top: 12px;
+  border: 1px solid #d5e3d9;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(15, 36, 28, 0.05);
+}
+
+.marketing-site .mr-glance-head,
+.marketing-site .mr-toc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  background: linear-gradient(90deg, #165624 0%, #388e3c 100%);
+}
+
+.marketing-site .mr-glance-head h2,
+.marketing-site .mr-toc-head h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.marketing-site .mr-glance-head > span {
+  color: #f0f8ec;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.marketing-site .mr-glance-body {
+  display: grid;
+  grid-template-columns: 22.5% minmax(0, 1.05fr) minmax(0, 1.1fr);
+  gap: 10px;
+  padding: 10px;
+  background: #fff;
+}
+
+.marketing-site .mr-glance-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.marketing-site .mr-glance-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: #f4faf5;
+  border: 1px solid #ddeee1;
+  min-height: 44px;
+}
+
+.marketing-site .mr-glance-stat-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #0d6b2f;
+  background: #fff;
+  border: 1px solid #d3e8d7;
+  font-size: 0.95rem;
+  flex: 0 0 auto;
+}
+
+.marketing-site .mr-glance-stat strong {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #18241b;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.marketing-site .mr-glance-stat span {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #2e3a31;
+}
+
+.marketing-site .mr-glance-chart {
+  background: linear-gradient(180deg, #fcfefc 0%, #fff 45%);
+  border: 1px solid #e1ebe4;
+  border-radius: 12px;
+  padding: 12px 12px 10px;
+  min-width: 0;
+}
+
+.marketing-site .mr-glance-chart header h3 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #18241b;
+}
+
+.marketing-site .mr-glance-chart header p {
+  margin: 2px 0 6px;
+  font-size: 0.72rem;
+  color: #3a463e;
+}
+
+.marketing-site .mr-donut-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.marketing-site .mr-donut-wrap {
+  position: relative;
+  max-width: 170px;
+  margin: 0 auto;
+}
+
+.marketing-site .mr-donut-wrap .recharts-pie-label-text {
+  fill: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.marketing-site .mr-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.marketing-site .mr-donut-center strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #18241b;
+  line-height: 1;
+}
+
+.marketing-site .mr-donut-center span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #18241b;
+}
+
+.marketing-site .mr-donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.marketing-site .mr-donut-legend li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  font-size: 0.72rem;
+  color: #222;
+  line-height: 1.2;
+}
+
+.marketing-site .mr-donut-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  display: inline-block;
+  margin-top: 3px;
+}
+
+.marketing-site .mr-donut-legend b {
+  font-variant-numeric: tabular-nums;
+  color: #18241b;
+  white-space: nowrap;
+  font-size: 0.8rem;
+}
+
+.marketing-site .mr-period-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #eaf4ec;
+  border: 1px solid #cfe6d4;
+  color: #18241b;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.marketing-site .mr-period-bar--under-title {
+  margin: 8px 0 14px;
+  width: 100%;
+}
+
+.marketing-site .mr-period-bar .anticon {
+  color: #1e6b38;
+}
+
+.marketing-site .mr-period-bar .ant-input {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-weight: 800;
+  color: #18241b;
+  padding: 0;
+}
+
+.marketing-site .mr-toc-panel {
+  margin-top: 12px;
+  margin-bottom: 14px;
+  border: 1px solid #dfeae1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.marketing-site .mr-toc--cover {
+  background: transparent;
+  border: none;
+  padding: 8px 10px 10px;
+  margin: 0;
+}
+
+.marketing-site .mr-toc-group {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.marketing-site .mr-toc-group:nth-child(odd) {
+  background: #f2f8f3;
+}
+
+.marketing-site .mr-toc-rail {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #247339;
+  background: #eaf4ec;
+  font-size: 0.95rem;
+  margin-top: 2px;
+}
+
+.marketing-site .mr-toc--cover .mr-toc-row {
+  margin: 0 0 3px;
+  gap: 8px;
+}
+
+.marketing-site .mr-toc--cover .mr-toc-row--icon > a {
+  font-weight: 800;
+  color: #18241b;
+}
+
+.marketing-site .mr-toc--cover .mr-toc-row--sub > a {
+  font-weight: 400;
+  color: #222b24;
+  padding-left: 2px;
+}
+
+.marketing-site .mr-toc--cover .mr-toc-dots {
+  border-bottom-color: #7c8b80;
+  border-bottom-style: dotted;
+}
+
+.marketing-site .mr-toc--cover .mr-toc-page {
+  min-width: 58px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  background: #e4f1e6;
+  color: #18241b;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.marketing-site .mr-toc--cover .mr-toc-row--sub .mr-toc-page {
+  font-weight: 500;
+}
+
+.marketing-site .mr-cover-footer {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: auto;
+  padding: 11px 92px 11px 18px;
+  background: #0e4423;
+  color: #eaf2ec;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.marketing-site .mr-cover-footer span {
+  color: #7fa88b;
+  margin: 0 4px;
+}
+
+.marketing-site .mr-cover-page {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 64px;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #b5da58;
+  color: #10381d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+  line-height: 1;
+}
+
+.marketing-site.mr-app {
+  max-width: 1180px;
+}
+
+@media (max-width: 1100px) {
+  .marketing-site .mr-glance-body {
+    grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .marketing-site .mr-cover-identity,
+  .marketing-site .mr-glance-body,
+  .marketing-site .mr-donut-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .marketing-site .mr-cover-id-card {
+    border-right: none;
+    border-bottom: 1px solid #dce5dd;
+  }
+
+  .marketing-site .mr-glance-head > span {
+    display: none;
+  }
 }

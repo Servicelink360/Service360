@@ -419,7 +419,26 @@ export class SitesService {
     const keyword = this.normalizedSiteKeyword(body);
     if (keyword) {
       query.andWhere(
-        '(sites.name ILIKE :keyword OR sites.addressName ILIKE :keyword OR sites.description ILIKE :keyword OR sites.location ILIKE :keyword)',
+        `(
+          sites.name ILIKE :keyword
+          OR sites.addressName ILIKE :keyword
+          OR sites.description ILIKE :keyword
+          OR sites.location ILIKE :keyword
+          OR EXISTS (
+            SELECT 1
+            FROM site_items si_kw
+            INNER JOIN users cu_kw ON cu_kw.id = si_kw.customer_id AND cu_kw.status <> 4
+            LEFT JOIN customers cc_kw ON cc_kw.user_id = cu_kw.id
+            LEFT JOIN customer_companies co_kw
+              ON co_kw.id = COALESCE(si_kw.company_id, cc_kw.company_id)
+            WHERE si_kw.site_id = sites.id
+              AND (
+                cu_kw.full_name ILIKE :keyword
+                OR COALESCE(cc_kw.company_name, '') ILIKE :keyword
+                OR COALESCE(co_kw.name, '') ILIKE :keyword
+              )
+          )
+        )`,
         { keyword: `%${keyword}%` },
       );
     }
@@ -489,7 +508,26 @@ export class SitesService {
     if (keyword) {
       const p = next();
       clauses.push(
-        `(s.name ILIKE ${p} OR s.address_name ILIKE ${p} OR s.description ILIKE ${p} OR s.location ILIKE ${p})`,
+        `(
+          s.name ILIKE ${p}
+          OR s.address_name ILIKE ${p}
+          OR s.description ILIKE ${p}
+          OR s.location ILIKE ${p}
+          OR EXISTS (
+            SELECT 1
+            FROM site_items si_kw
+            INNER JOIN users cu_kw ON cu_kw.id = si_kw.customer_id AND cu_kw.status <> 4
+            LEFT JOIN customers cc_kw ON cc_kw.user_id = cu_kw.id
+            LEFT JOIN customer_companies co_kw
+              ON co_kw.id = COALESCE(si_kw.company_id, cc_kw.company_id)
+            WHERE si_kw.site_id = s.id
+              AND (
+                cu_kw.full_name ILIKE ${p}
+                OR COALESCE(cc_kw.company_name, '') ILIKE ${p}
+                OR COALESCE(co_kw.name, '') ILIKE ${p}
+              )
+          )
+        )`,
       );
       params.push(`%${keyword}%`);
     }
