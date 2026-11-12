@@ -759,7 +759,7 @@ export class MonthlyReportsService {
   private async loadFaults(ids: number[], start: string, end: string) {
     if (!ids.length) return [];
     const rows = await this.dataSource.query(
-      `SELECT id, subject, issue, site_name, service_name, priority, status, created_at
+      `SELECT id, subject, issue, message, site_name, service_name, priority, status, created_at
        FROM public.report_faults
        WHERE customer_id = ANY($1::int[])
          AND status <> 4
@@ -771,14 +771,17 @@ export class MonthlyReportsService {
     );
     return rows.map((row: any) => {
       const created = row.created_at ? new Date(row.created_at) : null;
+      const title = String(row.subject || row.issue || 'Fault').trim();
+      // Comment column = fault message body (not priority/status).
+      const message = stripHtml(row.message).trim();
       return {
         id: +row.id,
         // ISO date reported — client formats as DD/MM/YYYY for the feedback table.
         date: created && !Number.isNaN(created.getTime()) ? created.toISOString() : row.created_at,
         site: row.site_name || '',
         service: row.service_name || '',
-        title: row.subject || row.issue || 'Fault',
-        detail: stripHtml(row.issue),
+        title,
+        detail: message,
         priority: +row.priority === 1 ? 'Urgent' : 'Normal',
         status: faultStatus(+row.status),
       };

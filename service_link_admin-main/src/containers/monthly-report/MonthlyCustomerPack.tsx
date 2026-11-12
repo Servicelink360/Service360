@@ -789,16 +789,21 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
       };
     }),
     feedbackHeading: `${pack.customer.name} Faults Reports`,
-    feedback: pack.faults.map((fault) => ({
-      id: fault.id,
-      site: fault.site,
-      feedback: fault.title,
-      comment: fault.detail && fault.detail !== fault.title
-        ? fault.detail
-        : `${fault.priority} – ${fault.status}`,
-      // Fault created_at = date reported (always show, even if still open).
-      rectified: formatWhen(fault.date),
-    })),
+    feedback: pack.faults.map((fault) => {
+      const title = String(fault.title || '').trim();
+      const message = String(fault.detail || '').trim();
+      // Comment = fault report message; never invent "Normal – Pending".
+      const comment =
+        message && message.toLowerCase() !== title.toLowerCase() ? message : '—';
+      return {
+        id: fault.id,
+        site: fault.site,
+        feedback: title,
+        comment,
+        // Fault created_at = date reported (always show, even if still open).
+        rectified: formatWhen(fault.date),
+      };
+    }),
     toolbox: talks.map((talk) => ({
       title: talk.title,
       date: formatWhen(talk.date),
