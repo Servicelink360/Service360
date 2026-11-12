@@ -58,8 +58,10 @@ export default function MonthlyReportPage() {
   const [listTab, setListTab] = useState<'active' | 'deleted'>('active');
   const [deletedCount, setDeletedCount] = useState(0);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [pdfBusyKey, setPdfBusyKey] = useState<string | null>(null);
 
   const monthKey = month ? month.format('YYYY-MM') : '';
+  const pdfKeyOf = (companyId: number, reportMonth: string) => `${companyId}-${reportMonth}`;
 
   const openCustomer = useCallback(
     async (companyId: number, reportMonth: string, edit = false) => {
@@ -86,31 +88,40 @@ export default function MonthlyReportPage() {
 
   const openPdf = useCallback(
     async (companyId: number, reportMonth: string) => {
+      const busyKey = pdfKeyOf(companyId, reportMonth);
+      setPdfBusyKey(busyKey);
       setLoading(true);
-      const res = await callAPIAsync(serviceType.COMMON, endPoint.MONTHLY_REPORTS, 'GET', {
-        companyId,
-        month: reportMonth,
-      });
-      if (res?.code !== 1 || !res.data) {
+      const hide = message.loading('Generating PDF…', 0);
+      try {
+        const res = await callAPIAsync(serviceType.COMMON, endPoint.MONTHLY_REPORTS, 'GET', {
+          companyId,
+          month: reportMonth,
+        });
+        if (res?.code !== 1 || !res.data) {
+          if (!isAdmin) setUnavailable(res?.message || 'This monthly report is not available');
+          message.error(res?.message || 'Could not open the monthly report');
+          return;
+        }
+        const draft = mergeMonthlyDraft(buildMonthlyDraft(res.data), res.data.edit);
+        const pdf = await callAPIAsync(serviceType.COMMON, `${endPoint.MONTHLY_REPORTS}/pdf`, 'POST', {
+          companyId,
+          month: reportMonth,
+          body: draft,
+        });
+        const href = resolveReportPdfHref(pdf?.data?.url);
+        if (pdf?.code !== 1 || !href) {
+          message.error(pdf?.message || 'Could not create the PDF');
+          return;
+        }
+        setUnavailable('');
+        window.open(href, '_blank', 'noopener,noreferrer');
+      } catch (e) {
+        message.error((e as Error)?.message || 'Could not create the PDF');
+      } finally {
+        hide();
         setLoading(false);
-        if (!isAdmin) setUnavailable(res?.message || 'This monthly report is not available');
-        message.error(res?.message || 'Could not open the monthly report');
-        return;
+        setPdfBusyKey(null);
       }
-      const draft = mergeMonthlyDraft(buildMonthlyDraft(res.data), res.data.edit);
-      const pdf = await callAPIAsync(serviceType.COMMON, `${endPoint.MONTHLY_REPORTS}/pdf`, 'POST', {
-        companyId,
-        month: reportMonth,
-        body: draft,
-      });
-      setLoading(false);
-      const href = resolveReportPdfHref(pdf?.data?.url);
-      if (pdf?.code !== 1 || !href) {
-        message.error(pdf?.message || 'Could not create the PDF');
-        return;
-      }
-      setUnavailable('');
-      window.open(href, '_blank', 'noopener,noreferrer');
     },
     [isAdmin],
   );
@@ -329,18 +340,26 @@ export default function MonthlyReportPage() {
       key: 'reportPdf',
       width: 90,
       align: 'center',
-      render: (_, row) => (
-        <Tooltip title="Open or download PDF" overlayStyle={{ pointerEvents: 'none' }}>
-          <Button
-            type="link"
-            size="small"
-            icon={<FilePdfOutlined />}
-            aria-label="Open report PDF"
-            style={iconButtonStyle}
-            onClick={() => void openPdf(row.companyId, row.month)}
-          />
-        </Tooltip>
-      ),
+      render: (_, row) => {
+        const busy = pdfBusyKey === pdfKeyOf(row.companyId, row.month);
+        return (
+          <Tooltip
+            title={busy ? 'Generating PDF…' : 'Open or download PDF'}
+            overlayStyle={{ pointerEvents: 'none' }}
+          >
+            <Button
+              type="link"
+              size="small"
+              icon={<FilePdfOutlined />}
+              aria-label="Open report PDF"
+              loading={busy}
+              disabled={busy}
+              style={iconButtonStyle}
+              onClick={() => void openPdf(row.companyId, row.month)}
+            />
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Action',
@@ -601,17 +620,22 @@ export default function MonthlyReportPage() {
                   key: 'reportPdf',
                   width: 120,
                   align: 'center',
-                  render: (_, row) => (
-                    <button
-                      type="button"
-                      className="mr-client-pdf"
-                      title="Open PDF"
-                      aria-label="Open report PDF"
-                      onClick={() => void openPdf(row.companyId, row.month)}
-                    >
-                      <FilePdfOutlined />
-                    </button>
-                  ),
+                  render: (_, row) => {
+                    const busy = pdfBusyKey === pdfKeyOf(row.companyId, row.month);
+                    return (
+                      <button
+                        type="button"
+                        className="mr-client-pdf"
+                        title={busy ? 'Generating PDF…' : 'Open PDF'}
+                        aria-label="Open report PDF"
+                        disabled={busy}
+                        style={busy ? { opacity: 0.55, cursor: 'wait' } : undefined}
+                        onClick={() => void openPdf(row.companyId, row.month)}
+                      >
+                        <FilePdfOutlined />
+                      </button>
+                    );
+                  },
                 },
               ]}
             />
