@@ -31,10 +31,7 @@ import { isDetailedSiteItem, resolveSiteItemFrequencyType } from './site-item-fr
 import { isValidPgIntegerId, INVALID_PG_INTEGER_ID_MESSAGE } from '../helpers/pg-integer-id';
 import { userType } from '../constants/user';
 import { UserDailyJobItem } from '../user-daily-job/entities/user-daily-job-items.entity';
-import {
-  BAYSIDE_COUNCIL_COMPANY,
-  sortStaffDropdownSites,
-} from './staff-site-dropdown-sort.util';
+import { sortStaffDropdownSites } from './staff-site-dropdown-sort.util';
 
 
 /** SQL fragment: distinct active staff on valid site items (matches job-sites Staff column). */
@@ -1714,23 +1711,6 @@ export class SitesService {
     }
   }
 
-  private async getBaysideCouncilSiteIdsForStaff(staffId: number): Promise<Set<number>> {
-    const rows: { id: string | number }[] = await this.sitesRepository.query(
-      `
-      SELECT DISTINCT s.id
-      FROM sites s
-      INNER JOIN site_items si ON si.site_id = s.id
-      INNER JOIN site_item_staffs sis ON sis.site_item_id = si.id AND sis.staff_id = $1
-      INNER JOIN users cu ON cu.id = si.customer_id AND cu.status <> 4
-      LEFT JOIN customers cust ON cust.user_id = cu.id
-      LEFT JOIN customer_companies cc ON cc.id = COALESCE(si.company_id, cust.company_id)
-      WHERE LOWER(TRIM(COALESCE(cc.name, cust.company_name, ''))) = LOWER(TRIM($2))
-      `,
-      [staffId, BAYSIDE_COUNCIL_COMPANY],
-    );
-    return new Set(rows.map((r) => +r.id).filter((id) => Number.isFinite(id)));
-  }
-
   async getSites(userInfo: IUserInfo) {
     try {
       const query = this.sitesRepository.createQueryBuilder('sites')
@@ -1762,12 +1742,12 @@ export class SitesService {
           name: r.name,
           location: r.location,
           addressName: r.addressName,
+          dropdownSortOrder: r.dropdownSortOrder ?? null,
           customerIds,
         };
       });
       if (userInfo.type === userType.STAFF) {
-        const baysideSiteIds = await this.getBaysideCouncilSiteIdsForStaff(userInfo.userId);
-        rows = sortStaffDropdownSites(rows, baysideSiteIds);
+        rows = sortStaffDropdownSites(rows);
       }
       return {
         ...errorCode.SUCCESS, data: rows,

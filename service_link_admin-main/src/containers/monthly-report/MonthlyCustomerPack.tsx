@@ -72,6 +72,8 @@ export type MonthlyPack = {
       name: string;
       /** Parent roll-up address listing child parks (1.Park A, 2.Park B, …). */
       addressName?: string;
+      /** Lower = higher in parent block / dropdown order (per-tenant data). */
+      dropdownSortOrder?: number | null;
       frequencyTimes?: number | null;
       frequencyCount?: number | null;
       frequencyPeriod?: string | null;
@@ -160,6 +162,8 @@ type VisitRow = {
   isGroupHeader?: boolean;
   /** Child park/site row under a parent amenities header. */
   isGroupChild?: boolean;
+  /** From sites.dropdown_sort_order — drives parent block order. */
+  sortOrder?: number | null;
 };
 
 /** True for parent portfolio sites such as Bayside / Mascot Public Amenities. */
@@ -257,17 +261,22 @@ function uniqueDateLinks(links: { date: string; id: number }[]) {
  */
 function groupVisitsByParentAmenities(
   visits: VisitRow[],
-  contractedSites: { name: string; addressName?: string }[],
+  contractedSites: { name: string; addressName?: string; dropdownSortOrder?: number | null }[],
 ): VisitRow[] {
-  const byName = new Map<string, { name: string; labels: string[] }>();
-  const remember = (name: string, labels: string[] = []) => {
+  const byName = new Map<string, { name: string; labels: string[]; sortOrder: number }>();
+  const remember = (name: string, labels: string[] = [], sortOrder?: number | null) => {
     const key = normSite(name);
     if (!key) return;
+    const order =
+      sortOrder != null && Number.isFinite(+sortOrder)
+        ? Math.floor(+sortOrder)
+        : Number.MAX_SAFE_INTEGER;
     const existing = byName.get(key);
     if (!existing) {
-      byName.set(key, { name, labels: [...labels] });
+      byName.set(key, { name, labels: [...labels], sortOrder: order });
       return;
     }
+    if (order < existing.sortOrder) existing.sortOrder = order;
     labels.forEach((label) => {
       if (!existing.labels.some((item) => softSiteMatch(item, label))) {
         existing.labels.push(label);
@@ -275,23 +284,17 @@ function groupVisitsByParentAmenities(
     });
   };
 
-  // Only Bayside / Mascot Public Amenities (etc.) are parents — never child parks
-  // like John Curtin Memorial Reserve, even if they have an address_name list.
+  // Parent = name matching "Public Amenities" (portfolio headers), not child parks.
   contractedSites.forEach((site) => {
     if (!isAmenityParentName(site.name)) return;
-    remember(site.name, childLabelsFromAddress(site.addressName || ''));
+    remember(site.name, childLabelsFromAddress(site.addressName || ''), site.dropdownSortOrder);
   });
   visits.forEach((visit) => {
-    if (isAmenityParentName(visit.site)) remember(visit.site, []);
+    if (isAmenityParentName(visit.site)) remember(visit.site, [], visit.sortOrder);
   });
 
-  const parentRank = (name: string) => {
-    if (/bayside/i.test(name)) return 0;
-    if (/mascot/i.test(name)) return 1;
-    return 2;
-  };
   const parents = [...byName.values()].sort(
-    (a, b) => parentRank(a.name) - parentRank(b.name) || a.name.localeCompare(b.name),
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
   );
   if (!parents.length) return visits;
 
@@ -341,6 +344,8 @@ function groupVisitsByParentAmenities(
       quality: '',
       comments: '',
       isGroupHeader: true,
+      sortOrder:
+        parent.sortOrder === Number.MAX_SAFE_INTEGER ? null : parent.sortOrder,
     });
     used.add(normSite(headerName));
     if (parentVisit) used.add(normSite(parentVisit.site));
@@ -724,7 +729,7 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
     streams: streams.map((stream) => {
       const label = stream.label;
       const kind = stream.kind;
-      // Cleaning: every contracted site + Bayside/Mascot parent→child grouping.
+      // Cleaning: every contracted site + public-amenities parent→child grouping.
       // Adhoc / other streams: only real dated visits — never empty amenity Nil rows.
       const contractedSites = (contracted.find((svc) =>
         (stream.serviceId != null && +svc.id === +stream.serviceId)
@@ -732,6 +737,7 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
       )?.sites || []).map((site) => ({
         name: site.name,
         addressName: site.addressName,
+        dropdownSortOrder: site.dropdownSortOrder,
       }));
       const rawVisits = siteVisits(stream.rows, stream.siteNames || [], kind === 'Cleaning');
       const visits = kind === 'Cleaning'
@@ -778,6 +784,7 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
           comments: row.comments,
           ...(row.isGroupHeader ? { isGroupHeader: true } : {}),
           ...(row.isGroupChild ? { isGroupChild: true } : {}),
+          ...(row.sortOrder != null ? { sortOrder: row.sortOrder } : {}),
         })),
       };
     }),

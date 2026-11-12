@@ -18,6 +18,14 @@ export class Site extends BaseEntity {
     @Column({ name: 'check_in_distance' })
     checkInDistance:number
 
+    /**
+     * Staff site dropdown / monthly parent block order.
+     * Lower = higher. Null = after pinned sites (A–Z).
+     * Per-tenant data — not hardcoded client names.
+     */
+    @Column({ name: 'dropdown_sort_order', type: 'int', nullable: true })
+    dropdownSortOrder?: number | null
+
     @OneToMany(() => SiteItem, t => t.site, { cascade: true })
     items?: SiteItem[]
 

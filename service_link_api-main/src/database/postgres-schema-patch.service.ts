@@ -2989,5 +2989,47 @@ export class PostgresSchemaPatchService implements OnModuleInit {
     } catch (e) {
       this.logger.warn(`report template site fields patch: ${(e as Error).message}`);
     }
+
+    try {
+      await this.dataSource.query(`
+        ALTER TABLE public.sites
+        ADD COLUMN IF NOT EXISTS dropdown_sort_order INT NULL;
+      `);
+      // One-time data seed for existing ServiceLink Bayside/Mascot layout.
+      // Runtime sort uses this column only — not hardcoded client names.
+      await this.dataSource.query(`
+        UPDATE public.sites
+        SET dropdown_sort_order = 10
+        WHERE dropdown_sort_order IS NULL
+          AND LOWER(TRIM(name)) = LOWER(TRIM('Bayside Public Amenities'));
+      `);
+      await this.dataSource.query(`
+        UPDATE public.sites
+        SET dropdown_sort_order = 20
+        WHERE dropdown_sort_order IS NULL
+          AND LOWER(TRIM(name)) = LOWER(TRIM('Mascot Public Amenities'));
+      `);
+      await this.dataSource.query(`
+        UPDATE public.sites s
+        SET dropdown_sort_order = 500
+        WHERE s.dropdown_sort_order IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM public.site_items si
+            INNER JOIN public.users cu ON cu.id = si.customer_id AND cu.status <> 4
+            LEFT JOIN public.customers cust ON cust.user_id = cu.id
+            LEFT JOIN public.customer_companies cc
+              ON cc.id = COALESCE(si.company_id, cust.company_id)
+            WHERE si.site_id = s.id
+              AND LOWER(TRIM(COALESCE(cc.name, cust.company_name, '')))
+                = LOWER(TRIM('Bayside Council'))
+          );
+      `);
+      this.logger.log('sites.dropdown_sort_order column + Bayside/Mascot seed ensured');
+    } catch (e) {
+      this.logger.warn(
+        `sites.dropdown_sort_order patch: ${(e as Error).message}`,
+      );
+    }
   }
 }

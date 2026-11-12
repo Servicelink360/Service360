@@ -356,6 +356,8 @@ export type MonthlyDraft = {
       /** Parent amenity label only; child rows under it hold the dates. */
       isGroupHeader?: boolean;
       isGroupChild?: boolean;
+      /** From sites.dropdown_sort_order — parent block order. */
+      sortOrder?: number | null;
     }[];
   }[];
   feedbackHeading: string;
@@ -396,6 +398,7 @@ function isVisitGroupHeader(row: {
 type VisitBlock = {
   key: string;
   parent: string | null;
+  sortOrder: number;
   rows: { row: NonNullable<MonthlyDraft['streams'][number]['visits']>[number]; index: number }[];
 };
 
@@ -411,14 +414,24 @@ function visitBlocks(
       last.rows.push(entry);
       return;
     }
-    blocks.push({ key: `loose-${entry.index}`, parent: null, rows: [entry] });
+    blocks.push({
+      key: `loose-${entry.index}`,
+      parent: null,
+      sortOrder: Number.MAX_SAFE_INTEGER,
+      rows: [entry],
+    });
   };
 
   visits.forEach((row, index) => {
     if (isVisitGroupHeader(row)) {
+      const order =
+        row.sortOrder != null && Number.isFinite(+row.sortOrder)
+          ? Math.floor(+row.sortOrder)
+          : Number.MAX_SAFE_INTEGER - 10;
       current = {
         key: `parent-${index}-${row.site}`,
         parent: String(row.site || '').replace(/\s+/g, ' ').trim(),
+        sortOrder: order,
         rows: [],
       };
       blocks.push(current);
@@ -433,14 +446,10 @@ function visitBlocks(
     pushLoose({ row, index });
   });
 
-  // Bayside first, then Mascot, then other parent blocks, then loose sites.
-  const rank = (block: VisitBlock) => {
-    if (!block.parent) return 50;
-    if (/bayside/i.test(block.parent)) return 0;
-    if (/mascot/i.test(block.parent)) return 1;
-    return 10;
-  };
-  return [...blocks].sort((a, b) => rank(a) - rank(b) || a.key.localeCompare(b.key));
+  // Order by sites.dropdown_sort_order on parent headers (data), then key.
+  return [...blocks].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key),
+  );
 }
 
 function textOf(value: unknown, fallback: string) {
@@ -581,6 +590,10 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
                 return { date, id };
               })
               .filter(Boolean) as { date: string; id: number }[];
+            const sortOrder =
+              visit.sortOrder != null && Number.isFinite(+visit.sortOrder)
+                ? Math.floor(+visit.sortOrder)
+                : null;
             const mapped = {
               site,
               dates: dateLinks.length
@@ -590,11 +603,20 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
               comments: String(visit.comments || ''),
               ...(dateLinks.length ? { dateLinks } : {}),
               ...(visit.isGroupChild ? { isGroupChild: true } : {}),
+              ...(sortOrder != null ? { sortOrder } : {}),
             };
             const header = isVisitGroupHeader({ ...mapped, isGroupHeader: Boolean(visit.isGroupHeader) });
             return {
               ...mapped,
-              ...(header ? { isGroupHeader: true as const, dates: '', quality: '', comments: '' } : {}),
+              ...(header
+                ? {
+                    isGroupHeader: true as const,
+                    dates: '',
+                    quality: '',
+                    comments: '',
+                    ...(sortOrder != null ? { sortOrder } : {}),
+                  }
+                : {}),
             };
           })
           : [],
@@ -617,6 +639,7 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
               quality: '',
               comments: '',
               isGroupHeader: true as const,
+              ...(live.sortOrder != null ? { sortOrder: live.sortOrder } : {}),
             };
           }
           const saved = (stream.visits || []).find(

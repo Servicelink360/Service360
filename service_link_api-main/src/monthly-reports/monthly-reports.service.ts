@@ -467,6 +467,8 @@ export class MonthlyReportsService {
       name: string;
       /** Parent amenity roll-up address listing child parks (1.Park A, 2.Park B, …). */
       addressName?: string;
+      /** Lower = higher in staff dropdown / monthly parent block order. */
+      dropdownSortOrder?: number | null;
       frequencyTimes?: number | null;
       frequencyCount?: number | null;
       frequencyPeriod?: string | null;
@@ -484,6 +486,7 @@ export class MonthlyReportsService {
       site_id: number;
       site_name: string;
       address_name: string;
+      dropdown_sort_order: number | null;
       site_item_id: number;
       frequency_times: number | null;
       frequency_count: number | null;
@@ -497,6 +500,7 @@ export class MonthlyReportsService {
           st.id AS site_id,
           COALESCE(NULLIF(TRIM(st.name), ''), 'Unnamed site') AS site_name,
           COALESCE(NULLIF(TRIM(st.address_name), ''), '') AS address_name,
+          st.dropdown_sort_order AS dropdown_sort_order,
           si.id AS site_item_id,
           si.frequency_times,
           si.frequency_count,
@@ -564,16 +568,24 @@ export class MonthlyReportsService {
       );
       const scheduleVisits = detailVisits > 0 ? detailVisits : simpleVisits;
       const addressName = String(row.address_name || '').trim();
+      const dropdownSortOrder =
+        row.dropdown_sort_order == null || !Number.isFinite(+row.dropdown_sort_order)
+          ? null
+          : Math.floor(+row.dropdown_sort_order);
       const existing = entry.sites.find((site) => site.id === siteId);
       if (existing) {
         existing.scheduleVisits = Math.max(existing.scheduleVisits, scheduleVisits);
         if (!existing.monthCadence && row.detail_cadence) existing.monthCadence = row.detail_cadence;
         if (!existing.addressName && addressName) existing.addressName = addressName;
+        if (existing.dropdownSortOrder == null && dropdownSortOrder != null) {
+          existing.dropdownSortOrder = dropdownSortOrder;
+        }
       } else {
         entry.sites.push({
           id: siteId,
           name: siteName,
           addressName: addressName || undefined,
+          dropdownSortOrder,
           frequencyTimes: row.frequency_times,
           frequencyCount: row.frequency_count,
           frequencyPeriod: row.frequency_period,
@@ -1575,13 +1587,21 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
       const text = String(value ?? '').trim();
       return text || blankVisitCell;
     };
-    // Parent name sits above each child table (Bayside / Mascot on top of their parks).
-    type PdfVisitBlock = { parent: string | null; rows: Record<string, unknown>[] };
+    // Parent name sits above each child table; order from sites.dropdown_sort_order.
+    type PdfVisitBlock = { parent: string | null; sortOrder: number; rows: Record<string, unknown>[] };
     const pdfBlocks: PdfVisitBlock[] = [];
     let pdfCurrent: PdfVisitBlock | null = null;
     visits.forEach((row) => {
       if (isPdfAmenityParent(row)) {
-        pdfCurrent = { parent: String(row.site || '').replace(/\s+/g, ' ').trim(), rows: [] };
+        const order =
+          row.sortOrder != null && Number.isFinite(+row.sortOrder)
+            ? Math.floor(+row.sortOrder)
+            : Number.MAX_SAFE_INTEGER - 10;
+        pdfCurrent = {
+          parent: String(row.site || '').replace(/\s+/g, ' ').trim(),
+          sortOrder: order,
+          rows: [],
+        };
         pdfBlocks.push(pdfCurrent);
         return;
       }
@@ -1592,15 +1612,15 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
       pdfCurrent = null;
       const last = pdfBlocks[pdfBlocks.length - 1];
       if (last && !last.parent) last.rows.push(row);
-      else pdfBlocks.push({ parent: null, rows: [row] });
+      else {
+        pdfBlocks.push({
+          parent: null,
+          sortOrder: Number.MAX_SAFE_INTEGER,
+          rows: [row],
+        });
+      }
     });
-    const pdfRank = (block: PdfVisitBlock) => {
-      if (!block.parent) return 50;
-      if (/bayside/i.test(block.parent)) return 0;
-      if (/mascot/i.test(block.parent)) return 1;
-      return 10;
-    };
-    pdfBlocks.sort((a, b) => pdfRank(a) - pdfRank(b));
+    pdfBlocks.sort((a, b) => a.sortOrder - b.sortOrder);
     const tableForRows = (blockRows: Record<string, unknown>[]) => {
       if (!blockRows.length) {
         return showQuality
