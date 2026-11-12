@@ -40,6 +40,7 @@ import {
   emailSupportFooterHtml,
 } from '../helpers/emailContent';
 import { isMailConfigured, SendMail } from '../helpers/sendEmail';
+import { generateFaultReportPdfBuffer } from './report-fault-pdf';
 
 @Injectable()
 export class ReportFaultsService {
@@ -2823,6 +2824,116 @@ export class ReportFaultsService {
     } catch (error) {
       this.logger.error(error);
       return errorCode.EXCEPTION;
+    }
+  }
+
+  /** On-demand PDF form for a fault report (not a stored file URL). */
+  async generatePdf(userInfo: IUserInfo, faultId: number) {
+    try {
+      const fault = await this.reportFaultsRepository
+        .createQueryBuilder('f')
+        .leftJoinAndSelect('f.answers', 'answers')
+        .leftJoin('f.staff', 'staff')
+        .addSelect(['staff.fullName', 'staff.username'])
+        .leftJoin('f.createdUser', 'createdUser')
+        .addSelect(['createdUser.fullName', 'createdUser.username'])
+        .leftJoin('answers.createdUser', 'answersCreatedUser')
+        .addSelect(['answersCreatedUser.fullName', 'answersCreatedUser.username'])
+        .leftJoin('answers.user', 'answerUser')
+        .addSelect(['answerUser.fullName', 'answerUser.username'])
+        .where('f.id = :faultId', { faultId: +faultId })
+        .orderBy('answers.createdAt', 'ASC')
+        .getOne();
+
+      if (!fault) {
+        return { ...errorCode.NOT_FOUND, message: 'Fault not found' };
+      }
+
+      if (+userInfo.type === userType.STAFF) {
+        const isReporter = +fault.staffId === +userInfo.userId;
+        const isAssignee =
+          fault.delegatedToType === 'staff' &&
+          +fault.delegatedToStaffId === +userInfo.userId;
+        if (!isReporter && !isAssignee) {
+          return { ...errorCode.NOT_FOUND, message: 'Fault not found' };
+        }
+      } else if (+userInfo.type === userType.CUSTOMER) {
+        if (!(await this.customerCanAccessFault(userInfo, fault.customerId))) {
+          return { ...errorCode.NOT_FOUND, message: 'Fault not found' };
+        }
+      } else if (+userInfo.type !== userType.ADMIN) {
+        return { ...errorCode.CAN_NOT_DELETE, message: 'Not allowed' };
+      }
+
+      if (
+        +fault.status === reportFaultStatus.DELETED &&
+        +userInfo.type !== userType.ADMIN
+      ) {
+        return { ...errorCode.NOT_FOUND, message: 'Fault not found' };
+      }
+
+      const answers = (fault.answers || []).map((a: any) => ({
+        message: a.message,
+        attachFiles: a.attachFiles,
+        createdAt: a.createdAt,
+        type: a.type,
+        userName:
+          a.createdUser?.fullName ||
+          a.createdUser?.username ||
+          a.user?.fullName ||
+          a.user?.username ||
+          null,
+      }));
+
+      const reporterId =
+        +fault.staffId ||
+        +fault.createdBy ||
+        0;
+      const submittedBy = reporterId > 0 ? `Usr-${reporterId}` : null;
+
+      const buf = await generateFaultReportPdfBuffer({
+        id: +fault.id,
+        subject: fault.subject,
+        issue: fault.issue,
+        toiletArea: fault.toiletArea,
+        customerName: fault.customerName,
+        companyName: fault.companyName,
+        siteName: fault.siteName,
+        serviceName: fault.serviceName,
+        priority: fault.priority,
+        message: fault.message,
+        attachFiles: fault.attachFiles,
+        status: fault.status,
+        createdAt: fault.createdAt,
+        submittedBy,
+        delegatedToType: fault.delegatedToType,
+        delegationNote: fault.delegationNote,
+        delegatedUntil: fault.delegatedUntil,
+        delegatedActedAt: fault.delegatedActedAt,
+        answers,
+      });
+
+      if (!buf?.length) {
+        return { ...errorCode.EXCEPTION, message: 'Could not generate PDF' };
+      }
+
+      const safeName = String(fault.issue || fault.subject || `fault-${fault.id}`)
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .slice(0, 80);
+
+      return {
+        ...errorCode.SUCCESS,
+        data: {
+          buffer: buf,
+          fileName: `${safeName || 'fault'}-${fault.id}.pdf`,
+        },
+      };
+    } catch (error) {
+      this.logger.error(error);
+      return {
+        ...errorCode.EXCEPTION,
+        message: error?.message || 'PDF failed',
+      };
     }
   }
 

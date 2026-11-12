@@ -1532,6 +1532,7 @@ async function convertHtmlToPdf(
 
     html = html.replace('{{TITLE_BAR_CLASS}}', titleBarClass);
     html = html.replace('{{TITLE}}', escapeHtml(title));
+    html = html.replace('{{SUBTITLE}}', '');
     // Header shows date only (time appears in report body fields).
     html = html.replace('{{CUR_DATE}}', escapeHtml(reportWhen.format(REPORT_PDF_DATE_FORMAT)));
     html = html.replace('{{SEVERITY_BADGE}}', metaBadge);
@@ -1721,8 +1722,10 @@ async function convertReportLayoutPdf(input: {
     title: string;
     dateLabel: string;
     contentHtml: string;
+    subtitle?: string;
     submittedBy?: string;
     rowNumber?: string | number;
+    asBuffer?: boolean;
 }) {
     const templatePath = resolveReportPdfTemplatePath();
     let html = fs.readFileSync(templatePath, 'utf8');
@@ -1737,19 +1740,28 @@ async function convertReportLayoutPdf(input: {
         html = html.replace(/<img class="logo"[^>]*\/>/i, '<!-- report logo not configured -->');
     }
     const title = String(input.title || 'Report');
+    const subtitle = String(input.subtitle || '').replace(/\s+/g, ' ').trim();
+    const subtitleHtml = subtitle
+        ? `<div class="report-subtitle">${escapeHtml(subtitle)}</div>`
+        : '';
     html = html.replace('{{TITLE_BAR_CLASS}}', 'title-bar');
     html = html.replace('{{TITLE}}', escapeHtml(title));
+    html = html.replace('{{SUBTITLE}}', subtitleHtml);
     html = html.replace('{{CUR_DATE}}', escapeHtml(input.dateLabel || ''));
     html = html.replace('{{SEVERITY_BADGE}}', '');
     html = html.replace('{{SCORECARD}}', '');
     html = html.replace('{{CONTENT_CLASS}}', ' tcontent--monthly');
     html = html.split('{{CONTENT}}').join(input.contentHtml || '');
-    return publishReportPdf(html, {
-        title,
-        submittedBy: input.submittedBy || 'ServiceLink',
-        submittedStamp: input.dateLabel || '',
-        rowNumber: input.rowNumber ?? '',
-    });
+    return publishReportPdf(
+        html,
+        {
+            title,
+            submittedBy: input.submittedBy || 'ServiceLink',
+            submittedStamp: input.dateLabel || '',
+            rowNumber: input.rowNumber ?? '',
+        },
+        { asBuffer: !!input.asBuffer },
+    );
 }
 
 function dataURItoBlob(dataURI) {

@@ -89,11 +89,28 @@
             background: linear-gradient(90deg, #7f1d1d 0%, #dc2626 55%, #991b1b 100%);
         }
 
+        .title-bar .report-title-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            margin-right: auto;
+        }
+
         .title-bar .report-title {
             font-size: 19px;
             font-weight: 700;
             letter-spacing: 0.03em;
             text-transform: uppercase;
+        }
+
+        .title-bar .report-subtitle {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            color: rgba(255, 255, 255, 0.95);
+            line-height: 1.25;
+            text-transform: none;
         }
 
         .title-bar-meta {
@@ -580,7 +597,10 @@
         </div>
 
         <div class="{{TITLE_BAR_CLASS}}">
-            <div class="report-title">{{TITLE}}</div>
+            <div class="report-title-block">
+                <div class="report-title">{{TITLE}}</div>
+                {{SUBTITLE}}
+            </div>
             <div class="title-bar-meta">
                 {{SEVERITY_BADGE}}
                 <div class="report-date">{{CUR_DATE}}</div>

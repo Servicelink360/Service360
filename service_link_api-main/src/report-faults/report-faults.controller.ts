@@ -1,6 +1,22 @@
 
 
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Res, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  Res,
+  UseGuards,
+  Request,
+  StreamableFile,
+  HttpException,
+  HttpStatus,
+  Header,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { customHttpCode } from '../helpers/util';
@@ -62,6 +78,33 @@ export class ReportFaultsController {
   async findAll(@Res() res, @Query() body: GetReportFaultsDto, @Request() req) {
     const user: IUserInfo = req.user;
     return customHttpCode(res, await this.reportFaultsService.findAll(user,body));
+  }
+
+  /** On-demand PDF form — generated from DB on click (not a stored S3 URL). */
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get(':id/pdf')
+  @Header('Cache-Control', 'no-store')
+  async downloadPdf(@Param('id') id: string, @Request() req): Promise<StreamableFile> {
+    const user: IUserInfo = req.user;
+    const result = await this.reportFaultsService.generatePdf(user, +id);
+    const raw = result?.data?.buffer;
+    const buf = raw
+      ? Buffer.isBuffer(raw)
+        ? raw
+        : Buffer.from(raw as any)
+      : null;
+    if (result?.code !== 1 || !buf?.length) {
+      throw new HttpException(
+        { code: result?.code ?? 0, message: result?.message || 'Could not generate PDF' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const fileName = result.data.fileName || `fault-${id}.pdf`;
+    return new StreamableFile(buf, {
+      type: 'application/pdf',
+      disposition: `inline; filename="${fileName}"`,
+    });
   }
 
 

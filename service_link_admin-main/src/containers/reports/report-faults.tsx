@@ -6,6 +6,7 @@ import {
     EditOutlined,
     EyeOutlined,
     FileAddOutlined,
+    FilePdfOutlined,
     FileTextOutlined,
     MailOutlined,
     MessageOutlined,
@@ -21,6 +22,7 @@ import {
 } from "@app/components/common/Common.styles";
 import Layout from "@app/components/layout/Layout";
 import { dateTimeFormat, limitData, pageData } from "@app/config/data.config";
+import urlConfig from "@app/config/site.config";
 import { Col, Popconfirm, Row, Form, Image, DatePicker, Input, Tooltip, Spin, message, Button, Select, Typography, Table, Empty, Pagination, Checkbox, Tabs } from "antd";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styled, { css } from "styled-components";
@@ -369,6 +371,7 @@ const ReportFaults: React.FC = () => {
     const dispatch = useDispatch();
     const [sites, setSites] = useState<any[]>([]);
     const [viewFaultOpen, setViewFaultOpen] = useState(false);
+    const [pdfBusyId, setPdfBusyId] = useState<number | null>(null);
     const [viewFaultRow, setViewFaultRow] = useState<any | null>(null);
     const [listRows, setListRows] = useState<any[]>([]);
     const [markingUnreadFaultId, setMarkingUnreadFaultId] = useState<number | null>(null);
@@ -587,6 +590,43 @@ const ReportFaults: React.FC = () => {
         [markFaultOpenedForViewer],
     );
 
+    const openFaultPdf = useCallback(async (record: any) => {
+        const faultId = reportFaultIdOf(record);
+        if (!faultId) return;
+        setPdfBusyId(+faultId);
+        const hide = message.loading("Generating PDF…", 0);
+        try {
+            const token = localStorage.getItem("id_token") || "";
+            const res = await fetch(
+                `${urlConfig.orderApiURL}${endPoint.REPORT_FAULTS}/${faultId}/pdf`,
+                {
+                    method: "GET",
+                    headers: { Authorization: `Bearer ${token}` },
+                },
+            );
+            if (!res.ok) {
+                let msg = "Could not generate PDF";
+                try {
+                    const body = await res.json();
+                    if (body?.message) msg = body.message;
+                } catch {
+                    /* ignore */
+                }
+                message.error(msg);
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, "_blank", "noopener,noreferrer");
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } catch (e) {
+            message.error((e as Error)?.message || "Could not generate PDF");
+        } finally {
+            hide();
+            setPdfBusyId(null);
+        }
+    }, []);
+
     const closeFaultView = useCallback(() => {
         setViewFaultOpen(false);
         setViewFaultRow(null);
@@ -783,6 +823,8 @@ const ReportFaults: React.FC = () => {
             markingUnreadFaultId,
             markFaultUnread,
             openFaultView,
+            openFaultPdf,
+            pdfBusyId,
             canUseBulkDelete,
             canBulkDeleteRow,
             selectedRowKeys,
@@ -798,6 +840,20 @@ const ReportFaults: React.FC = () => {
             <Tooltip title="View">
                 <ButtonMR className="btnLink" onClick={() => openFaultView(record)}>
                     <EyeOutlined />
+                </ButtonMR>
+            </Tooltip>
+            <Tooltip title={pdfBusyId === +reportFaultIdOf(record) ? "Generating PDF…" : "PDF"}>
+                <ButtonMR
+                    className="btnLink"
+                    disabled={pdfBusyId === +reportFaultIdOf(record)}
+                    onClick={() => void openFaultPdf(record)}
+                    style={
+                        pdfBusyId === +reportFaultIdOf(record)
+                            ? { opacity: 0.55, cursor: "wait" }
+                            : undefined
+                    }
+                >
+                    <FilePdfOutlined />
                 </ButtonMR>
             </Tooltip>
             {+profile?.type === userType.STAFF && checkRole("EDIT") ? (
@@ -924,7 +980,7 @@ const ReportFaults: React.FC = () => {
     const columns: ColDef[] | any = useMemo(() => {
         const actionColumn = {
             title: isMobilePortrait ? "" : intl.formatMessage({ id: "table.column.action" }),
-            width: isMobilePortrait ? 104 : 180,
+            width: isMobilePortrait ? 128 : 210,
             ...(isMobilePortrait ? {} : { fixed: "right" as const }),
             align: "center" as const,
             dataIndex: "action",
@@ -1206,6 +1262,8 @@ const ReportFaults: React.FC = () => {
         markingUnreadFaultId,
         markFaultUnread,
         openFaultView,
+        openFaultPdf,
+        pdfBusyId,
         isMobilePortrait,
         listSort,
         readStatusColumn,
