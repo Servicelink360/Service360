@@ -1952,7 +1952,6 @@ function ReportBody({
               <p className="mr-nil">Nil</p>
             )}
             <AddButton editing={editing} label="Add adhoc request" onClick={() => onDraft((current) => ({ ...current, adhoc: [...current.adhoc, { site: '', description: '', requestedBy: '', date: '', amount: '' }] }))} />
-            <p><TextField editing={editing} multiline value={draft.adhocComments} onChange={(value) => onText('adhocComments', value)} /></p>
             <h3 className="mr-subhead" id="mr-financials-quotes">5.4 Quotes</h3>
             <TextField editing={editing} multiline value={draft.quotes} onChange={(value) => onText('quotes', value)} />
             <h3 className="mr-subhead" id="mr-financials-consumables">5.5 Consumables delivered</h3>

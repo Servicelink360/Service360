@@ -848,8 +848,8 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
       date: formatWhen(row.date),
       amount: '',
     })),
-    // Per-row Description already carries the work description; keep footer blankish.
-    adhocComments: adhoc.length ? '—' : 'Nil',
+    // Description column is enough — no separate Adhoc comments footer.
+    adhocComments: '',
     quotes: `Nil recorded for ${pack.period.label}.`,
     consumables: (pack.consumables || []).map((row) => ({
       date: formatWhen(row.date),

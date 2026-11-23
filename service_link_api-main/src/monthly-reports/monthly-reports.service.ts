@@ -1961,7 +1961,7 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
           ['Site', 'Description', 'Requested by', 'Date', 'Amount'],
           adhoc.map((row) => [String(row.site || ''), String(row.description || ''), String(row.requestedBy || ''), String(row.date || ''), String(row.amount || '')]),
         )
-        : pdfProse('5.3 Adhoc work request', draft.adhocComments)}${adhoc.length ? pdfProse('Adhoc comments', draft.adhocComments) : ''}</div>`,
+        : pdfProse('5.3 Adhoc work request', 'Nil')}</div>`,
       `<div id="mp-financials-quotes">${pdfProse('5.4 Quotes', draft.quotes)}</div>`,
       `<div id="mp-financials-consumables">${consumables.length
         ? pdfTable(
