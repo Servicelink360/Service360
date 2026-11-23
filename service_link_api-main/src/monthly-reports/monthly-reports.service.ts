@@ -691,6 +691,8 @@ export class MonthlyReportsService {
     if (!ids.length) return [];
     // Completed = submitted New Reports (/new-reports) for the month — same CUSTOM
     // rows as that page (exclude Incident / Safety Audit sidebar pages).
+    // detail = Adhoc "Description of the work/services produced" (user_task_reports
+    // name Details), else any matching work-description field, else ut.description.
     const rows = await this.dataSource.query(
       `SELECT ut.id,
               ut.type,
@@ -702,7 +704,27 @@ export class MonthlyReportsService {
               ut.site_address,
               ut.pdf_file,
               staff.full_name AS staff_name,
-              LEFT(regexp_replace(COALESCE(ut.description, ''), '<[^>]+>', ' ', 'g'), 220) AS detail,
+              LEFT(regexp_replace(COALESCE(
+                (
+                  SELECT utr.value
+                  FROM public.user_task_reports utr
+                  WHERE utr.user_task_id = ut.id
+                    AND NULLIF(TRIM(utr.value), '') IS NOT NULL
+                    AND (
+                      LOWER(TRIM(utr.name)) = 'details'
+                      OR LOWER(utr.name) LIKE '%description of the work%'
+                      OR LOWER(utr.name) LIKE '%services produced%'
+                    )
+                  ORDER BY CASE
+                    WHEN LOWER(TRIM(utr.name)) = 'details' THEN 0
+                    WHEN LOWER(utr.name) LIKE '%description of the work%' THEN 1
+                    ELSE 2
+                  END, utr."order" ASC NULLS LAST, utr.id ASC
+                  LIMIT 1
+                ),
+                ut.description,
+                ''
+              ), '<[^>]+>', ' ', 'g'), 800) AS detail,
               COALESCE(ut.check_in, ut.created_at) AS done_at
        FROM public.user_tasks ut
        LEFT JOIN public.users staff ON staff.id = ut.staff_id

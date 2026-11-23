@@ -199,8 +199,14 @@ function softSiteMatch(a: string, b: string) {
   return na === nb || na.includes(nb) || nb.includes(na);
 }
 
-function siteVisits(rows: WorkRow[], allSites: string[] = [], includeEmptySites = false): VisitRow[] {
-  const bySite = new Map<string, { date: string; id: number }[]>();
+function siteVisits(
+  rows: WorkRow[],
+  allSites: string[] = [],
+  includeEmptySites = false,
+  /** When true, Comments = report "Description of the work/services produced". */
+  includeWorkDescription = false,
+): VisitRow[] {
+  const bySite = new Map<string, { date: string; id: number; detail: string }[]>();
   if (includeEmptySites) {
     allSites.forEach((site) => {
       const name = String(site || '').trim() || 'Unnamed site';
@@ -213,7 +219,9 @@ function siteVisits(rows: WorkRow[], allSites: string[] = [], includeEmptySites 
     const id = Number(row.id);
     if (!date || !Number.isFinite(id) || id <= 0) return;
     const list = bySite.get(site) || [];
-    if (!list.some((item) => item.id === id)) list.push({ date, id });
+    if (!list.some((item) => item.id === id)) {
+      list.push({ date, id, detail: String(row.detail || '').trim() });
+    }
     bySite.set(site, list);
   });
   return [...bySite.entries()]
@@ -221,17 +229,24 @@ function siteVisits(rows: WorkRow[], allSites: string[] = [], includeEmptySites 
     .filter(([, dateLinks]) => includeEmptySites || dateLinks.length > 0)
     .map(([site, dateLinks]) => {
       const links = uniqueDateLinks(dateLinks);
+      const comments = includeWorkDescription
+        ? [...new Set(
+            sortDateLinks(dateLinks)
+              .map((item) => String(item.detail || '').trim())
+              .filter(Boolean),
+          )].join('; ')
+        : '';
       return {
         site,
         dates: links.map((item) => item.date).join(', '),
         dateLinks: links,
         quality: '',
-        comments: '',
+        comments,
       };
     });
 }
 
-function sortDateLinks(links: { date: string; id: number }[]) {
+function sortDateLinks<T extends { date: string; id: number }>(links: T[]) {
   return [...links].sort((a, b) => {
     const [da, ma, ya] = a.date.split('/').map(Number);
     const [db, mb, yb] = b.date.split('/').map(Number);
@@ -240,9 +255,9 @@ function sortDateLinks(links: { date: string; id: number }[]) {
 }
 
 /** One link per calendar day (keep newest report id) — avoid "12/10/2026, 12/10/2026, …". */
-function uniqueDateLinks(links: { date: string; id: number }[]) {
+function uniqueDateLinks<T extends { date: string; id: number }>(links: T[]) {
   const seen = new Set<string>();
-  const out: { date: string; id: number }[] = [];
+  const out: T[] = [];
   sortDateLinks(links).forEach((link) => {
     const day = String(link.date || '').trim();
     if (!day || seen.has(day)) return;
@@ -739,7 +754,13 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
         addressName: site.addressName,
         dropdownSortOrder: site.dropdownSortOrder,
       }));
-      const rawVisits = siteVisits(stream.rows, stream.siteNames || [], kind === 'Cleaning');
+      const rawVisits = siteVisits(
+        stream.rows,
+        stream.siteNames || [],
+        kind === 'Cleaning',
+        // Adhoc Comments = report "Description of the work/services produced".
+        kind === 'Adhoc' || isAdhocServiceName(label),
+      );
       const visits = kind === 'Cleaning'
         ? groupVisitsByParentAmenities(rawVisits, contractedSites)
         : rawVisits;
@@ -821,14 +842,14 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
     variationComments: `Nil for ${pack.period.label}.`,
     adhoc: adhoc.map((row) => ({
       site: row.site,
-      description: row.title || row.service,
+      // Description = report "Description of the work/services produced" (optional).
+      description: String(row.detail || '').trim() || '—',
       requestedBy: '',
       date: formatWhen(row.date),
       amount: '',
     })),
-    adhocComments: adhoc.length
-      ? 'All adhoc has been completed to a satisfactory level. Photos and reports were provided via the Service360 platform.'
-      : 'Nil',
+    // Per-row Description already carries the work description; keep footer blankish.
+    adhocComments: adhoc.length ? '—' : 'Nil',
     quotes: `Nil recorded for ${pack.period.label}.`,
     consumables: (pack.consumables || []).map((row) => ({
       date: formatWhen(row.date),

@@ -522,7 +522,14 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
     recognition: textOf(raw.recognition, base.recognition),
     invoiceIntro: textOf(raw.invoiceIntro, textOf(raw.invoiceEmpty, base.invoiceIntro)),
     variationComments: textOf(raw.variationComments, typeof raw.variations === 'string' ? raw.variations : base.variationComments),
-    adhocComments: textOf(raw.adhocComments, base.adhocComments),
+    adhocComments: (() => {
+      const saved = textOf(raw.adhocComments, '');
+      // Drop old canned "satisfactory level" copy — Description column holds the real text.
+      if (!saved || /satisfactory level/i.test(saved) || /^all adhoc has been completed/i.test(saved)) {
+        return base.adhocComments;
+      }
+      return saved;
+    })(),
     quotes: textOf(raw.quotes, base.quotes),
     consumablesComments: textOf(raw.consumablesComments, base.consumablesComments),
     weekly: list(raw.weekly, (row) => ({
@@ -715,13 +722,34 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
       detail: String(row.detail || row.date || ''),
     }), base.invoices),
     variations,
-    adhoc: list(raw.adhoc, (row) => ({
-      site: String(row.site || ''),
-      description: String(row.description || ''),
-      requestedBy: String(row.requestedBy || ''),
-      date: String(row.date || ''),
-      amount: String(row.amount || ''),
-    }), base.adhoc),
+    adhoc: (() => {
+      const saved = list(raw.adhoc, (row) => ({
+        site: String(row.site || ''),
+        description: String(row.description || ''),
+        requestedBy: String(row.requestedBy || ''),
+        date: String(row.date || ''),
+        amount: String(row.amount || ''),
+      }), base.adhoc);
+      if (!Array.isArray(raw.adhoc)) return base.adhoc;
+      // Prefer live work-description over old drafts that stored task title/service.
+      return base.adhoc.map((live, index) => {
+        const row = saved[index];
+        if (!row) return live;
+        const liveDesc = String(live.description || '').trim();
+        const savedDesc = String(row.description || '').trim();
+        const savedLooksTitle =
+          !savedDesc
+          || savedDesc === '—'
+          || /^adhoc report\b/i.test(savedDesc)
+          || /reactive\/?adhoc/i.test(savedDesc);
+        return {
+          ...row,
+          site: row.site || live.site,
+          date: row.date || live.date,
+          description: liveDesc && (savedLooksTitle || !savedDesc) ? liveDesc : (savedDesc || liveDesc || '—'),
+        };
+      });
+    })(),
     consumables: (() => {
       const saved = list(raw.consumables, (row) => ({
         date: String(row.date || ''),
