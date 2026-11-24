@@ -471,6 +471,56 @@ function reportNameLabel(value: string) {
   return /report$/i.test(base) ? base : `${base} Report`;
 }
 
+function streamHeadingKey(heading: string) {
+  return String(heading || '').split('–')[0].split('-')[0].trim().toLowerCase();
+}
+
+/** True when Schedule/Completed on the draft differ from live seed (edited). */
+function summaryScheduleEdited(draft: MonthlyDraft, seed: MonthlyDraft) {
+  return (draft.streams || []).some((stream) => {
+    const live = (seed.streams || []).find(
+      (item) => streamHeadingKey(item.heading) === streamHeadingKey(stream.heading),
+    );
+    if (!live) return false;
+    const draftRows = stream.summary || [];
+    const liveRows = live.summary || [];
+    if (draftRows.length !== liveRows.length) return true;
+    return liveRows.some((liveRow) => {
+      const key = liveRow.group.trim().toLowerCase();
+      const row = draftRows.find((item) => item.group.trim().toLowerCase() === key);
+      if (!row) return true;
+      return String(row.schedule) !== String(liveRow.schedule)
+        || String(row.completed) !== String(liveRow.completed);
+    });
+  });
+}
+
+/** Restore Schedule/Completed from live seed; keep Comments and other edits. */
+function resetSummaryFromLive(draft: MonthlyDraft, seed: MonthlyDraft): MonthlyDraft {
+  return {
+    ...draft,
+    streams: (draft.streams || []).map((stream) => {
+      const live = (seed.streams || []).find(
+        (item) => streamHeadingKey(item.heading) === streamHeadingKey(stream.heading),
+      );
+      if (!live?.summary?.length) return stream;
+      const draftRows = stream.summary || [];
+      return {
+        ...stream,
+        summary: live.summary.map((liveRow) => {
+          const key = liveRow.group.trim().toLowerCase();
+          const saved = draftRows.find((item) => item.group.trim().toLowerCase() === key);
+          return {
+            ...liveRow,
+            month: saved?.month || liveRow.month,
+            comments: saved?.comments ?? liveRow.comments,
+          };
+        }),
+      };
+    }),
+  };
+}
+
 /** Word-wrap chart axis labels (avoids "Parks and ameniti…" truncation). */
 export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDraft> | null): MonthlyDraft {
   if (!saved || typeof saved !== 'object') return base;
@@ -668,21 +718,35 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
             ...(live.isGroupChild ? { isGroupChild: true as const } : {}),
           };
         });
-        // Schedule/completed always follow live /sites frequency + New Reports uploads (not frozen draft).
+        // Summary rows: live groups/descriptions from /sites + New Reports; schedule /
+        // completed / comments stay on the saved monthly draft only (never write back).
+        const savedSummary = stream.summary || [];
         const liveSummary = (baseStream?.summary || []).map((baseRow) => {
-          const savedRow = (stream.summary || []).find(
+          const savedRow = savedSummary.find(
             (row) => row.group.trim().toLowerCase() === baseRow.group.trim().toLowerCase(),
           );
+          const savedSchedule = String(savedRow?.schedule ?? '').trim();
+          const savedCompleted = String(savedRow?.completed ?? '').trim();
           return {
             month: savedRow?.month || baseRow.month,
             group: baseRow.group,
             // Description = exact /services name from live pack.
             description: baseRow.description || savedRow?.description || '',
-            schedule: baseRow.schedule,
-            completed: baseRow.completed,
+            schedule: savedSchedule !== '' ? savedSchedule : baseRow.schedule,
+            completed: savedCompleted !== '' ? savedCompleted : baseRow.completed,
             comments: savedRow?.comments ?? baseRow.comments,
           };
         });
+        const liveGroups = new Set(
+          liveSummary.map((row) => row.group.trim().toLowerCase()).filter(Boolean),
+        );
+        const extraSummary = savedSummary.filter((row) => {
+          const key = row.group.trim().toLowerCase();
+          return key ? !liveGroups.has(key) : true;
+        });
+        const mergedSummary = liveSummary.length
+          ? [...liveSummary, ...extraSummary]
+          : savedSummary;
         return {
           ...stream,
           // Headings always from live /services names (not old "Cleaning Site Inspections" drafts).
@@ -690,7 +754,7 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
           detailHeading: baseStream?.detailHeading || stream.detailHeading,
           detailNote: baseStream?.detailNote || stream.detailNote,
           note: baseStream?.note || stream.note,
-          summary: liveSummary.length ? liveSummary : stream.summary,
+          summary: mergedSummary.length ? mergedSummary : stream.summary,
           visits: liveVisits.length ? liveVisits : stream.visits,
         };
       });
@@ -955,6 +1019,16 @@ export default function MonthlyReportDocument({
         ) : null}
         {isAdmin && editing ? (
           <>
+            {summaryScheduleEdited(draft, seed) ? (
+              <Button
+                onClick={() => {
+                  setDraft((current) => resetSummaryFromLive(current, seed));
+                  message.success('Schedule and Completed reset from live data');
+                }}
+              >
+                Reset to live data
+              </Button>
+            ) : null}
             <Button
               onClick={() => {
                 setDraft(baseline);
