@@ -937,6 +937,94 @@ function AddButton({ editing, onClick, label = 'Add row' }: { editing: boolean; 
   );
 }
 
+/** Nearest ancestor that actually scrolls (Layout / mobile shells vary). */
+function findScrollParent(start: HTMLElement | null): HTMLElement {
+  let node: HTMLElement | null = start;
+  while (node && node !== document.body) {
+    const style = window.getComputedStyle(node);
+    const oy = style.overflowY;
+    if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && node.scrollHeight > node.clientHeight + 1) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return (document.scrollingElement as HTMLElement) || document.documentElement;
+}
+
+/**
+ * Keep edit buttons fixed at the top of the visible content while scrolling.
+ * Always pinned — CSS sticky fails under Layout overflow:hidden / mobile shells.
+ */
+function StickyEditBar({ children }: { children: React.ReactNode }) {
+  const spacerRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ top: 0, left: 0, width: 0, height: 52 });
+
+  useLayoutEffect(() => {
+    const spacer = spacerRef.current;
+    const bar = barRef.current;
+    if (!spacer || !bar) return undefined;
+
+    const sync = () => {
+      const scrollParent = findScrollParent(spacer);
+      const main =
+        (document.getElementById('main-content') as HTMLElement | null)
+        || (spacer.closest('.isoContentMainLayout') as HTMLElement | null)
+        || scrollParent;
+      const mainBox = main.getBoundingClientRect();
+      const host =
+        (spacer.closest('.isoBoxWrapper') as HTMLElement | null)
+        || (spacer.closest('.isoLayoutContentWrapper') as HTMLElement | null)
+        || main;
+      const hostBox = host.getBoundingClientRect();
+      const height = Math.max(bar.offsetHeight, 48);
+      const left = Math.max(hostBox.left, mainBox.left);
+      const right = Math.min(hostBox.right, mainBox.right);
+      const width = Math.max(right - left, 0);
+      // Sit just under the top of the scrolling content (below app topbar).
+      const top = Math.max(mainBox.top, 0);
+      setBox({ top, left, width, height });
+      spacer.style.height = `${height}px`;
+    };
+
+    sync();
+    const scrollParent = findScrollParent(spacer);
+    scrollParent.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(sync) : null;
+    ro?.observe(spacer);
+    ro?.observe(bar);
+    const mainEl = document.getElementById('main-content');
+    if (mainEl) ro?.observe(mainEl);
+    return () => {
+      scrollParent.removeEventListener('scroll', sync);
+      window.removeEventListener('scroll', sync);
+      window.removeEventListener('resize', sync);
+      ro?.disconnect();
+    };
+  }, []);
+
+  return (
+    <>
+      <div ref={spacerRef} className="mr-edit-bar-anchor" aria-hidden />
+      <div
+        ref={barRef}
+        className="mr-edit-bar mr-edit-bar--pinned"
+        style={{
+          position: 'fixed',
+          top: box.top,
+          left: box.left,
+          width: box.width || '100%',
+          zIndex: 1100,
+        }}
+      >
+        {children}
+      </div>
+    </>
+  );
+}
+
 export default function MonthlyReportDocument({
   seed,
   saved,
@@ -1004,7 +1092,7 @@ export default function MonthlyReportDocument({
 
   return (
     <div>
-      <div className="mr-edit-bar">
+      <StickyEditBar>
         {onBack ? (
           <Button onClick={onBack} style={{ marginRight: 'auto' }}>
             Back to customers
@@ -1042,7 +1130,7 @@ export default function MonthlyReportDocument({
             </Button>
           </>
         ) : null}
-      </div>
+      </StickyEditBar>
       <ReportBody
         draft={draft}
         editing={editing && isAdmin}

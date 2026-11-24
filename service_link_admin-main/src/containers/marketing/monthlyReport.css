@@ -747,16 +747,41 @@ body.app-shell-dark .mr-list-bar .ant-picker,
   color: #f0f0f0 !important;
 }
 
+.mr-edit-bar-anchor {
+  width: 100%;
+  margin: 0 0 12px;
+  min-height: 52px;
+}
+
 .mr-edit-bar {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  margin: 0 auto 12px;
-  max-width: 1040px;
-  width: 100%;
-  padding: 0 8px;
+  padding: 10px 12px;
   box-sizing: border-box;
+  background: #fff;
+}
+
+.mr-edit-bar--pinned {
+  margin: 0;
+  max-width: none;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+}
+
+body.app-shell-dark .mr-edit-bar,
+#main-content.app-content--dark .mr-edit-bar,
+html[data-color-mode='dark'] .mr-edit-bar {
+  background: #121212;
+}
+
+body.app-shell-dark .mr-edit-bar--pinned,
+#main-content.app-content--dark .mr-edit-bar--pinned,
+html[data-color-mode='dark'] .mr-edit-bar--pinned {
+  border-bottom-color: #333333;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
 }
 
 .mr-add-row {
@@ -791,6 +816,7 @@ body.app-shell-dark .mr-list-bar .ant-picker,
 
 @media print {
   .mr-edit-bar,
+  .mr-edit-bar-anchor,
   .mr-add-row,
   .mr-row-remove {
     display: none !important;
