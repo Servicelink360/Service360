@@ -747,6 +747,11 @@ body.app-shell-dark .mr-list-bar .ant-picker,
   color: #f0f0f0 !important;
 }
 
+/* Above pinned edit bar (z-index 1100) so save success/error toasts stay visible. */
+.ant-message {
+  z-index: 4000 !important;
+}
+
 .mr-edit-bar-anchor {
   width: 100%;
   margin: 0 0 12px;
@@ -1735,6 +1740,34 @@ html[data-color-mode='dark'] .mr-edit-bar--pinned {
   max-height: none !important;
   overflow: hidden !important;
   overflow-y: hidden !important;
+}
+
+.marketing-site .mr-visit-site-select.ant-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.marketing-site .mr-visit-site-cell .mr-visit-site-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.marketing-site .mr-visit-datepickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.marketing-site .mr-visit-datepicker.ant-picker,
+.marketing-site .mr-visit-datepicker.ant-calendar-picker {
+  width: 138px;
+  max-width: 100%;
+}
+
+.marketing-site .mr-visit-datepicker--add.ant-picker,
+.marketing-site .mr-visit-datepicker--add.ant-calendar-picker {
+  width: 118px;
 }
 
 .marketing-site .mr-visit-dates .mr-date-links {

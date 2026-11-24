@@ -142,6 +142,72 @@ function detailNote(service: string, label = service) {
   return `Note: ${label} reports are available on the Service360 platform with timestamped photos.`;
 }
 
+/** Summary Comments tailored to site group + service (not one generic line for all). */
+function summaryComments(kind: string, group: string, schedule: number) {
+  const site = String(group || '').trim() || 'Other sites';
+  if (kind === 'Roof and Gutter') {
+    const byGroup: Record<string, string> = {
+      'Early Learning Centers':
+        'Gutters and downpipes cleared at early learning centres. Leaf and debris removed; roofs left clear and safe for children and staff.',
+      'Community Centers':
+        'Community centre roofs and gutters cleaned to schedule. Rubbish removed off site; surrounds left tidy.',
+      'Town Hall and Library':
+        'Town hall and library roof and gutter works completed. Debris cleared; no blockages left in downpipes.',
+      'Aquatic Centers':
+        'Aquatic centre roof and gutter cleaning completed. Leaves and silt removed; drainage paths left clear.',
+      Depot:
+        'Depot roof and gutter maintenance completed. Rubbish removed off site; yard left clean after finish.',
+      'Parks and amenities':
+        'Park and amenity roof/gutter cleaning completed. Debris removed; structures left clear and serviceable.',
+      'Other sites':
+        'Roof and gutter works completed to schedule. All rubbish removed off site; areas left clean after finish.',
+    };
+    return byGroup[site] || byGroup['Other sites'];
+  }
+  if (kind === 'Ground Maintenance') {
+    const byGroup: Record<string, string> = {
+      'Early Learning Centers':
+        'Grounds at early learning centres maintained to schedule. Lawns/edges attended; outdoor play areas left clean and safe.',
+      'Community Centers':
+        'Community centre grounds maintained. Rubbish removed; gardens and surrounds left neat after finish.',
+      'Town Hall and Library':
+        'Town hall and library grounds completed to schedule. Litter removed; presentation left professional.',
+      'Aquatic Centers':
+        'Aquatic centre grounds maintained. External areas cleared of litter; access ways left tidy.',
+      Depot:
+        'Depot grounds completed. Rubbish removed off site; yard left clean after finish.',
+      'Parks and amenities':
+        'Parks and amenities grounds maintained to schedule. Rubbish removed off site; turf and surrounds left tidy.',
+      'Other sites':
+        'Ground maintenance completed to schedule. All rubbish removed off site; yard clean after finish.',
+    };
+    return byGroup[site] || byGroup['Other sites'];
+  }
+  if (kind === 'Cleaning') {
+    const byGroup: Record<string, string> = {
+      'Early Learning Centers':
+        'Early learning centres cleaned to schedule. Timestamped photos and reports are on the Service360 platform.',
+      'Community Centers':
+        'Community centres cleaned to schedule. Reports with timestamped photos are available on Service360.',
+      'Town Hall and Library':
+        'Town hall and library cleaning completed. Reports with timestamped photos are on Service360.',
+      'Aquatic Centers':
+        'Aquatic centre cleaning completed to schedule. Reports with timestamped photos are on Service360.',
+      Depot:
+        'Depot cleaning completed. Reports with timestamped photos are available on Service360.',
+      'Parks and amenities':
+        'Parks and amenities cleaning completed. Reports with timestamped photos are on Service360.',
+      'Other sites':
+        'Cleaning completed to schedule. All reports are available on the Service360 platform with timestamped photos.',
+    };
+    return byGroup[site] || byGroup['Other sites'];
+  }
+  if (schedule > 0) {
+    return 'All reports are available on the Service360 platform with timestamped photos.';
+  }
+  return 'Completed visits recorded; set /sites frequency to show scheduled targets and %.';
+}
+
 function isAdhocServiceName(name: string) {
   return /adhoc/i.test(String(name || ''));
 }
@@ -758,8 +824,8 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
         stream.rows,
         stream.siteNames || [],
         kind === 'Cleaning',
-        // Adhoc Comments = report "Description of the work/services produced".
-        kind === 'Adhoc' || isAdhocServiceName(label),
+        // Visit Comments = real New Report answers (Details / checklist), all services.
+        true,
       );
       const visits = kind === 'Cleaning'
         ? groupVisitsByParentAmenities(rawVisits, contractedSites)
@@ -783,11 +849,7 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
             description: label,
             schedule: String(row.schedule),
             completed: String(row.completed),
-            comments: kind === 'Ground Maintenance' || kind === 'Roof and Gutter'
-              ? 'All work completed according to schedule. All rubbish removed off site. Yard clean after finish.'
-              : row.schedule > 0
-                ? 'All reports are available on the Service360 platform with timestamped photos.'
-                : 'Completed visits recorded; set /sites frequency to show scheduled targets and %.',
+            comments: summaryComments(kind, row.group, row.schedule),
           }))
           : [{
             month: monthStamp,
@@ -860,6 +922,26 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
     consumablesComments: (pack.consumables || []).length
       ? `${pack.consumables!.length} consumable delivery${pack.consumables!.length === 1 ? '' : 'ies'} emailed to the client in ${pack.period.label}.`
       : `No consumables were emailed to the client in ${pack.period.label}.`,
+    siteOptions: (() => {
+      const seen = new Set<string>();
+      const out: string[] = [];
+      const push = (name: string) => {
+        const label = String(name || '').replace(/\s+/g, ' ').trim();
+        if (!label) return;
+        const key = label.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(label);
+      };
+      (pack.contractedServices || []).forEach((svc) => {
+        (svc.sites || []).forEach((site) => push(site.name));
+      });
+      (pack.sites || []).forEach((site) => push(site.site));
+      (pack.work || []).forEach((row) => push(row.site));
+      (pack.faults || []).forEach((row) => push(row.site));
+      (pack.consumables || []).forEach((row) => push(row.site));
+      return out.sort((a, b) => a.localeCompare(b));
+    })(),
   };
 }
 

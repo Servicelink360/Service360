@@ -19,8 +19,9 @@ import {
   TeamOutlined,
   ToolOutlined,
 } from '@ant-design/icons';
-import { Button, Input, message } from 'antd';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Button, DatePicker, Input, Select, message } from 'antd';
+import moment, { Moment } from 'moment';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -375,6 +376,8 @@ export type MonthlyDraft = {
   quotes: string;
   consumables: { date: string; site: string; subject: string; items: string }[];
   consumablesComments: string;
+  /** Customer sites for visit / adhoc Site dropdowns (live from /sites + reports). */
+  siteOptions?: string[];
 };
 
 function isAmenityParentSite(name: string) {
@@ -471,54 +474,27 @@ function reportNameLabel(value: string) {
   return /report$/i.test(base) ? base : `${base} Report`;
 }
 
-function streamHeadingKey(heading: string) {
-  return String(heading || '').split('–')[0].split('-')[0].trim().toLowerCase();
+/** Stable JSON for comparing draft vs live seed (ignore key order noise). */
+function draftFingerprint(draft: MonthlyDraft) {
+  try {
+    return JSON.stringify(draft);
+  } catch {
+    return '';
+  }
 }
 
-/** True when Schedule/Completed on the draft differ from live seed (edited). */
-function summaryScheduleEdited(draft: MonthlyDraft, seed: MonthlyDraft) {
-  return (draft.streams || []).some((stream) => {
-    const live = (seed.streams || []).find(
-      (item) => streamHeadingKey(item.heading) === streamHeadingKey(stream.heading),
-    );
-    if (!live) return false;
-    const draftRows = stream.summary || [];
-    const liveRows = live.summary || [];
-    if (draftRows.length !== liveRows.length) return true;
-    return liveRows.some((liveRow) => {
-      const key = liveRow.group.trim().toLowerCase();
-      const row = draftRows.find((item) => item.group.trim().toLowerCase() === key);
-      if (!row) return true;
-      return String(row.schedule) !== String(liveRow.schedule)
-        || String(row.completed) !== String(liveRow.completed);
-    });
-  });
+/** True when the open draft differs from live-built seed (any section edited). */
+function draftEditedFromLive(draft: MonthlyDraft, seed: MonthlyDraft) {
+  return draftFingerprint(draft) !== draftFingerprint(seed);
 }
 
-/** Restore Schedule/Completed from live seed; keep Comments and other edits. */
-function resetSummaryFromLive(draft: MonthlyDraft, seed: MonthlyDraft): MonthlyDraft {
-  return {
-    ...draft,
-    streams: (draft.streams || []).map((stream) => {
-      const live = (seed.streams || []).find(
-        (item) => streamHeadingKey(item.heading) === streamHeadingKey(stream.heading),
-      );
-      if (!live?.summary?.length) return stream;
-      const draftRows = stream.summary || [];
-      return {
-        ...stream,
-        summary: live.summary.map((liveRow) => {
-          const key = liveRow.group.trim().toLowerCase();
-          const saved = draftRows.find((item) => item.group.trim().toLowerCase() === key);
-          return {
-            ...liveRow,
-            month: saved?.month || liveRow.month,
-            comments: saved?.comments ?? liveRow.comments,
-          };
-        }),
-      };
-    }),
-  };
+/** Restore every section from live seed (compliance, visits, financials, …). */
+function resetDraftFromLive(_draft: MonthlyDraft, seed: MonthlyDraft): MonthlyDraft {
+  try {
+    return JSON.parse(JSON.stringify(seed)) as MonthlyDraft;
+  } catch {
+    return seed;
+  }
 }
 
 /** Word-wrap chart axis labels (avoids "Parks and ameniti…" truncation). */
@@ -582,6 +558,12 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
     })(),
     quotes: textOf(raw.quotes, base.quotes),
     consumablesComments: textOf(raw.consumablesComments, base.consumablesComments),
+    // Always live customer site list for dropdowns.
+    siteOptions: Array.isArray(base.siteOptions) && base.siteOptions.length
+      ? base.siteOptions
+      : (Array.isArray(raw.siteOptions)
+        ? (raw.siteOptions as unknown[]).map((item) => String(item || '').trim()).filter(Boolean)
+        : []),
     weekly: list(raw.weekly, (row) => ({
       week: String(row.week || ''),
       jobs: String(row.jobs || ''),
@@ -704,17 +686,30 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
               && String(row.site || '').trim().toLowerCase() === String(live.site || '').trim().toLowerCase(),
           );
           const savedComment = String(saved?.comments || '').trim();
-          const keepSavedComment = savedComment
-            && !/^covered under\b/i.test(savedComment)
-            && !/^includes:/i.test(savedComment);
+          const liveComment = String(live.comments || '').trim();
+          // Prefer live report-derived Comments unless the admin typed a custom note.
+          const cannedVisitComment =
+            !savedComment
+            || /^covered under\b/i.test(savedComment)
+            || /^includes:/i.test(savedComment)
+            || /^all work completed according to schedule/i.test(savedComment)
+            || /^all reports are available on the service360 platform/i.test(savedComment);
+          const keepSavedComment = Boolean(savedComment) && !cannedVisitComment && savedComment !== liveComment;
+          const savedDates = String(saved?.dates || '').trim();
+          // Calendar-picked dates clear dateLinks on the draft — keep those over live links.
+          const preferSavedDates = Boolean(saved)
+            && Boolean(savedDates)
+            && (!Array.isArray(saved?.dateLinks) || saved.dateLinks.length === 0);
           return {
             ...live,
             quality: String(saved?.quality || '').trim() || live.quality,
-            comments: keepSavedComment ? savedComment : (live.comments || savedComment),
-            dateLinks: live.dateLinks?.length ? live.dateLinks : saved?.dateLinks,
-            dates: live.dateLinks?.length
-              ? live.dates
-              : (saved?.dates || live.dates),
+            comments: keepSavedComment ? savedComment : (liveComment || savedComment),
+            dateLinks: preferSavedDates
+              ? undefined
+              : (live.dateLinks?.length ? live.dateLinks : saved?.dateLinks),
+            dates: preferSavedDates
+              ? savedDates
+              : (live.dateLinks?.length ? live.dates : (savedDates || live.dates)),
             ...(live.isGroupChild ? { isGroupChild: true as const } : {}),
           };
         });
@@ -727,6 +722,11 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
           );
           const savedSchedule = String(savedRow?.schedule ?? '').trim();
           const savedCompleted = String(savedRow?.completed ?? '').trim();
+          const savedComment = String(savedRow?.comments ?? '').trim();
+          // Drop old one-size-fits-all Ground/Roof line so site-group comments from live win.
+          const cannedSummaryComment =
+            /^all work completed according to schedule/i.test(savedComment)
+            || /^all reports are available on the service360 platform with timestamped photos\.?$/i.test(savedComment);
           return {
             month: savedRow?.month || baseRow.month,
             group: baseRow.group,
@@ -734,7 +734,9 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
             description: baseRow.description || savedRow?.description || '',
             schedule: savedSchedule !== '' ? savedSchedule : baseRow.schedule,
             completed: savedCompleted !== '' ? savedCompleted : baseRow.completed,
-            comments: savedRow?.comments ?? baseRow.comments,
+            comments: savedComment && !cannedSummaryComment
+              ? savedComment
+              : (baseRow.comments || savedComment),
           };
         });
         const liveGroups = new Set(
@@ -937,6 +939,115 @@ function AddButton({ editing, onClick, label = 'Add row' }: { editing: boolean; 
   );
 }
 
+const VISIT_DATE_FORMATS = ['DD/MM/YYYY', 'D/M/YYYY', 'YYYY-MM-DD'];
+
+function parseVisitDates(value: string): Moment[] {
+  return String(value || '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => moment(part, VISIT_DATE_FORMATS, true))
+    .filter((part) => part.isValid());
+}
+
+function formatVisitDates(dates: Moment[]) {
+  return dates.map((part) => part.format('DD/MM/YYYY')).join(', ');
+}
+
+/** Calendar picker(s) for Date of Service / Date of Inspection while editing. */
+/** Searchable site dropdown (still allows keeping a custom value if not in the list). */
+function VisitSiteSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (next: string) => void;
+}) {
+  const current = String(value || '').trim();
+  const list = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    [...options, current].forEach((name) => {
+      const label = String(name || '').trim();
+      if (!label) return;
+      const key = label.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(label);
+    });
+    return out.sort((a, b) => a.localeCompare(b));
+  }, [options, current]);
+
+  return (
+    <Select
+      className="mr-visit-site-select"
+      showSearch
+      allowClear
+      optionFilterProp="label"
+      placeholder="Select site"
+      value={current || undefined}
+      style={{ width: '100%' }}
+      options={list.map((name) => ({ value: name, label: name }))}
+      onChange={(next) => onChange(String(next || ''))}
+    />
+  );
+}
+
+function VisitDatesPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const dates = parseVisitDates(value);
+  const emit = (next: Moment[]) => onChange(formatVisitDates(next));
+
+  if (!dates.length) {
+    return (
+      <DatePicker
+        className="mr-visit-datepicker"
+        value={null}
+        format="DD/MM/YYYY"
+        allowClear
+        placeholder="Select date"
+        onChange={(next) => emit(next ? [next] : [])}
+      />
+    );
+  }
+
+  return (
+    <div className="mr-visit-datepickers">
+      {dates.map((date, index) => (
+        <DatePicker
+          key={`visit-date-${index}-${date.format('YYYYMMDD')}`}
+          className="mr-visit-datepicker"
+          value={date}
+          format="DD/MM/YYYY"
+          allowClear
+          onChange={(next) => {
+            const copy = [...dates];
+            if (!next) copy.splice(index, 1);
+            else copy[index] = next;
+            emit(copy);
+          }}
+        />
+      ))}
+      <DatePicker
+        className="mr-visit-datepicker mr-visit-datepicker--add"
+        value={null}
+        format="DD/MM/YYYY"
+        placeholder="Add date"
+        onChange={(next) => {
+          if (next) emit([...dates, next]);
+        }}
+      />
+    </div>
+  );
+}
+
 /** Nearest ancestor that actually scrolls (Layout / mobile shells vary). */
 function findScrollParent(start: HTMLElement | null): HTMLElement {
   let node: HTMLElement | null = start;
@@ -1076,8 +1187,13 @@ export default function MonthlyReportDocument({
       return;
     }
     setBaseline(draft);
-    setEditing(false);
-    message.success('Monthly report saved');
+    // Stay on the edit page after save (same as continuing work in New Reports).
+    // Match New Reports toast (duration + key); z-index raised in monthlyReport.css.
+    message.success({
+      content: 'Monthly report updated successfully',
+      duration: 4,
+      key: 'mr-report-save-ok',
+    });
   };
 
   const chartServices = draft.services
@@ -1107,11 +1223,15 @@ export default function MonthlyReportDocument({
         ) : null}
         {isAdmin && editing ? (
           <>
-            {summaryScheduleEdited(draft, seed) ? (
+            {draftEditedFromLive(draft, seed) ? (
               <Button
                 onClick={() => {
-                  setDraft((current) => resetSummaryFromLive(current, seed));
-                  message.success('Schedule and Completed reset from live data');
+                  setDraft(resetDraftFromLive(draft, seed));
+                  message.success({
+                    content: 'Report reset to live data',
+                    duration: 4,
+                    key: 'mr-report-reset-ok',
+                  });
                 }}
               >
                 Reset to live data
@@ -1635,6 +1755,7 @@ function ReportBody({
               const summary = stream.summary || [];
               const visits = stream.visits || [];
               const showQuality = !!stream.showQuality;
+              const siteOptions = draft.siteOptions || [];
               const blankRow = { month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' };
               const blankVisit = { site: '', dates: '', quality: '', comments: '' };
               const chartData = summary
@@ -1867,12 +1988,44 @@ function ReportBody({
                                     <td className={isChild ? 'mr-visit-child-site' : undefined}>
                                       <div className="mr-visit-site-cell">
                                         {isChild ? <VisitSiteIcon /> : null}
-                                        <TextField editing={editing} value={row.site} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex ? { ...entry, site: value } : entry) } : item) }))} />
+                                        {editing ? (
+                                          <VisitSiteSelect
+                                            value={row.site}
+                                            options={siteOptions}
+                                            onChange={(value) => onDraft((current) => ({
+                                              ...current,
+                                              streams: current.streams.map((item, index) => index === streamIndex
+                                                ? {
+                                                    ...item,
+                                                    visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex
+                                                      ? { ...entry, site: value }
+                                                      : entry),
+                                                  }
+                                                : item),
+                                            }))}
+                                          />
+                                        ) : (
+                                          <TextField editing={false} value={row.site} onChange={() => undefined} />
+                                        )}
                                       </div>
                                     </td>
                                     <td className="mr-visit-dates">
                                       {editing ? (
-                                        <TextField editing={editing} multiline grow value={row.dates} onChange={(value) => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex ? { ...entry, dates: value } : entry) } : item) }))} />
+                                        <VisitDatesPicker
+                                          value={row.dates}
+                                          onChange={(value) => onDraft((current) => ({
+                                            ...current,
+                                            streams: current.streams.map((item, index) => index === streamIndex
+                                              ? {
+                                                  ...item,
+                                                  visits: (item.visits || []).map((entry, visitIndex) => visitIndex === rowIndex
+                                                    // Clear dateLinks so the picked dates stick on the draft.
+                                                    ? { ...entry, dates: value, dateLinks: undefined }
+                                                    : entry),
+                                                }
+                                              : item),
+                                          }))}
+                                        />
                                       ) : row.dateLinks?.length ? (
                                         <div className="mr-date-links">
                                           {row.dateLinks.map((link, linkIndex) => (
@@ -2099,7 +2252,20 @@ function ReportBody({
                   <tbody>
                     {draft.adhoc.map((row, index) => (
                       <tr key={`adhoc-${index}`}>
-                        <td><TextField editing={editing} value={row.site} onChange={(value) => onDraft((current) => ({ ...current, adhoc: current.adhoc.map((item, itemIndex) => itemIndex === index ? { ...item, site: value } : item) }))} /></td>
+                        <td>
+                          {editing ? (
+                            <VisitSiteSelect
+                              value={row.site}
+                              options={draft.siteOptions || []}
+                              onChange={(value) => onDraft((current) => ({
+                                ...current,
+                                adhoc: current.adhoc.map((item, itemIndex) => itemIndex === index ? { ...item, site: value } : item),
+                              }))}
+                            />
+                          ) : (
+                            <TextField editing={false} value={row.site} onChange={() => undefined} />
+                          )}
+                        </td>
                         <td><TextField editing={editing} multiline value={row.description} onChange={(value) => onDraft((current) => ({ ...current, adhoc: current.adhoc.map((item, itemIndex) => itemIndex === index ? { ...item, description: value } : item) }))} /></td>
                         <td><TextField editing={editing} value={row.requestedBy} onChange={(value) => onDraft((current) => ({ ...current, adhoc: current.adhoc.map((item, itemIndex) => itemIndex === index ? { ...item, requestedBy: value } : item) }))} /></td>
                         <td><TextField editing={editing} fit="short" value={row.date} onChange={(value) => onDraft((current) => ({ ...current, adhoc: current.adhoc.map((item, itemIndex) => itemIndex === index ? { ...item, date: value } : item) }))} /></td>

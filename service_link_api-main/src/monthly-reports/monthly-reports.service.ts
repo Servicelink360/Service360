@@ -65,6 +65,113 @@ function stripHtml(value: unknown) {
     .trim();
 }
 
+/** Turn checklist question labels into short Comments phrases (still from real YES/NO answers). */
+function checklistCommentPhrase(name: string, yes: boolean): string | null {
+  const key = String(name || '')
+    .replace(/\?+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (!key) return null;
+  if (/maintenance issue/.test(key)) {
+    return yes ? 'Maintenance issues noted' : 'No maintenance issues';
+  }
+  if (!yes) return null;
+  if (/downpipe/.test(key)) return 'Downpipes cleared';
+  if (/gutter/i.test(key) && /debris|clear/.test(key)) return 'Gutters cleared of debris';
+  if (/blow roof|leaves/.test(key)) return 'Roof cleared of leaves';
+  if (/condition of the roof|roof and gutters good/.test(key)) return 'Roof and gutters in good condition';
+  if (/overhanging tree/.test(key)) return 'Overhanging branches checked';
+  if (/premises safe/.test(key)) return 'Premises safe to enter';
+  if (/ppe|uniform/.test(key)) return 'PPE and uniform compliant';
+  if (/introduced yourself/.test(key)) return 'Introduced to site staff';
+  if (/(lawn|garden|mow|edge|litter|rubbish)/.test(key)) {
+    return key.replace(/^is\s+/i, '').replace(/^are\s+/i, '').replace(/^ensure\s+/i, '');
+  }
+  return null;
+}
+
+/** Monthly visit Comments from real New Report answers (never invented marketing copy). */
+function buildWorkCommentFromAnswers(
+  items: { name: string; type: string; value: string; order: number }[],
+  fallbackDescription = '',
+) {
+  const rows = [...(items || [])].sort(
+    (a, b) => (a.order - b.order) || a.name.localeCompare(b.name),
+  );
+  const textBits: string[] = [];
+  for (const row of rows) {
+    const name = String(row.name || '').trim();
+    const type = String(row.type || '').toUpperCase();
+    const value = stripHtml(row.value);
+    if (!name || !value) continue;
+    if (/photo|image|video|media/i.test(name) || /photo|image|video|media/i.test(type)) continue;
+    if (type === 'TEXTAREA' || type === 'TEXT' || type === 'INPUT' || type === 'STRING') {
+      // Adhoc "Details" / free-text notes.
+      if (
+        /^details$/i.test(name)
+        || /description of the work/i.test(name)
+        || /services produced/i.test(name)
+        || /comment/i.test(name)
+        || /note/i.test(name)
+      ) {
+        textBits.push(value);
+      } else if (value.length >= 12) {
+        textBits.push(value);
+      }
+    }
+  }
+  if (textBits.length) {
+    return [...new Set(textBits)].join('; ').slice(0, 800);
+  }
+
+  const parts: string[] = [];
+  for (const row of rows) {
+    const name = String(row.name || '').trim();
+    const type = String(row.type || '').toUpperCase();
+    const value = stripHtml(row.value).toUpperCase();
+    if (type !== 'YES_NO' && type !== 'YESNO') continue;
+    if (/photo|image|video|media/i.test(name)) continue;
+    const yes = value === 'YES' || value === 'Y';
+    const no = value === 'NO' || value === 'N';
+    if (!yes && !no) continue;
+    // Work / condition / maintenance from Roof–Ground checklists only.
+    if (
+      !/maintenance issue|gutter|downpipe|debris|blow roof|leaves|clear|lawn|garden|mow|edge|litter|rubbish|condition of the roof|roof and gutters good|overhanging tree/i.test(name)
+    ) {
+      continue;
+    }
+    const phrase = checklistCommentPhrase(name, yes);
+    if (phrase) parts.push(phrase);
+  }
+  if (parts.length) {
+    return [...new Set(parts)].join('; ').slice(0, 800);
+  }
+
+  // Ground / cleaning-style reports: attendance checklist is still real report data.
+  const soft: string[] = [];
+  for (const row of rows) {
+    const name = String(row.name || '').trim();
+    const type = String(row.type || '').toUpperCase();
+    const value = stripHtml(row.value).toUpperCase();
+    if (/photo|image|video|media/i.test(name) || /IMAGE|PHOTO|IMAGES|PHOTOS|VIDEO|MEDIA/.test(type)) {
+      continue;
+    }
+    if (type !== 'YES_NO' && type !== 'YESNO') continue;
+    if (!(value === 'YES' || value === 'Y')) continue;
+    const phrase = checklistCommentPhrase(name, true);
+    if (phrase && /Premises safe|PPE and uniform|Introduced to site/.test(phrase)) {
+      soft.push(phrase);
+    }
+  }
+  if (soft.length) {
+    return [...new Set(soft)].join('; ').slice(0, 800);
+  }
+
+  const fallback = stripHtml(fallbackDescription);
+  return fallback ? fallback.slice(0, 800) : '';
+}
+
 function faultStatus(status: number) {
   if (status === 1) return 'Completed';
   if (status === 3) return 'In progress';
@@ -691,8 +798,6 @@ export class MonthlyReportsService {
     if (!ids.length) return [];
     // Completed = submitted New Reports (/new-reports) for the month — same CUSTOM
     // rows as that page (exclude Incident / Safety Audit sidebar pages).
-    // detail = Adhoc "Description of the work/services produced" (user_task_reports
-    // name Details), else any matching work-description field, else ut.description.
     const rows = await this.dataSource.query(
       `SELECT ut.id,
               ut.type,
@@ -703,28 +808,8 @@ export class MonthlyReportsService {
               ut.site_name,
               ut.site_address,
               ut.pdf_file,
+              ut.description,
               staff.full_name AS staff_name,
-              LEFT(regexp_replace(COALESCE(
-                (
-                  SELECT utr.value
-                  FROM public.user_task_reports utr
-                  WHERE utr.user_task_id = ut.id
-                    AND NULLIF(TRIM(utr.value), '') IS NOT NULL
-                    AND (
-                      LOWER(TRIM(utr.name)) = 'details'
-                      OR LOWER(utr.name) LIKE '%description of the work%'
-                      OR LOWER(utr.name) LIKE '%services produced%'
-                    )
-                  ORDER BY CASE
-                    WHEN LOWER(TRIM(utr.name)) = 'details' THEN 0
-                    WHEN LOWER(utr.name) LIKE '%description of the work%' THEN 1
-                    ELSE 2
-                  END, utr."order" ASC NULLS LAST, utr.id ASC
-                  LIMIT 1
-                ),
-                ut.description,
-                ''
-              ), '<[^>]+>', ' ', 'g'), 800) AS detail,
               COALESCE(ut.check_in, ut.created_at) AS done_at
        FROM public.user_tasks ut
        LEFT JOIN public.users staff ON staff.id = ut.staff_id
@@ -742,20 +827,49 @@ export class MonthlyReportsService {
        LIMIT 500`,
       [ids, start, end],
     );
-    return rows.map((row: any) => ({
-      id: +row.id,
-      date: row.done_at,
-      siteId: row.site_id != null && +row.site_id > 0 ? +row.site_id : null,
-      site: row.site_name || '',
-      address: row.site_address || '',
-      serviceId: row.service_id != null && +row.service_id > 0 ? +row.service_id : null,
-      service: row.service_name || row.task_name || 'Job',
-      title: row.task_name || row.service_name || 'Completed job',
-      detail: stripHtml(row.detail),
-      kind: 'Site report',
-      pdfFile: row.pdf_file || '',
-      staffName: row.staff_name || '',
-    }));
+    const taskIds = rows
+      .map((row: any) => +row.id)
+      .filter((id: number) => Number.isFinite(id) && id > 0);
+    const answersByTask = new Map<number, { name: string; type: string; value: string; order: number }[]>();
+    if (taskIds.length) {
+      const answers = await this.dataSource.query(
+        `SELECT user_task_id, name, type, value, "order"
+         FROM public.user_task_reports
+         WHERE user_task_id = ANY($1::int[])
+         ORDER BY user_task_id ASC, "order" ASC NULLS LAST, id ASC`,
+        [taskIds],
+      );
+      for (const answer of answers) {
+        const taskId = +answer.user_task_id;
+        if (!Number.isFinite(taskId) || taskId <= 0) continue;
+        const list = answersByTask.get(taskId) || [];
+        list.push({
+          name: String(answer.name || ''),
+          type: String(answer.type || ''),
+          value: String(answer.value || ''),
+          order: Number(answer.order) || 0,
+        });
+        answersByTask.set(taskId, list);
+      }
+    }
+    return rows.map((row: any) => {
+      const id = +row.id;
+      return {
+        id,
+        date: row.done_at,
+        siteId: row.site_id != null && +row.site_id > 0 ? +row.site_id : null,
+        site: row.site_name || '',
+        address: row.site_address || '',
+        serviceId: row.service_id != null && +row.service_id > 0 ? +row.service_id : null,
+        service: row.service_name || row.task_name || 'Job',
+        title: row.task_name || row.service_name || 'Completed job',
+        // Visit Comments = real report answers (Details text, checklist, etc.).
+        detail: buildWorkCommentFromAnswers(answersByTask.get(id) || [], row.description || ''),
+        kind: 'Site report',
+        pdfFile: row.pdf_file || '',
+        staffName: row.staff_name || '',
+      };
+    });
   }
 
   private async countWork(ids: number[], start: string, end: string) {
