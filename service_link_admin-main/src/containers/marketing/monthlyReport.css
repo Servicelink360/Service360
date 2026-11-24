@@ -1559,10 +1559,10 @@ html[data-color-mode='dark'] .mr-edit-bar--pinned {
   border-collapse: collapse;
 }
 
-.marketing-site .mr-table--visits .mr-col-visit-site { width: 22%; }
-.marketing-site .mr-table--visits .mr-col-visit-dates { width: auto; }
-.marketing-site .mr-table--visits .mr-col-visit-quality { width: 150px; }
-.marketing-site .mr-table--visits .mr-col-visit-notes { width: 12%; }
+.marketing-site .mr-table--visits .mr-col-visit-site { width: 24%; }
+.marketing-site .mr-table--visits .mr-col-visit-dates { width: 18%; }
+.marketing-site .mr-table--visits .mr-col-visit-quality { width: 140px; }
+.marketing-site .mr-table--visits .mr-col-visit-notes { width: auto; }
 
 .marketing-site .mr-visit-block {
   margin: 0 0 18px;
@@ -1690,7 +1690,6 @@ html[data-color-mode='dark'] .mr-edit-bar--pinned {
 
 .marketing-site .mr-table--visits td.mr-visit-dates {
   overflow: visible;
-  width: 100%;
   vertical-align: top;
   white-space: normal;
   word-break: break-word;
@@ -1702,6 +1701,17 @@ html[data-color-mode='dark'] .mr-edit-bar--pinned {
 .marketing-site .mr-table--visits td.mr-visit-quality,
 .marketing-site .mr-table--visits td.mr-visit-comments {
   vertical-align: middle;
+}
+
+.marketing-site .mr-table--visits td.mr-visit-comments {
+  min-width: 0;
+  width: auto;
+}
+
+.marketing-site .mr-editing .mr-table--visits td.mr-visit-comments .mr-edit-area,
+.marketing-site .mr-editing .mr-table--visits td.mr-visit-comments textarea.ant-input {
+  width: 100% !important;
+  min-height: 48px;
 }
 
 .marketing-site .mr-quality-pill {
