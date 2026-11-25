@@ -4,6 +4,8 @@ export interface option {
 	leftIcon?: any,
 	children?: any,
 	groupColor?: string,
+	/** WORKSPACE / SYSTEM divider from nav draft. */
+	section?: 'workspace' | 'system',
 }
 export interface hashOption {
 	key: string,
@@ -15,6 +17,10 @@ export type NavGroupDef = {
 	label: string;
 	color: string;
 	keys: string[];
+	/** Draft nav: WORKSPACE vs SYSTEM section divider. */
+	section?: 'workspace' | 'system';
+	/** Group header icon (SidebarIcon name). */
+	icon?: string;
 };
 
 /** Same grouping as /nav-mock — unwrap these so the group title is the section, not a nested duplicate. */
@@ -55,51 +61,162 @@ const LEAF_ICONS: Record<string, string> = {
 	'asset-register': 'icon-asset',
 };
 
+/** Admin nav — same groups/order as Drafts/Service360_Navigation_With_Icons.html */
 export const adminNavGroups: NavGroupDef[] = [
-	{ id: 'nav-home', label: 'sidebar.dashboard', color: '#A3F34F', keys: ['dashboard'] },
-	{ id: 'nav-messages', label: 'sidebar.navMessages', color: '#A3F34F', keys: ['messages', 'tickets'] },
-	{ id: 'nav-camera', label: 'sidebar.navCamera', color: '#FFAD32', keys: ['field-photos'] },
-	{ id: 'nav-field', label: 'sidebar.navFieldWork', color: '#FFE05B', keys: ['task-today'] },
-	{ id: 'nav-meeting', label: 'sidebar.navTeamMeeting', color: '#4FB8FF', keys: ['team-meeting', 'meeting-history'] },
-	{ id: 'nav-procurement', label: 'sidebar.navProcurement', color: '#FF5797', keys: ['invoices', 'consumables'] },
-	{ id: 'nav-directory', label: 'sidebar.navDirectory', color: '#BD70FF', keys: ['directory'] },
-	{ id: 'nav-reports', label: 'sidebar.navReports', color: '#67E8F9', keys: ['report'] },
-	{ id: 'nav-staff', label: 'sidebar.navStaffManagement', color: '#FFAD32', keys: ['staff-management'] },
-	{ id: 'nav-assets', label: 'sidebar.navAssetsPpe', color: '#A3F34F', keys: ['asset', 'manageme-PPE'] },
-	{ id: 'nav-admin', label: 'sidebar.navAdmin', color: '#CBD5E1', keys: ['admin'] },
-	{ id: 'nav-help', label: 'sidebar.navHelp', color: '#F9A8D4', keys: ['how-to'] },
+	// Dashboard is via logo link — not a sidebar chip (footer: Powered by Service360).
+	{
+		id: 'nav-communication',
+		label: 'sidebar.navCommunication',
+		color: '#a3ed59',
+		section: 'workspace',
+		icon: 'icon-messages',
+		keys: ['messages', 'tickets', 'team-meeting', 'meeting-history'],
+	},
+	{
+		id: 'nav-operations',
+		label: 'sidebar.navOperations',
+		color: '#ffb74d',
+		section: 'workspace',
+		icon: 'icon-tasks',
+		keys: ['field-photos', 'task-today', 'invoices', 'consumables'],
+	},
+	{
+		id: 'nav-directory',
+		label: 'sidebar.navDirectory',
+		color: '#60b9ff',
+		section: 'workspace',
+		icon: 'icon-users',
+		keys: ['directory'],
+	},
+	{
+		id: 'nav-reports',
+		label: 'sidebar.navReportsCompliance',
+		color: '#e9cf62',
+		section: 'workspace',
+		icon: 'icon-reports',
+		keys: ['report'],
+	},
+	{
+		id: 'nav-staff',
+		label: 'sidebar.navStaffManagement',
+		color: '#ce9aff',
+		section: 'workspace',
+		icon: 'icon-staff',
+		keys: ['staff-management'],
+	},
+	{
+		id: 'nav-assets',
+		label: 'sidebar.navAssetsPpe',
+		color: '#f58cb0',
+		section: 'workspace',
+		icon: 'icon-asset',
+		keys: ['asset', 'manageme-PPE'],
+	},
+	{
+		id: 'nav-admin',
+		label: 'sidebar.navAdmin',
+		color: '#b5c9bf',
+		section: 'system',
+		icon: 'icon-system',
+		keys: ['admin'],
+	},
+	{
+		id: 'nav-help',
+		label: 'sidebar.navHelp',
+		color: '#b5c9bf',
+		section: 'system',
+		icon: 'icon-help',
+		keys: ['how-to'],
+	},
 ];
 
-/** Staff (type 2): field tools only — no Staff Management / Directory / Admin / Assets / Procurement / Meetings. */
+/** Staff (type 2): field tools only — no Directory / Admin / Assets / Meetings / Procurement. */
 export const staffNavGroups: NavGroupDef[] = [
-	{ id: 'nav-home', label: 'sidebar.dashboard', color: '#A3F34F', keys: ['dashboard'] },
-	{ id: 'nav-messages', label: 'sidebar.navMessages', color: '#A3F34F', keys: ['messages'] },
-	{ id: 'nav-camera', label: 'sidebar.navCamera', color: '#FFAD32', keys: ['field-photos'] },
 	{
-		id: 'nav-field',
-		label: 'sidebar.navFieldWork',
-		color: '#FFE05B',
-		// Site check-in / job sites sit at Field Work level — not under Tasks
-		keys: ['site-check-in', 'my-tasks'],
+		id: 'nav-communication',
+		label: 'sidebar.navCommunication',
+		color: '#a3ed59',
+		section: 'workspace',
+		icon: 'icon-messages',
+		keys: ['messages'],
 	},
-	{ id: 'nav-reports', label: 'sidebar.navReports', color: '#67E8F9', keys: ['report'] },
 	{
-		id: 'nav-training',
-		label: 'sidebar.training',
-		color: '#FFAD32',
+		id: 'nav-operations',
+		label: 'sidebar.navOperations',
+		color: '#ffb74d',
+		section: 'workspace',
+		icon: 'icon-tasks',
+		// Keep site check-in + tasks (all existing staff field links)
+		keys: ['field-photos', 'site-check-in', 'my-tasks'],
+	},
+	{
+		id: 'nav-reports',
+		label: 'sidebar.navReportsCompliance',
+		color: '#e9cf62',
+		section: 'workspace',
+		icon: 'icon-reports',
+		keys: ['report'],
+	},
+	{
+		id: 'nav-staff',
+		label: 'sidebar.navStaffManagement',
+		color: '#ce9aff',
+		section: 'workspace',
+		icon: 'icon-training',
 		keys: ['training-menu', 'toolbox', 'induction'],
 	},
-	{ id: 'nav-help', label: 'sidebar.navHelp', color: '#F9A8D4', keys: ['how-to'] },
+	{
+		id: 'nav-help',
+		label: 'sidebar.navHelp',
+		color: '#b5c9bf',
+		section: 'system',
+		icon: 'icon-help',
+		keys: ['how-to'],
+	},
 ];
 
-/** Customer (type 1): messages/tickets, invoices, consumables (read), limited reports, own personnel — nothing admin. */
+/** Customer (type 1): messages/tickets, invoices, consumables, limited reports, own personnel. */
 export const customerNavGroups: NavGroupDef[] = [
-	{ id: 'nav-home', label: 'sidebar.dashboard', color: '#A3F34F', keys: ['dashboard'] },
-	{ id: 'nav-messages', label: 'sidebar.navMessages', color: '#A3F34F', keys: ['messages', 'tickets'] },
-	{ id: 'nav-procurement', label: 'sidebar.navProcurement', color: '#FF5797', keys: ['invoices', 'consumables'] },
-	{ id: 'nav-reports', label: 'sidebar.navReports', color: '#67E8F9', keys: ['report'] },
-	{ id: 'nav-directory', label: 'sidebar.navDirectory', color: '#BD70FF', keys: ['customer-personnel'] },
-	{ id: 'nav-help', label: 'sidebar.navHelp', color: '#F9A8D4', keys: ['how-to'] },
+	{
+		id: 'nav-communication',
+		label: 'sidebar.navCommunication',
+		color: '#a3ed59',
+		section: 'workspace',
+		icon: 'icon-messages',
+		keys: ['messages', 'tickets'],
+	},
+	{
+		id: 'nav-operations',
+		label: 'sidebar.navOperations',
+		color: '#ffb74d',
+		section: 'workspace',
+		icon: 'icon-invoice',
+		keys: ['invoices', 'consumables'],
+	},
+	{
+		id: 'nav-reports',
+		label: 'sidebar.navReportsCompliance',
+		color: '#e9cf62',
+		section: 'workspace',
+		icon: 'icon-reports',
+		keys: ['report'],
+	},
+	{
+		id: 'nav-directory',
+		label: 'sidebar.navDirectory',
+		color: '#60b9ff',
+		section: 'workspace',
+		icon: 'icon-staff',
+		keys: ['customer-personnel'],
+	},
+	{
+		id: 'nav-help',
+		label: 'sidebar.navHelp',
+		color: '#b5c9bf',
+		section: 'system',
+		icon: 'icon-help',
+		keys: ['how-to'],
+	},
 ];
 
 function withLeafIcon(item: option): option {
@@ -112,13 +229,26 @@ function withLeafIcon(item: option): option {
 	};
 }
 
-/** Wrap flat menus into the same colored groups as /nav-mock. */
+/** Wrap flat menus into the same colored groups as the navigation draft. */
 export function applyNavGroups(items: option[], groups: NavGroupDef[]): option[] {
 	const byKey = new Map(items.map((item) => [String(item.key), item]));
 	const used = new Set<string>();
 	const result: option[] = [];
 
 	for (const group of groups) {
+		// Dashboard stays a top-level link (not a collapsible group).
+		if (group.id === 'nav-home') {
+			const dash = byKey.get('dashboard');
+			if (dash) {
+				used.add('dashboard');
+				result.push({
+					...withLeafIcon(dash),
+					leftIcon: group.icon || dash.leftIcon || 'svg-dashboard',
+				});
+			}
+			continue;
+		}
+
 		const children: option[] = [];
 		for (const key of group.keys) {
 			const item = byKey.get(key);
@@ -134,10 +264,11 @@ export function applyNavGroups(items: option[], groups: NavGroupDef[]): option[]
 		result.push({
 			key: group.id,
 			label: group.label,
-			leftIcon: children[0]?.leftIcon || 'svg-dashboard',
+			leftIcon: group.icon || children[0]?.leftIcon || 'svg-dashboard',
 			groupColor: group.color,
+			...(group.section ? { section: group.section } : {}),
 			children,
-		});
+		} as option & { section?: string });
 	}
 
 	// Do not append unused items — role menus must only show what the group map allows.

@@ -62,6 +62,20 @@ const ICON_BY_KEY: Record<string, string> = {
   roles: 'icon-master',
   settings: 'icon-system',
   'how-to': 'icon-help',
+  'nav-communication': 'icon-messages',
+  'nav-operations': 'icon-tasks',
+  'nav-directory': 'icon-users',
+  'nav-reports': 'icon-reports',
+  'nav-staff': 'icon-staff',
+  'nav-assets': 'icon-asset',
+  'nav-admin': 'icon-system',
+  'nav-help': 'icon-help',
+  'nav-training': 'icon-training',
+  'nav-procurement': 'icon-invoice',
+  'nav-messages': 'icon-messages',
+  'nav-camera': 'icon-camera',
+  'nav-field': 'icon-tasks',
+  'nav-meeting': 'icon-meeting',
 };
 
 function iconNameFor(item: option): string {
@@ -181,15 +195,21 @@ export default function GroupedSidebarNav({
     }
   };
 
+  let lastSection: string | undefined;
+
   return (
     <div className="sl-nav">
       <nav aria-label="Main">
         {menuOptions.map((group) => {
           const isGroup = Boolean(group.groupColor && group.children?.length);
+
+          // Skip standalone Dashboard chip — logo already goes to /dashboard.
           if (!isGroup) {
+            const key = String(group.key);
+            if (key === 'dashboard') return null;
             return (
               <NavItem
-                key={String(group.key)}
+                key={key}
                 item={group}
                 base={base}
                 pathLeaf={pathLeaf}
@@ -201,65 +221,76 @@ export default function GroupedSidebarNav({
             );
           }
 
-          if (String(group.key) === 'nav-home') {
-            return null;
-          }
-
           const sectionKey = String(group.key);
           const isOpen = Boolean(expandedSections[sectionKey]);
           const panelId = `sl-panel-${sectionKey}`;
+          const section = group.section;
+          const showSectionLabel = Boolean(section && section !== lastSection);
+          if (section) lastSection = section;
 
           return (
-            <div
-              className={`sl-section${isOpen ? ' is-open' : ''}`}
-              key={sectionKey}
-              style={{ ['--g' as string]: group.groupColor }}
-            >
-              <button
-                type="button"
-                className="sl-heading"
-                onClick={() =>
-                  setExpandedSections((prev) => ({
-                    ...prev,
-                    [sectionKey]: !prev[sectionKey],
-                  }))
-                }
-                aria-expanded={isOpen}
-                aria-controls={panelId}
+            <React.Fragment key={sectionKey}>
+              {showSectionLabel ? (
+                <div className="sl-label" aria-hidden>
+                  <IntlMessages
+                    id={section === 'system' ? 'sidebar.navSystem' : 'sidebar.navWorkspace'}
+                  />
+                </div>
+              ) : null}
+              <div
+                className={`sl-section${isOpen ? ' is-open' : ''}`}
+                style={{ ['--g' as string]: group.groupColor }}
               >
-                <span
-                  className="sl-indicator"
-                  style={{ background: group.groupColor }}
-                  aria-hidden
-                />
-                <span className="sl-heading-label">
-                  <IntlMessages id={group.label} />
-                </span>
-                <DownOutlined className={isOpen ? 'is-open' : ''} aria-hidden />
-              </button>
+                <button
+                  type="button"
+                  className="sl-heading"
+                  onClick={() =>
+                    setExpandedSections((prev) => ({
+                      ...prev,
+                      [sectionKey]: !prev[sectionKey],
+                    }))
+                  }
+                  aria-expanded={isOpen}
+                  aria-controls={panelId}
+                >
+                  <span
+                    className="sl-indicator"
+                    style={{ background: group.groupColor }}
+                    aria-hidden
+                  />
+                  <span className="sl-heading-ico" style={{ color: group.groupColor }} aria-hidden>
+                    <SidebarIcon name={iconNameFor(group)} />
+                  </span>
+                  <span className="sl-heading-label">
+                    <IntlMessages id={group.label} />
+                  </span>
+                  <DownOutlined className={isOpen ? 'is-open' : ''} aria-hidden />
+                </button>
 
-              <div className="sl-panel" id={panelId}>
-                <div className="sl-panel-inner">
-                  <div className="sl-items" role="region" aria-label={group.label}>
-                    {group.children!.map((item: option) => (
-                      <NavItem
-                        key={String(item.key)}
-                        item={item}
-                        base={base}
-                        pathLeaf={pathLeaf}
-                        openKeys={openKeys}
-                        onToggle={toggleKey}
-                        onNavigate={onNavigate}
-                        messagesBadge={messagesBadge}
-                      />
-                    ))}
+                <div className="sl-panel" id={panelId}>
+                  <div className="sl-panel-inner">
+                    <div className="sl-items" role="region" aria-label={group.label}>
+                      {group.children!.map((item: option) => (
+                        <NavItem
+                          key={String(item.key)}
+                          item={item}
+                          base={base}
+                          pathLeaf={pathLeaf}
+                          openKeys={openKeys}
+                          onToggle={toggleKey}
+                          onNavigate={onNavigate}
+                          messagesBadge={messagesBadge}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            </React.Fragment>
           );
         })}
       </nav>
+      <footer className="sl-powered">Powered by Service360</footer>
     </div>
   );
 }

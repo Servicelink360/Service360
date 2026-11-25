@@ -223,7 +223,7 @@ export default function Sidebar() {
 				trigger={null}
 				collapsible={true}
 				collapsed={isCollapsed}
-				width="250px"
+				width="300px"
 				className='isomorphicSidebar'
 				id="main_side_bar"
 				onMouseEnter={onMouseEnter}

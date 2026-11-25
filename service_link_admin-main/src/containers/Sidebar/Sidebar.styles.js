@@ -17,8 +17,8 @@ const SidebarWrapper = styled.div`
     background:
       radial-gradient(120% 55% at 0% 0%, rgba(120, 220, 80, 0.28) 0%, transparent 55%),
       linear-gradient(165deg, #06452b 0%, #00351f 48%, #002b1b 100%);
-    width: 250px;
-    flex: 0 0 250px;
+    width: 300px;
+    flex: 0 0 300px;
     height: 100%;
     max-height: 936px;
     overflow: hidden;
@@ -270,8 +270,8 @@ const SidebarWrapper = styled.div`
     }
 
     @media only screen and (max-width: 767px) {
-      width: 250px !important;
-      flex: 0 0 250px !important;
+      width: 300px !important;
+      flex: 0 0 300px !important;
 
       &.isomorphicSidebar--drawer {
         width: 100% !important;
