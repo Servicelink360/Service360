@@ -1686,7 +1686,11 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
   const consumables = asRows(draft.consumables);
 
   const streamHtml = streams.map((stream) => {
-    const summary = asRows(stream.summary);
+    const isAdhocStream = /adhoc|reactive/i.test(
+      `${stream.heading || ''} ${stream.detailHeading || ''}`,
+    );
+    // Adhoc: visits only — no Month/Schedule summary table or chart.
+    const summary = isAdhocStream ? [] : asRows(stream.summary);
     const visits = asRows(stream.visits);
     const showQuality = stream.showQuality === true || stream.showQuality === 'true';
     const periodHint = String(summary[0]?.month || draft.periodLabel || '').trim();
@@ -1699,18 +1703,20 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
       schedule: pdfNum(row.schedule),
       completed: pdfNum(row.completed),
     }));
-    const summaryTable = pdfTable(
-      ['Month', 'Site', 'Description', 'Schedule for this month', 'Completed', 'Comments'],
-      summary.map((row) => [
-        String(row.month || ''),
-        String(row.group || ''),
-        String(row.description || ''),
-        String(row.schedule || ''),
-        String(row.completed || ''),
-        String(row.comments || ''),
-      ]),
-      [3, 4],
-    );
+    const summaryTable = isAdhocStream
+      ? ''
+      : pdfTable(
+        ['Month', 'Site', 'Description', 'Schedule for this month', 'Completed', 'Comments'],
+        summary.map((row) => [
+          String(row.month || ''),
+          String(row.group || ''),
+          String(row.description || ''),
+          String(row.schedule || ''),
+          String(row.completed || ''),
+          String(row.comments || ''),
+        ]),
+        [3, 4],
+      );
     const isPdfAmenityParent = (row: Record<string, unknown>) => {
       if (row.isGroupHeader) return true;
       const site = String(row.site || '');
@@ -1813,7 +1819,7 @@ function monthlyDraftToReportHtml(draft: Record<string, unknown>) {
       : '';
     const detailHead = String(stream.detailHeading || '').trim();
     const detailNote = String(stream.detailNote || '').trim();
-    const chartHtml = inspectionChartSvg(chartRows, chartTitle);
+    const chartHtml = isAdhocStream ? '' : inspectionChartSvg(chartRows, chartTitle);
     return `<div class="mp-stream"><h3>${pdfText(String(stream.heading || 'Service'))}</h3>${
       String(stream.note || '').trim() ? `<p class="mp-note">${pdfText(String(stream.note))}</p>` : ''
     }${summaryTable}${chartHtml}${

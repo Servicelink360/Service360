@@ -5,13 +5,16 @@ import {
   BarChartOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
+  DeleteOutlined,
   EnvironmentFilled,
   FileDoneOutlined,
   FileProtectOutlined,
   FileTextOutlined,
   HomeOutlined,
   PhoneFilled,
+  PlusOutlined,
   ReadOutlined,
+  ScheduleOutlined,
   SearchOutlined,
   ShopOutlined,
   SolutionOutlined,
@@ -522,13 +525,25 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
     contact: textOf(raw.contact, base.contact),
     periodLabel: textOf(raw.periodLabel, base.periodLabel),
     periodRange: textOf(raw.periodRange, base.periodRange),
-    jobs: textOf(raw.jobs, base.jobs),
-    locations: textOf(raw.locations, base.locations),
+    // Always live counts from New Reports / sites.
+    jobs: base.jobs,
+    locations: base.locations,
     preparedBy: textOf(raw.preparedBy, base.preparedBy),
     glanceNote: textOf(raw.glanceNote, base.glanceNote),
     serviceDelivery: textOf(raw.serviceDelivery, base.serviceDelivery),
-    disruptions: textOf(raw.disruptions, base.disruptions),
-    generalIssues: textOf(raw.generalIssues, base.generalIssues),
+    // Live from open faults unless admin typed a custom note (non-empty saved ≠ live).
+    disruptions: (() => {
+      const saved = textOf(raw.disruptions, '');
+      if (!saved || saved === base.disruptions) return base.disruptions;
+      if (/^nil$/i.test(saved.trim())) return base.disruptions;
+      return saved;
+    })(),
+    generalIssues: (() => {
+      const saved = textOf(raw.generalIssues, '');
+      if (!saved || saved === base.generalIssues) return base.generalIssues;
+      if (/^nil$/i.test(saved.trim())) return base.generalIssues;
+      return saved;
+    })(),
     previousMinutes: textOf(raw.previousMinutes, base.previousMinutes),
     whsScope: textOf(raw.whsScope, base.whsScope),
     whsMonth1: textOf(raw.whsMonth1, textOf(raw.whsPriorLabel, base.whsMonth1)),
@@ -564,31 +579,82 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
       : (Array.isArray(raw.siteOptions)
         ? (raw.siteOptions as unknown[]).map((item) => String(item || '').trim()).filter(Boolean)
         : []),
-    weekly: list(raw.weekly, (row) => ({
-      week: String(row.week || ''),
-      jobs: String(row.jobs || ''),
-      faults: String(row.faults || ''),
-      tickets: String(row.tickets || ''),
-    }), base.weekly),
-    services: (() => {
-      const savedServices = list(raw.services, (row) => ({ name: String(row.name || ''), value: String(row.value || '') }), base.services);
-      const names = new Set(savedServices.map((row) => row.name.trim().toLowerCase()).filter(Boolean));
-      const missing = base.services.filter((row) => row.name && !names.has(row.name.trim().toLowerCase()));
-      return [...savedServices, ...missing];
+    weekly: (() => {
+      // Live week rows; keep saved numbers only when the admin changed that week.
+      if (!Array.isArray(raw.weekly)) return base.weekly;
+      const savedWeekly = list(raw.weekly, (row) => ({
+        week: String(row.week || ''),
+        jobs: String(row.jobs || ''),
+        faults: String(row.faults || ''),
+        tickets: String(row.tickets || ''),
+      }), base.weekly);
+      const byWeek = new Map(savedWeekly.map((row) => [row.week.trim().toLowerCase(), row]));
+      return base.weekly.map((live) => {
+        const saved = byWeek.get(live.week.trim().toLowerCase());
+        if (!saved) return live;
+        return {
+          week: live.week,
+          jobs: saved.jobs !== '' && saved.jobs !== live.jobs ? saved.jobs : live.jobs,
+          faults: saved.faults !== '' && saved.faults !== live.faults ? saved.faults : live.faults,
+          tickets: saved.tickets !== '' && saved.tickets !== live.tickets ? saved.tickets : live.tickets,
+        };
+      });
     })(),
-    compliance: list(raw.compliance, (row) => ({
-      area: String(row.area || ''),
-      yes: String(row.yes || row.result || ''),
-      no: String(row.no || ''),
-      comments: String(row.comments || ''),
-    }), base.compliance),
-    whs: list(raw.whs, (row) => ({
-      label: String(row.label || ''),
-      m1: String(row.m1 || ''),
-      m2: String(row.m2 || row.prior || ''),
-      m3: String(row.m3 || row.current || ''),
-      ytd: String(row.ytd || ''),
-    }), base.whs),
+    services: (() => {
+      // Live service names from pack; keep saved chart values when edited.
+      const savedServices = list(raw.services, (row) => ({ name: String(row.name || ''), value: String(row.value || '') }), base.services);
+      const byName = new Map(savedServices.map((row) => [row.name.trim().toLowerCase(), row]));
+      return base.services.map((live) => {
+        const saved = byName.get(live.name.trim().toLowerCase());
+        if (!saved) return live;
+        return {
+          name: live.name,
+          value: saved.value !== '' && saved.value !== live.value ? saved.value : live.value,
+        };
+      });
+    })(),
+    compliance: (() => {
+      if (!Array.isArray(raw.compliance)) return base.compliance;
+      const savedCompliance = list(raw.compliance, (row) => ({
+        area: String(row.area || ''),
+        yes: String(row.yes || row.result || ''),
+        no: String(row.no || ''),
+        comments: String(row.comments || ''),
+      }), base.compliance);
+      const byArea = new Map(savedCompliance.map((row) => [row.area.trim().toLowerCase(), row]));
+      return base.compliance.map((live) => {
+        const saved = byArea.get(live.area.trim().toLowerCase());
+        if (!saved) return live;
+        return {
+          area: live.area,
+          yes: saved.yes !== '' ? saved.yes : live.yes,
+          no: saved.no !== '' ? saved.no : live.no,
+          comments: saved.comments !== '' && saved.comments !== live.comments ? saved.comments : live.comments,
+        };
+      });
+    })(),
+    whs: (() => {
+      if (!Array.isArray(raw.whs)) return base.whs;
+      const savedWhs = list(raw.whs, (row) => ({
+        label: String(row.label || ''),
+        m1: String(row.m1 || ''),
+        m2: String(row.m2 || row.prior || ''),
+        m3: String(row.m3 || row.current || ''),
+        ytd: String(row.ytd || ''),
+      }), base.whs);
+      const byLabel = new Map(savedWhs.map((row) => [row.label.trim().toLowerCase(), row]));
+      return base.whs.map((live) => {
+        const saved = byLabel.get(live.label.trim().toLowerCase());
+        if (!saved) return live;
+        return {
+          label: live.label,
+          m1: saved.m1 !== '' ? saved.m1 : live.m1,
+          m2: saved.m2 !== '' ? saved.m2 : live.m2,
+          m3: saved.m3 !== '' ? saved.m3 : live.m3,
+          ytd: saved.ytd !== '' ? saved.ytd : live.ytd,
+        };
+      });
+    })(),
     environmental: Array.isArray(raw.environmental)
       ? list(raw.environmental, (row) => ({ area: String(row.area || ''), comments: String(row.comments || '') }), base.environmental)
       : base.environmental,
@@ -662,14 +728,33 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
       }), base.streams);
       // Keep saved stream edits, then append any contracted services missing from the saved draft.
       const headingKey = (heading: string) => heading.split('–')[0].split('-')[0].trim().toLowerCase();
+      const isAdhocHeading = (heading: string) => /adhoc|reactive/i.test(String(heading || ''));
+      const findBaseStream = (stream: { heading: string }, streamIndex: number) => {
+        const key = headingKey(stream.heading);
+        const exact = base.streams.find((item) => headingKey(item.heading) === key);
+        if (exact) return exact;
+        // Saved "Adhoc – …" must still match live "Reactive/Adhoc Maintenance Works – …".
+        if (isAdhocHeading(stream.heading)) {
+          return base.streams.find((item) => isAdhocHeading(item.heading)) || base.streams[streamIndex];
+        }
+        return base.streams[streamIndex];
+      };
       const savedKeys = new Set(savedStreams.map((stream) => headingKey(stream.heading)));
-      const missing = base.streams.filter((stream) => !savedKeys.has(headingKey(stream.heading)));
+      // Treat any saved Adhoc/Reactive heading as covering the live Adhoc stream key.
+      const savedCovers = (liveHeading: string) => {
+        const key = headingKey(liveHeading);
+        if (savedKeys.has(key)) return true;
+        if (isAdhocHeading(liveHeading)) {
+          return savedStreams.some((stream) => isAdhocHeading(stream.heading));
+        }
+        return false;
+      };
+      const missing = base.streams.filter((stream) => !savedCovers(stream.heading));
       return [...savedStreams, ...missing].map((stream, streamIndex) => {
         // Live visits are grouped by parent amenities (Bayside / Mascot). Prefer that
         // structure so old drafts do not keep Nil child-park rows.
-        const baseStream =
-          base.streams.find((item) => headingKey(item.heading) === headingKey(stream.heading))
-          || base.streams[streamIndex];
+        const baseStream = findBaseStream(stream, streamIndex);
+        const adhocStream = isAdhocHeading(baseStream?.heading || stream.heading);
         const liveVisits = (baseStream?.visits || []).map((live) => {
           if (isVisitGroupHeader(live)) {
             return {
@@ -679,6 +764,13 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
               comments: '',
               isGroupHeader: true as const,
               ...(live.sortOrder != null ? { sortOrder: live.sortOrder } : {}),
+            };
+          }
+          // Adhoc visits always follow live New Reports (site / date / comments).
+          if (adhocStream) {
+            return {
+              ...live,
+              ...(live.isGroupChild ? { isGroupChild: true as const } : {}),
             };
           }
           const saved = (stream.visits || []).find(
@@ -696,49 +788,59 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
             || /^all reports are available on the service360 platform/i.test(savedComment);
           const keepSavedComment = Boolean(savedComment) && !cannedVisitComment && savedComment !== liveComment;
           const savedDates = String(saved?.dates || '').trim();
-          // Calendar-picked dates clear dateLinks on the draft — keep those over live links.
+          const liveHasLinks = Array.isArray(live.dateLinks) && live.dateLinks.length > 0;
+          // Calendar-picked dates clear dateLinks on the draft — keep those over live links
+          // only when live itself has no linked reports for this site.
           const preferSavedDates = Boolean(saved)
             && Boolean(savedDates)
-            && (!Array.isArray(saved?.dateLinks) || saved.dateLinks.length === 0);
+            && (!Array.isArray(saved?.dateLinks) || saved.dateLinks.length === 0)
+            && !liveHasLinks;
+          const savedQuality = String(saved?.quality || '').trim();
+          const liveQuality = String(live.quality || '').trim();
           return {
             ...live,
-            quality: String(saved?.quality || '').trim() || live.quality,
+            quality: savedQuality && savedQuality !== liveQuality ? savedQuality : liveQuality,
             comments: keepSavedComment ? savedComment : (liveComment || savedComment),
             dateLinks: preferSavedDates
               ? undefined
               : (live.dateLinks?.length ? live.dateLinks : saved?.dateLinks),
             dates: preferSavedDates
               ? savedDates
-              : (live.dateLinks?.length ? live.dates : (savedDates || live.dates)),
+              : (live.dateLinks?.length ? live.dates : (live.dates || savedDates)),
             ...(live.isGroupChild ? { isGroupChild: true as const } : {}),
           };
         });
-        // Summary rows: live groups/descriptions from /sites + New Reports; schedule /
-        // completed / comments stay on the saved monthly draft only (never write back).
-        const savedSummary = stream.summary || [];
-        const liveSummary = (baseStream?.summary || []).map((baseRow) => {
-          const savedRow = savedSummary.find(
-            (row) => row.group.trim().toLowerCase() === baseRow.group.trim().toLowerCase(),
-          );
-          const savedSchedule = String(savedRow?.schedule ?? '').trim();
-          const savedCompleted = String(savedRow?.completed ?? '').trim();
-          const savedComment = String(savedRow?.comments ?? '').trim();
-          // Drop old one-size-fits-all Ground/Roof line so site-group comments from live win.
-          const cannedSummaryComment =
-            /^all work completed according to schedule/i.test(savedComment)
-            || /^all reports are available on the service360 platform with timestamped photos\.?$/i.test(savedComment);
-          return {
-            month: savedRow?.month || baseRow.month,
-            group: baseRow.group,
-            // Description = exact /services name from live pack.
-            description: baseRow.description || savedRow?.description || '',
-            schedule: savedSchedule !== '' ? savedSchedule : baseRow.schedule,
-            completed: savedCompleted !== '' ? savedCompleted : baseRow.completed,
-            comments: savedComment && !cannedSummaryComment
-              ? savedComment
-              : (baseRow.comments || savedComment),
-          };
-        });
+        // Summary: live schedule/completed from New Reports; keep saved only when admin changed them.
+        // Adhoc: no schedule table — keep visits only.
+        const savedSummary = adhocStream ? [] : (stream.summary || []);
+        const liveSummary = adhocStream
+          ? []
+          : (baseStream?.summary || []).map((baseRow) => {
+            const savedRow = savedSummary.find(
+              (row) => row.group.trim().toLowerCase() === baseRow.group.trim().toLowerCase(),
+            );
+            const savedSchedule = String(savedRow?.schedule ?? '').trim();
+            const savedCompleted = String(savedRow?.completed ?? '').trim();
+            const savedComment = String(savedRow?.comments ?? '').trim();
+            const liveSchedule = String(baseRow.schedule ?? '').trim();
+            const liveCompleted = String(baseRow.completed ?? '').trim();
+            // Drop old one-size-fits-all Ground/Roof line so site-group comments from live win.
+            const cannedSummaryComment =
+              /^all work completed according to schedule/i.test(savedComment)
+              || /^all reports are available on the service360 platform with timestamped photos\.?$/i.test(savedComment)
+              || /^no completed visits recorded this period\.?$/i.test(savedComment);
+            return {
+              month: baseRow.month || savedRow?.month || '',
+              group: baseRow.group,
+              // Description = exact /services name from live pack.
+              description: baseRow.description || savedRow?.description || '',
+              schedule: savedSchedule !== '' && savedSchedule !== liveSchedule ? savedSchedule : liveSchedule,
+              completed: savedCompleted !== '' && savedCompleted !== liveCompleted ? savedCompleted : liveCompleted,
+              comments: savedComment && !cannedSummaryComment && savedComment !== String(baseRow.comments || '').trim()
+                ? savedComment
+                : (baseRow.comments || savedComment),
+            };
+          });
         const liveGroups = new Set(
           liveSummary.map((row) => row.group.trim().toLowerCase()).filter(Boolean),
         );
@@ -756,39 +858,100 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
           detailHeading: baseStream?.detailHeading || stream.detailHeading,
           detailNote: baseStream?.detailNote || stream.detailNote,
           note: baseStream?.note || stream.note,
-          summary: mergedSummary.length ? mergedSummary : stream.summary,
+          summary: adhocStream ? [] : (mergedSummary.length ? mergedSummary : stream.summary),
           visits: liveVisits.length ? liveVisits : stream.visits,
         };
       });
     })(),
-    feedback: list(raw.feedback, (row) => {
-      const site = String(row.site || '');
-      const feedback = String(row.feedback || '');
-      const comment = String(row.comment || row.status || '');
-      let reported = String(row.rectified || row.date || '').trim();
-      const savedId = Number(row.id);
-      const match =
-        base.feedback.find((item) => item.site === site && item.feedback === feedback)
-        || base.feedback.find((item) => item.feedback === feedback && !!item.rectified)
-        || base.feedback.find((item) => item.site === site && !!item.rectified);
-      // Old drafts stored blank/"Nil" under Date rectified — pull the real fault date.
-      if (!reported || /^nil$/i.test(reported) || /^n\/?a$/i.test(reported)) {
-        if (match?.rectified) reported = match.rectified;
-      }
-      const id = Number.isFinite(savedId) && savedId > 0 ? savedId : match?.id;
-      return { site, feedback, comment, rectified: reported, ...(id ? { id } : {}) };
-    }, base.feedback),
-    toolbox: list(raw.toolbox, (row) => ({
-      title: String(row.title || ''),
-      date: String(row.date || ''),
-      detail: String(row.detail || ''),
-    }), base.toolbox),
-    invoices: list(raw.invoices, (row) => ({
-      number: String(row.number || row.title || ''),
-      detail: String(row.detail || row.date || ''),
-    }), base.invoices),
+    feedback: (() => {
+      // Live faults first so Reset / reopen pick up new reports; overlay saved comment edits.
+      if (!Array.isArray(raw.feedback)) return base.feedback;
+      const savedFeedback = list(raw.feedback, (row) => {
+        const site = String(row.site || '');
+        const feedback = String(row.feedback || '');
+        const comment = String(row.comment || row.status || '');
+        let reported = String(row.rectified || row.date || '').trim();
+        const savedId = Number(row.id);
+        return {
+          site,
+          feedback,
+          comment,
+          rectified: reported,
+          ...(Number.isFinite(savedId) && savedId > 0 ? { id: savedId } : {}),
+        };
+      }, base.feedback);
+      const byId = new Map(
+        savedFeedback.filter((row) => row.id).map((row) => [row.id as number, row]),
+      );
+      const byKey = new Map(
+        savedFeedback.map((row) => [
+          `${row.site.trim().toLowerCase()}|${row.feedback.trim().toLowerCase()}`,
+          row,
+        ]),
+      );
+      return base.feedback.map((live) => {
+        const saved = (live.id ? byId.get(live.id) : undefined)
+          || byKey.get(`${live.site.trim().toLowerCase()}|${live.feedback.trim().toLowerCase()}`);
+        if (!saved) return live;
+        const savedComment = String(saved.comment || '').trim();
+        const liveComment = String(live.comment || '').trim();
+        const keepComment = savedComment && savedComment !== liveComment && savedComment !== '—';
+        let reported = String(saved.rectified || '').trim();
+        if (!reported || /^nil$/i.test(reported) || /^n\/?a$/i.test(reported)) {
+          reported = live.rectified;
+        }
+        return {
+          ...live,
+          comment: keepComment ? savedComment : liveComment,
+          rectified: reported || live.rectified,
+        };
+      });
+    })(),
+    toolbox: (() => {
+      if (!Array.isArray(raw.toolbox)) return base.toolbox;
+      const savedToolbox = list(raw.toolbox, (row) => ({
+        title: String(row.title || ''),
+        date: String(row.date || ''),
+        detail: String(row.detail || ''),
+      }), base.toolbox);
+      const byTitle = new Map(savedToolbox.map((row) => [row.title.trim().toLowerCase(), row]));
+      const merged = base.toolbox.map((live) => {
+        const saved = byTitle.get(live.title.trim().toLowerCase());
+        if (!saved) return live;
+        return {
+          title: live.title,
+          date: saved.date && saved.date !== live.date ? saved.date : live.date,
+          detail: saved.detail && saved.detail !== live.detail ? saved.detail : live.detail,
+        };
+      });
+      const liveTitles = new Set(base.toolbox.map((row) => row.title.trim().toLowerCase()));
+      const extra = savedToolbox.filter((row) => row.title && !liveTitles.has(row.title.trim().toLowerCase()));
+      return [...merged, ...extra];
+    })(),
+    invoices: (() => {
+      if (!Array.isArray(raw.invoices)) return base.invoices;
+      const savedInvoices = list(raw.invoices, (row) => ({
+        number: String(row.number || row.title || ''),
+        detail: String(row.detail || row.date || ''),
+      }), base.invoices);
+      const byNumber = new Map(savedInvoices.map((row) => [row.number.trim().toLowerCase(), row]));
+      const merged = base.invoices.map((live) => {
+        const saved = byNumber.get(live.number.trim().toLowerCase());
+        if (!saved) return live;
+        return {
+          number: live.number,
+          detail: saved.detail && saved.detail !== live.detail ? saved.detail : live.detail,
+        };
+      });
+      const liveNumbers = new Set(base.invoices.map((row) => row.number.trim().toLowerCase()));
+      const extra = savedInvoices.filter((row) => row.number && !liveNumbers.has(row.number.trim().toLowerCase()));
+      return [...merged, ...extra];
+    })(),
     variations,
     adhoc: (() => {
+      // 5.3 always follows live New Reports (site / date / description).
+      // Keep only saved amount / requestedBy when the same site+date row exists.
+      if (!Array.isArray(raw.adhoc)) return base.adhoc;
       const saved = list(raw.adhoc, (row) => ({
         site: String(row.site || ''),
         description: String(row.description || ''),
@@ -796,42 +959,57 @@ export function mergeMonthlyDraft(base: MonthlyDraft, saved?: Partial<MonthlyDra
         date: String(row.date || ''),
         amount: String(row.amount || ''),
       }), base.adhoc);
-      if (!Array.isArray(raw.adhoc)) return base.adhoc;
-      // Prefer live work-description over old drafts that stored task title/service.
+      const savedByKey = new Map(
+        saved.map((row) => [
+          `${row.site.trim().toLowerCase()}|${row.date.trim()}`,
+          row,
+        ]),
+      );
       return base.adhoc.map((live, index) => {
-        const row = saved[index];
-        if (!row) return live;
-        const liveDesc = String(live.description || '').trim();
-        const savedDesc = String(row.description || '').trim();
-        const savedLooksTitle =
-          !savedDesc
-          || savedDesc === '—'
-          || /^adhoc report\b/i.test(savedDesc)
-          || /reactive\/?adhoc/i.test(savedDesc);
+        const key = `${String(live.site || '').trim().toLowerCase()}|${String(live.date || '').trim()}`;
+        const row = savedByKey.get(key) || saved[index];
         return {
-          ...row,
-          site: row.site || live.site,
-          date: row.date || live.date,
-          description: liveDesc && (savedLooksTitle || !savedDesc) ? liveDesc : (savedDesc || liveDesc || '—'),
+          site: live.site,
+          date: live.date,
+          description: live.description || '—',
+          requestedBy: String(row?.requestedBy || ''),
+          amount: String(row?.amount || ''),
         };
       });
     })(),
     consumables: (() => {
+      // Live deliveries first; keep saved row edits when the same delivery exists.
+      if (!Array.isArray(raw.consumables)) return base.consumables;
       const saved = list(raw.consumables, (row) => ({
         date: String(row.date || ''),
         site: String(row.site || ''),
         subject: String(row.subject || ''),
         items: String(row.items || row.itemsLabel || ''),
       }), base.consumables);
-      if (!Array.isArray(raw.consumables)) return base.consumables;
-      // Keep saved edits; append any newly sent deliveries missing from the draft.
-      const keys = new Set(
-        saved.map((row) => `${row.date}|${row.site}|${row.subject}|${row.items}`.toLowerCase()),
+      const byKey = new Map(
+        saved.map((row) => [
+          `${row.date}|${row.site}|${row.subject}`.toLowerCase(),
+          row,
+        ]),
       );
-      const missing = base.consumables.filter(
-        (row) => !keys.has(`${row.date}|${row.site}|${row.subject}|${row.items}`.toLowerCase()),
+      const merged = base.consumables.map((live) => {
+        const key = `${live.date}|${live.site}|${live.subject}`.toLowerCase();
+        const row = byKey.get(key);
+        if (!row) return live;
+        return {
+          date: live.date,
+          site: live.site || row.site,
+          subject: live.subject || row.subject,
+          items: row.items && row.items !== live.items ? row.items : live.items,
+        };
+      });
+      const liveKeys = new Set(
+        base.consumables.map((row) => `${row.date}|${row.site}|${row.subject}`.toLowerCase()),
       );
-      return [...saved, ...missing];
+      const extra = saved.filter(
+        (row) => !liveKeys.has(`${row.date}|${row.site}|${row.subject}`.toLowerCase()),
+      );
+      return [...merged, ...extra];
     })(),
   };
 }
@@ -930,10 +1108,72 @@ function RemoveButton({ editing, onClick }: { editing: boolean; onClick: () => v
   );
 }
 
-function AddButton({ editing, onClick, label = 'Add row' }: { editing: boolean; onClick: () => void; label?: string }) {
+/** "Roof and Gutter Cleaning – Scheduled work due for October 2026" */
+function splitServiceBarTitle(value: string) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  const parts = text.split(/\s+[–—-]\s+/);
+  if (parts.length < 2) return { name: text, meta: '' };
+  return {
+    name: parts[0].trim(),
+    meta: parts.slice(1).join(' – ').trim(),
+  };
+}
+
+function joinServiceBarTitle(name: string, meta: string) {
+  const title = String(name || '').replace(/\s+/g, ' ').trim();
+  const rest = String(meta || '').replace(/\s+/g, ' ').trim();
+  if (!title) return rest;
+  if (!rest) return title;
+  return `${title} – ${rest}`;
+}
+
+/** "Scheduled work due for October 2026" → "Scheduled work due • October 2026" */
+function formatServiceBarMeta(meta: string) {
+  return String(meta || '')
+    .replace(/\s+for\s+/i, ' • ')
+    .replace(/\s*[–—-]\s*/g, ' • ')
+    .trim();
+}
+
+function parseServiceBarMetaInput(value: string) {
+  return String(value || '')
+    .replace(/\s*•\s*/g, ' for ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function AddButton({
+  editing,
+  onClick,
+  label = 'Add row',
+  tone = 'row',
+}: {
+  editing: boolean;
+  onClick: () => void;
+  label?: string;
+  /** `section` = global Add service (not a row under the stream above). */
+  tone?: 'row' | 'section';
+}) {
   if (!editing) return null;
+  if (tone === 'section') {
+    return (
+      <div className="mr-add-service">
+        <Button
+          type="dashed"
+          className="mr-add-service-btn"
+          icon={<PlusOutlined />}
+          onClick={onClick}
+        >
+          {label}
+        </Button>
+        <span className="mr-add-service-hint">
+          Adds a new service section to this report (separate from the visits above)
+        </span>
+      </div>
+    );
+  }
   return (
-    <Button className="mr-add-row" size="small" onClick={onClick}>
+    <Button className="mr-add-row" type="default" size="middle" icon={<PlusOutlined />} onClick={onClick}>
       {label}
     </Button>
   );
@@ -1158,42 +1398,67 @@ export default function MonthlyReportDocument({
   const [baseline, setBaseline] = useState<MonthlyDraft>(() => mergeMonthlyDraft(seed, saved));
   const [editing, setEditing] = useState(startEditing);
   const [saving, setSaving] = useState(false);
+  // undefined = use prop `saved`; null = force live; object = post-reset/local body.
+  const [savedOverride, setSavedOverride] = useState<Partial<MonthlyDraft> | null | undefined>(undefined);
+  const effectiveSaved = savedOverride === undefined ? saved : savedOverride;
 
   useEffect(() => {
-    const next = mergeMonthlyDraft(seed, saved);
+    const next = mergeMonthlyDraft(seed, effectiveSaved);
     setDraft(next);
     setBaseline(next);
     setEditing(Boolean(startEditing) && isAdmin);
-  }, [seed, saved, startEditing, isAdmin]);
+  }, [seed, effectiveSaved, startEditing, isAdmin]);
 
   const setText = (key: keyof MonthlyDraft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
 
-  const save = async () => {
+  const persistDraft = async (
+    body: MonthlyDraft,
+    okMessage: string,
+    opts?: { /** When false, keep ignoring pack.edit (Reset stays on pure live). */ pinSaved?: boolean },
+  ) => {
     if (!companyId || !month) {
       message.error('This report cannot be saved');
-      return;
+      return false;
     }
     setSaving(true);
     const res = await callAPIAsync(serviceType.COMMON, endPoint.MONTHLY_REPORTS, 'PUT', {
       companyId,
       month,
-      body: draft,
+      body,
     });
     setSaving(false);
     if (res?.code !== 1) {
       message.error(res?.message || 'Could not save the monthly report');
-      return;
+      return false;
     }
-    setBaseline(draft);
-    // Stay on the edit page after save (same as continuing work in New Reports).
-    // Match New Reports toast (duration + key); z-index raised in monthlyReport.css.
+    setBaseline(body);
+    if (opts?.pinSaved === false) {
+      // Stay on live seed — do not re-merge the just-saved body (that re-sticks overlays).
+      setSavedOverride(null);
+    } else {
+      setSavedOverride(body);
+    }
     message.success({
-      content: 'Monthly report updated successfully',
+      content: okMessage,
       duration: 4,
       key: 'mr-report-save-ok',
     });
+    return true;
+  };
+
+  const save = async () => {
+    await persistDraft(draft, 'Monthly report updated successfully');
+  };
+
+  const resetToLive = async () => {
+    const live = resetDraftFromLive(draft, seed);
+    setDraft(live);
+    setBaseline(live);
+    setSavedOverride(null);
+    // Persist live body for reopen, but keep override null so the open editor stays pure seed.
+    await persistDraft(live, 'Report reset to live data', { pinSaved: false });
   };
 
   const chartServices = draft.services
@@ -1224,16 +1489,7 @@ export default function MonthlyReportDocument({
         {isAdmin && editing ? (
           <>
             {draftEditedFromLive(draft, seed) ? (
-              <Button
-                onClick={() => {
-                  setDraft(resetDraftFromLive(draft, seed));
-                  message.success({
-                    content: 'Report reset to live data',
-                    duration: 4,
-                    key: 'mr-report-reset-ok',
-                  });
-                }}
-              >
+              <Button loading={saving} onClick={() => void resetToLive()}>
                 Reset to live data
               </Button>
             ) : null}
@@ -1751,10 +2007,47 @@ function ReportBody({
               <p>Site inspections and scheduled work for this month.</p>
             </header>
             <h3 className="mr-subhead" id="mr-inspections-sites">3.1 Site Inspections</h3>
-            {draft.streams.map((stream, streamIndex) => {
+            {(() => {
+              const streamIsAdhoc = (item: MonthlyDraft['streams'][number]) =>
+                /adhoc|reactive/i.test(`${item.heading || ''} ${item.detailHeading || ''}`);
+              const lastScheduledIndex = draft.streams.reduce(
+                (last, item, index) => (streamIsAdhoc(item) ? last : index),
+                -1,
+              );
+              const addService = () => onDraft((current) => {
+                const neu = {
+                  heading: 'New service',
+                  note: '',
+                  detailHeading: 'Work completed',
+                  detailNote: '',
+                  showQuality: false,
+                  summary: [{ month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' }],
+                  visits: [] as MonthlyDraft['streams'][number]['visits'],
+                };
+                const streams = [...current.streams];
+                const adhocAt = streams.findIndex((item) => streamIsAdhoc(item));
+                if (adhocAt < 0) streams.push(neu);
+                else streams.splice(adhocAt, 0, neu);
+                return { ...current, streams };
+              });
+              const addServiceBar = (
+                <div className="mr-inspections-add" key="mr-add-service">
+                  <AddButton
+                    editing={editing}
+                    tone="section"
+                    label="Add service"
+                    onClick={addService}
+                  />
+                </div>
+              );
+              return (
+                <>
+                  {lastScheduledIndex < 0 ? addServiceBar : null}
+                  {draft.streams.map((stream, streamIndex) => {
               const summary = stream.summary || [];
               const visits = stream.visits || [];
               const showQuality = !!stream.showQuality;
+              const isAdhocStream = streamIsAdhoc(stream);
               const siteOptions = draft.siteOptions || [];
               const blankRow = { month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' };
               const blankVisit = { site: '', dates: '', quality: '', comments: '' };
@@ -1826,23 +2119,71 @@ function ReportBody({
                   ...current,
                   streams: current.streams.map((item, index) => (index === streamIndex ? { ...item, ...patch } : item)),
                 }));
-              return (
-              <div className="mr-stream" key={`stream-${streamIndex}`}>
-                <div className="mr-stream-head">
-                  <h3 className="mr-subhead">
-                    <TextField editing={editing} chars={Math.max(16, (stream.heading || '').length + 1)} value={stream.heading} onChange={(value) => patchStream({ heading: value })} />
-                  </h3>
-                  {editing ? (
-                    <Button className="mr-add-row" danger size="small" onClick={() => onDraft((current) => ({ ...current, streams: current.streams.filter((_, index) => index !== streamIndex) }))}>
-                      Remove this service
-                    </Button>
-                  ) : null}
-                </div>
+              const streamBlock = (
+              <div className={`mr-stream${isAdhocStream ? ' mr-stream--adhoc' : ''}`}>
+                {(() => {
+                  const { name: barName, meta: barMeta } = splitServiceBarTitle(
+                    stream.heading || 'Service',
+                  );
+                  const metaLabel = formatServiceBarMeta(barMeta);
+                  return (
+                    <div className={`mr-service-bar${editing ? ' mr-service-bar--editing' : ''}`}>
+                      <span className="mr-service-bar-ico" aria-hidden="true">
+                        <ScheduleOutlined />
+                      </span>
+                      <div className="mr-service-bar-copy">
+                        {editing ? (
+                          <input
+                            className="mr-service-bar-name-input"
+                            value={barName}
+                            aria-label="Service name"
+                            onChange={(event) => patchStream({
+                              heading: joinServiceBarTitle(event.target.value, barMeta),
+                            })}
+                          />
+                        ) : (
+                          <strong className="mr-service-bar-name">{barName || 'Service'}</strong>
+                        )}
+                        {editing ? (
+                          <input
+                            className="mr-service-bar-meta-input"
+                            value={metaLabel}
+                            aria-label="Service schedule"
+                            placeholder="Scheduled work due • October 2026"
+                            onChange={(event) => patchStream({
+                              heading: joinServiceBarTitle(
+                                barName,
+                                parseServiceBarMetaInput(event.target.value),
+                              ),
+                            })}
+                          />
+                        ) : metaLabel ? (
+                          <span className="mr-service-bar-meta">{metaLabel}</span>
+                        ) : null}
+                      </div>
+                      {editing ? (
+                        <button
+                          type="button"
+                          className="mr-service-bar-remove"
+                          onClick={() => onDraft((current) => ({
+                            ...current,
+                            streams: current.streams.filter((_, index) => index !== streamIndex),
+                          }))}
+                        >
+                          <DeleteOutlined />
+                          <span>Remove service</span>
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })()}
                 {editing || stream.note ? (
                   <p className="mr-nil">
                     <TextField editing={editing} placeholder="Note" value={stream.note} onChange={(value) => patchStream({ note: value })} />
                   </p>
                 ) : null}
+                {!isAdhocStream ? (
+                  <>
                 <div className="mr-table-wrap" style={{ marginBottom: 8 }}>
                   <table className="mr-table mr-table--sites">
                     <colgroup>
@@ -1883,8 +2224,10 @@ function ReportBody({
                 <div className="mr-row-actions">
                   <AddButton editing={editing} label="Add row" onClick={() => onDraft((current) => ({ ...current, streams: current.streams.map((item, index) => index === streamIndex ? { ...item, summary: [...(item.summary || []), blankRow] } : item) }))} />
                 </div>
+                  </>
+                ) : null}
 
-                {chartData.length ? (
+                {!isAdhocStream && chartData.length ? (
                   <article className="mr-perf-card">
                     <header className="mr-chart-card-head">
                       <h3>{chartTitle}</h3>
@@ -2085,8 +2428,16 @@ function ReportBody({
                 </>
               </div>
               );
-            })}
-            <AddButton editing={editing} label="Add service" onClick={() => onDraft((current) => ({ ...current, streams: [...current.streams, { heading: 'New service', note: '', detailHeading: 'Work completed', detailNote: '', showQuality: false, summary: [{ month: draft.periodLabel, group: '', description: '', schedule: '', completed: '', comments: '' }], visits: [] }] }))} />
+              return (
+                <React.Fragment key={`stream-${streamIndex}`}>
+                  {streamBlock}
+                  {streamIndex === lastScheduledIndex ? addServiceBar : null}
+                </React.Fragment>
+              );
+                  })}
+                </>
+              );
+            })()}
 
             <h3 className="mr-subhead" id="mr-faults">
               3.2 <TextField editing={editing} value={draft.feedbackHeading} onChange={(value) => onText('feedbackHeading', value)} />

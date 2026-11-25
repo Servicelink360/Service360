@@ -464,7 +464,7 @@ const SERVICE_ORDER = ['Cleaning', 'Ground Maintenance', 'Roof and Gutter', 'Adh
 export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
   const openFaults = pack.faults.filter((fault) => fault.status !== 'Completed');
   const urgentOpen = openFaults.filter((fault) => fault.priority === 'Urgent');
-  // Financials 5.3 still lists adhoc rows; inspections also keep each Adhoc service stream.
+  // Financials 5.3 lists adhoc rows; Inspections keep Adhoc visits but not the schedule table.
   const adhoc = pack.work.filter((row) => isAdhocServiceName(`${row.service} ${row.title} ${row.kind}`));
   const talks = pack.toolbox || [];
   const contracted = pack.contractedServices || [];
@@ -830,35 +830,43 @@ export function buildMonthlyDraft(pack: MonthlyPack): MonthlyDraft {
       const visits = kind === 'Cleaning'
         ? groupVisitsByParentAmenities(rawVisits, contractedSites)
         : rawVisits;
+      const isAdhocStream = kind === 'Adhoc' || /adhoc|reactive/i.test(label);
       return {
-        heading: streamHeading(kind, pack.period.label, label),
-        note: stream.jobs
-          ? `${stream.jobs} completed visits across ${
-              visits.filter((row) => !row.isGroupHeader).length || stream.siteCount
-            } sites.`
-          : stream.siteCount
-            ? `No completed visits this period across ${stream.siteCount} contracted sites.`
-            : 'No completed visits this period.',
+        // Adhoc has no monthly schedule — skip "Scheduled work due for…" block.
+        heading: isAdhocStream ? label : streamHeading(kind, pack.period.label, label),
+        note: isAdhocStream
+          ? (stream.jobs
+            ? `${stream.jobs} completed visit${stream.jobs === 1 ? '' : 's'} this period.`
+            : '')
+          : stream.jobs
+            ? `${stream.jobs} completed visits across ${
+                visits.filter((row) => !row.isGroupHeader).length || stream.siteCount
+              } sites.`
+            : stream.siteCount
+              ? `No completed visits this period across ${stream.siteCount} contracted sites.`
+              : 'No completed visits this period.',
         detailHeading: detailHeading(kind, pack.period.label, label),
         detailNote: detailNote(kind, label),
         showQuality: kind === 'Cleaning',
-        summary: stream.summary.length
-          ? stream.summary.map((row) => ({
-            month: monthStamp,
-            group: row.group,
-            description: label,
-            schedule: String(row.schedule),
-            completed: String(row.completed),
-            comments: summaryComments(kind, row.group, row.schedule),
-          }))
-          : [{
-            month: monthStamp,
-            group: '',
-            description: label,
-            schedule: '',
-            completed: '',
-            comments: 'No completed visits recorded this period.',
-          }],
+        summary: isAdhocStream
+          ? []
+          : stream.summary.length
+            ? stream.summary.map((row) => ({
+              month: monthStamp,
+              group: row.group,
+              description: label,
+              schedule: String(row.schedule),
+              completed: String(row.completed),
+              comments: summaryComments(kind, row.group, row.schedule),
+            }))
+            : [{
+              month: monthStamp,
+              group: '',
+              description: label,
+              schedule: '',
+              completed: '',
+              comments: 'No completed visits recorded this period.',
+            }],
         visits: visits.map((row) => ({
           site: row.site,
           dates: row.dates,

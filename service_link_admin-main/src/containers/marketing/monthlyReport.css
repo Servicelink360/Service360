@@ -793,6 +793,28 @@ html[data-color-mode='dark'] .mr-edit-bar--pinned {
   margin: 0;
 }
 
+/* Row-level adds (site visit, fault, etc.) — real buttons, not flat text boxes. */
+.marketing-site .mr-page--app .mr-add-row.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid #147a54;
+  color: #147a54;
+  background: #fff;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.marketing-site .mr-page--app .mr-add-row.ant-btn:hover,
+.marketing-site .mr-page--app .mr-add-row.ant-btn:focus {
+  color: #fff;
+  background: #147a54;
+  border-color: #147a54;
+}
+
 .mr-row-actions {
   display: flex;
   align-items: center;
@@ -813,16 +835,213 @@ html[data-color-mode='dark'] .mr-edit-bar--pinned {
   min-width: 0;
 }
 
+/* Service heading bar — exact mock colours */
+.marketing-site .mr-page--app .mr-service-bar,
+.mr-service-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 10px 0 12px;
+  padding: 14px 16px;
+  background: #eff7f2 !important;
+  border: 1px solid #c9ded2 !important;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-ico,
+.mr-service-bar-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #d8ebdf !important;
+  color: #164d36 !important;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-copy,
+.mr-service-bar-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-name,
+.mr-service-bar-name,
+.marketing-site .mr-page--app .mr-service-bar-name-input,
+.mr-service-bar-name-input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  outline: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: #164d36 !important;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-meta,
+.mr-service-bar-meta,
+.marketing-site .mr-page--app .mr-service-bar-meta-input,
+.mr-service-bar-meta-input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0 !important;
+  outline: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #567364 !important;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-name-input:focus,
+.mr-service-bar-name-input:focus,
+.marketing-site .mr-page--app .mr-service-bar-meta-input:focus,
+.mr-service-bar-meta-input:focus {
+  outline: none;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-remove,
+.mr-service-bar-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-left: auto;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #dc2626;
+  border-radius: 10px;
+  background: #fff;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.marketing-site .mr-page--app .mr-service-bar-remove:hover,
+.mr-service-bar-remove:hover {
+  background: #fff5f5;
+  color: #b91c1c;
+  border-color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .mr-service-bar {
+    flex-wrap: wrap;
+  }
+
+  .mr-service-bar-remove {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media print {
+  .mr-service-bar-remove {
+    display: none !important;
+  }
+}
+
+/* Global Add service — clear break from the stream template above. */
+.mr-inspections-add {
+  margin: 20px 0 24px;
+}
+
+.mr-add-service {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #f3faf6;
+  border: 1px dashed #9cc4ad;
+  border-radius: 10px;
+}
+
+.marketing-site .mr-page--app .mr-add-service-btn.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  border-color: #147a54;
+  border-style: dashed;
+  color: #0f5c3d;
+  background: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.marketing-site .mr-page--app .mr-add-service-btn.ant-btn:hover,
+.marketing-site .mr-page--app .mr-add-service-btn.ant-btn:focus {
+  color: #fff;
+  background: #147a54;
+  border-color: #147a54;
+  border-style: solid;
+}
+
+.mr-add-service-hint {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #5a6f63;
+}
+
+.marketing-site .mr-page--app .mr-stream--adhoc {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid #e6eeea;
+}
+
 .mr-row-remove.ant-btn {
   height: 24px;
   padding: 0;
   line-height: 24px;
 }
 
+.marketing-site .mr-page--app .mr-remove-service.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: none;
+}
+
 @media print {
   .mr-edit-bar,
   .mr-edit-bar-anchor,
   .mr-add-row,
+  .mr-add-service,
+  .mr-remove-service,
   .mr-row-remove {
     display: none !important;
   }
